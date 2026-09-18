@@ -42,6 +42,10 @@ _Avoid_: Routing, layout, plan
 A run of bundled conductors between two endpoints in a topology, with a length in millimetres typed by hand. Segments are undirected and never form a cycle. An endpoint is a connector, a breakout, a splice, or a point. A segment flagged as a purchased assembly (a USB, HDMI, or Ethernet patch cable) has a part number and a fixed length, and its two connector ends produce no mating-part BOM rows.
 _Avoid_: Branch, leg, cable run
 
+**Purchased assembly**:
+A segment bought finished rather than built: a USB, HDMI, Ethernet, or CAN patch cable with a part number and a fixed length. It runs connector to connector, so it is always its own piece of the graph and never part of a harness.
+_Avoid_: Off-the-shelf cable, pre-made
+
 **Endpoint**:
 A node in a topology graph that segments end at. Each node stores a drawn position for the topology view. Degree rules: a connector ends exactly one segment, a point exactly two, a breakout three or more, a splice two or more.
 _Avoid_: Vertex, junction
@@ -67,7 +71,7 @@ An endpoint where the conductors of one or more nets are joined outside a connec
 _Avoid_: Join, tap
 
 **Harness**:
-One physically connected assembly of segments in a topology, with connectors at its ends. Removing it from the machine removes one connected piece of wiring. A robot has several harnesses.
+One connected piece of a topology graph that contains at least one built segment, with connectors at its ends. Removing it from the machine removes one connected piece of wiring. Membership is derived from the graph; the user names a harness by anchoring the name to one of its segments, and may give it a part number. A piece made only of a purchased assembly is a purchased cable, not a harness. A robot has several harnesses.
 _Avoid_: Loom, cable assembly, wiring
 
 **Sheath**:

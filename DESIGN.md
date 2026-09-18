@@ -16,7 +16,7 @@ The destination of the first map is a manufacturing BOM: connectors, wire and ca
 
 A topology graph is a forest. A net's route is the unique subtree reaching its connectors, derived on demand and stored nowhere. Two-connector nets need no choice at all. A net with three or more connectors branches only at a splice; a branch point with no splice for that net is a design rule error. RAMMP Gen 1.5 has no such net: the CAN bus daisy-chains between the motor controllers and the MIB with purchased patch cables, so each hop is its own two-connector net, and UART is dropped.
 
-A harness is whatever stays connected when you lift it off the machine: one connected piece of the topology graph, ending at connectors.
+A harness is whatever stays connected when you lift it off the machine: one connected piece of the topology graph, ending at connectors. Membership is derived, like routes. A name is stored on one segment of the piece as an anchor, with an optional part number. Splitting a harness leaves the piece without the anchor unnamed, which is a warning; joining two named harnesses puts two anchors in one piece, which is an error until one is dropped. Nothing is renamed or reassigned silently. A piece made only of a purchased assembly (a patch cable) is not a harness and the BOM lists it under purchased cables. A sheath cannot span two harnesses, because two bundles under one sleeve come off together and so share a segment.
 
 ## Stack and files
 
