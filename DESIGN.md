@@ -24,7 +24,7 @@ Browser app: Vite, React, TypeScript, React Flow for the canvas, Zustand for the
 
 ## Test case
 
-RAMMP Gen 1.5. Roughly 45 components across 48 V power, 24 V power, CAN, Ethernet, USB, HDMI, SPI, analog, motor phase, and encoder ABZ domains. The current diagram (`docs/reference/rammp-gen1.5-diagram.png`) is the picture to reproduce.
+RAMMP Gen 1.5. Roughly 45 components across thirteen domains: 48 V, 24 V, CAN, Ethernet, analog, motor phase, encoder ABZ, SPI, PWM, digital I/O, USB, HDMI, and GMSL. The default layers are Power (48 V, 24 V, motor phase), Signals (CAN, Ethernet, SPI, encoder ABZ, PWM, analog, digital I/O), Compute peripherals (USB, HDMI, GMSL), and a built-in All. The current diagram (`docs/reference/rammp-gen1.5-diagram.png`) is the picture to reproduce, with two corrections: the finished robot has six fisheye cameras on GMSL rather than four on USB, and four encoders are PWM rather than SPI. The diagram's "local" colour splits into motor phase, encoder ABZ, SPI, digital I/O, USB, and HDMI. PoE is not modelled; every Ethernet run is a purchased patch cable.
 
 ## Ruled out for now
 

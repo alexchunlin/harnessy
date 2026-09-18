@@ -25,11 +25,11 @@ A logical electrical connection between two or more connectors, independent of h
 _Avoid_: Signal, link, edge, connection
 
 **Domain**:
-The signal family a net belongs to. Examples on the RAMMP robot: 48 V battery power, 24 V power, CAN, Ethernet, analog, USB, HDMI, SPI, motor phase, encoder ABZ. A domain names a default wire or cable spec and conductor count, which a net can override. No catch-all domains; "local" is not a domain.
+The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethernet, analog, motor phase, encoder ABZ, SPI, PWM, digital I/O, USB, HDMI, GMSL. A sensor rail is not a domain; the signal domain's default cable carries it. A domain names a default wire or cable spec and conductor count, which a net can override. No catch-all domains; "local" is not a domain.
 _Avoid_: Type, category, class, local
 
 **Layer**:
-A named set of domains shown together on the connectivity canvas. A "high power" layer might show the 60 V and 48 V domains; the Ethernet layer would not be shown with it. Layers only affect what is visible; they own no data. Components with no net in the active layer stay drawn with dimmed outlines and hidden text.
+A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components with no net in the active layer stay drawn with dimmed outlines and hidden text.
 _Avoid_: View, page, sheet
 
 ### Physical realization
