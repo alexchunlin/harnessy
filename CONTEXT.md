@@ -21,11 +21,11 @@ _Avoid_: Terminal, contact
 ### Logical connectivity
 
 **Net**:
-A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain. A connector can terminate several nets from different domains.
+A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain and takes that domain's wire or cable spec unless it overrides it. A connector can terminate several nets from different domains. A bus daisy-chained with patch cables is a chain of two-connector nets, one per cable.
 _Avoid_: Signal, link, edge, connection
 
 **Domain**:
-The signal family a net belongs to. Examples on the RAMMP robot: 48 V battery power, 24 V power, UART/CAN, Ethernet, analog, USB, HDMI, SPI, motor phase, encoder ABZ. No catch-all domains; "local" is not a domain.
+The signal family a net belongs to. Examples on the RAMMP robot: 48 V battery power, 24 V power, CAN, Ethernet, analog, USB, HDMI, SPI, motor phase, encoder ABZ. A domain names a default wire or cable spec and conductor count, which a net can override. No catch-all domains; "local" is not a domain.
 _Avoid_: Type, category, class, local
 
 **Layer**:
@@ -39,7 +39,7 @@ One complete physical arrangement of segments that realizes every net in the pro
 _Avoid_: Routing, layout, plan
 
 **Segment**:
-A run of bundled conductors between two endpoints in a topology, with a length in millimetres typed by hand. Segments are undirected. An endpoint is a connector, a breakout, a splice, or a point. A segment flagged as a purchased assembly (a USB, HDMI, or Ethernet patch cable) has a part number and a fixed length, and its two connector ends produce no mating-part BOM rows.
+A run of bundled conductors between two endpoints in a topology, with a length in millimetres typed by hand. Segments are undirected and never form a cycle. An endpoint is a connector, a breakout, a splice, or a point. A segment flagged as a purchased assembly (a USB, HDMI, or Ethernet patch cable) has a part number and a fixed length, and its two connector ends produce no mating-part BOM rows.
 _Avoid_: Branch, leg, cable run
 
 **Endpoint**:
@@ -57,6 +57,10 @@ _Avoid_: Split, junction, tee
 **Group**:
 A labelled region on the canvas that components are dragged into, for visual organisation only. A group says nothing about topology or harness membership.
 _Avoid_: Assembly, module, subsystem
+
+**Route**:
+The set of segments a net's conductors run through in a topology: the smallest subtree that reaches all of the net's connectors. A route is derived from the topology graph and never stored. Where a route branches there must be a splice for that net.
+_Avoid_: Path, routing, assignment
 
 **Splice**:
 An endpoint where the conductors of one or more nets are joined outside a connector. A splice references the nets it joins, one BOM row per net. It never joins two different nets; that would make them one net.

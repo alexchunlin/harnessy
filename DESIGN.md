@@ -14,6 +14,8 @@ A net in the MVP connects connectors, not pins. Pin assignment is a later refine
 
 The destination of the first map is a manufacturing BOM: connectors, wire and cable by spec and cut length, sheaths by spec and length, tie points by type. That needs the topology view, so the MVP includes a minimal one: segments with hand-typed lengths, breakouts, sheaths that cover a path of segments, and tie points. Lengths come from the team laying out yarn and rope on the robot, measuring, and typing the numbers in. No bundle volume checks and no 3D in this map.
 
+A topology graph is a forest. A net's route is the unique subtree reaching its connectors, derived on demand and stored nowhere. Two-connector nets need no choice at all. A net with three or more connectors branches only at a splice; a branch point with no splice for that net is a design rule error. RAMMP Gen 1.5 has no such net: the CAN bus daisy-chains between the motor controllers and the MIB with purchased patch cables, so each hop is its own two-connector net, and UART is dropped.
+
 A harness is whatever stays connected when you lift it off the machine: one connected piece of the topology graph, ending at connectors.
 
 ## Stack and files
@@ -22,7 +24,7 @@ Browser app: Vite, React, TypeScript, React Flow for the canvas, Zustand for the
 
 ## Test case
 
-RAMMP Gen 1.5. Roughly 45 components across 48 V power, 24 V power, UART/CAN, Ethernet, USB, HDMI, SPI, analog, motor phase, and encoder ABZ domains. The current diagram (`docs/reference/rammp-gen1.5-diagram.png`) is the picture to reproduce.
+RAMMP Gen 1.5. Roughly 45 components across 48 V power, 24 V power, CAN, Ethernet, USB, HDMI, SPI, analog, motor phase, and encoder ABZ domains. The current diagram (`docs/reference/rammp-gen1.5-diagram.png`) is the picture to reproduce.
 
 ## Ruled out for now
 
