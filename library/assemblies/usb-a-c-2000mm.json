@@ -1,0 +1,11 @@
+{
+  "id": "usb-a-c-2000mm",
+  "name": "USB 3.0 A to C cable, 2 m",
+  "part_number": "TBD",
+  "length_mm": 2000,
+  "ends": [
+    "connectors/usb-a",
+    "connectors/usb-c"
+  ],
+  "cable": "cables/usb-a-c-2m"
+}

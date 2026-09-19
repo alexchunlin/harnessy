@@ -1,0 +1,8 @@
+{
+  "id": "awg12-red",
+  "name": "12 AWG silicone, red",
+  "awg": 12,
+  "od_mm": 3.7,
+  "ampacity_a": 20,
+  "color": "red"
+}

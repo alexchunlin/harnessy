@@ -1,0 +1,11 @@
+{
+  "id": "ethernet-patch-500mm",
+  "name": "Ethernet patch cable, Cat6, 0.5 m",
+  "part_number": "TBD",
+  "length_mm": 500,
+  "ends": [
+    "connectors/rj45",
+    "connectors/rj45"
+  ],
+  "cable": "cables/cat6-utp-24awg"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "usb-a-c-2m",
+  "name": "USB 3.0 A to C cable core",
+  "conductors": 9,
+  "awg": 28,
+  "od_mm": 4.5,
+  "shielded": true
+}

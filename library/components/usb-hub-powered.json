@@ -1,0 +1,33 @@
+{
+  "id": "usb-hub-powered",
+  "name": "USB hub, powered, 4 port",
+  "connectors": [
+    {
+      "designator": "UP",
+      "connector": "connectors/usb-c",
+      "label": "upstream"
+    },
+    {
+      "designator": "D1",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "D2",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "D3",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "D4",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "PWR",
+      "connector": "connectors/dc-barrel-5521",
+      "label": "24 V in"
+    }
+  ],
+  "part_number": "TBD"
+}

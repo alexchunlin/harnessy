@@ -1,0 +1,10 @@
+{
+  "id": "jst-gh-2",
+  "name": "JST GH 2-pin",
+  "pins": 2,
+  "mating": {
+    "part_number": "GHR-02V-S",
+    "contacts_part_number": "SSHL-002T-P0.2"
+  },
+  "manufacturer": "JST"
+}

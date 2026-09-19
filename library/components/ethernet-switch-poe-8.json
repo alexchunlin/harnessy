@@ -1,0 +1,44 @@
+{
+  "id": "ethernet-switch-poe-8",
+  "name": "Ethernet switch, 8 port, PoE",
+  "connectors": [
+    {
+      "designator": "P1",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P2",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P3",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P4",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P5",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P6",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P7",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "P8",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt60",
+      "label": "48 V in"
+    }
+  ],
+  "part_number": "TBD"
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "id": "net-222252",
+    "name": "HDMI touchscreen",
+    "connectors": [
+      "cmp-22222c/HDMI",
+      "cmp-22222d/HDMI"
+    ]
+  }
+]

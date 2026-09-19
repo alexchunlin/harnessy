@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222k",
+  "name": "48 V battery + BMS",
+  "definition": "components/battery-48v-bms"
+}

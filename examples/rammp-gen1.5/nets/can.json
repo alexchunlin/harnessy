@@ -1,0 +1,34 @@
+[
+  {
+    "id": "net-22224h",
+    "name": "CAN MIB to BMS",
+    "connectors": [
+      "cmp-22222j/CAN-B",
+      "cmp-22222k/CAN"
+    ]
+  },
+  {
+    "id": "net-22224j",
+    "name": "CAN MIB to RoboClaw L",
+    "connectors": [
+      "cmp-22222j/CAN-A",
+      "cmp-222234/CAN-A"
+    ]
+  },
+  {
+    "id": "net-22224k",
+    "name": "CAN RoboClaw L to R",
+    "connectors": [
+      "cmp-222234/CAN-B",
+      "cmp-222235/CAN-A"
+    ]
+  },
+  {
+    "id": "net-22224m",
+    "name": "CAN RoboClaw R to rear",
+    "connectors": [
+      "cmp-222235/CAN-B",
+      "cmp-222236/CAN-A"
+    ]
+  }
+]

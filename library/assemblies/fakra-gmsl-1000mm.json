@@ -1,0 +1,11 @@
+{
+  "id": "fakra-gmsl-1000mm",
+  "name": "FAKRA Z GMSL2 coax, 1 m",
+  "part_number": "TBD",
+  "length_mm": 1000,
+  "ends": [
+    "connectors/fakra-z",
+    "connectors/fakra-z"
+  ],
+  "cable": "cables/fakra-coax"
+}

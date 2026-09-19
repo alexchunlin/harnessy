@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22223q",
+  "name": "PWM encoder left lift",
+  "definition": "components/pwm-encoder"
+}

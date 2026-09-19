@@ -1,0 +1,8 @@
+{
+  "id": "awg14-black",
+  "name": "14 AWG silicone, black",
+  "awg": 14,
+  "od_mm": 3.3,
+  "ampacity_a": 15,
+  "color": "black"
+}

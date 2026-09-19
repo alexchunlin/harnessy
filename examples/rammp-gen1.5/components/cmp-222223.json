@@ -1,0 +1,5 @@
+{
+  "id": "cmp-222223",
+  "name": "Fisheye camera 1",
+  "definition": "components/fisheye-gmsl-camera"
+}

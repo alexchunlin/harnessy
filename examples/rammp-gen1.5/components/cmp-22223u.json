@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22223u",
+  "name": "Limit switches right",
+  "definition": "components/limit-switch-pair"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "awg8-red",
+  "name": "8 AWG silicone, red",
+  "awg": 8,
+  "od_mm": 6.5,
+  "ampacity_a": 40,
+  "color": "red"
+}

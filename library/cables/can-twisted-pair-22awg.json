@@ -1,0 +1,8 @@
+{
+  "id": "can-twisted-pair-22awg",
+  "name": "CAN twisted pair, 22 AWG, shielded",
+  "conductors": 2,
+  "awg": 22,
+  "od_mm": 4.5,
+  "shielded": true
+}

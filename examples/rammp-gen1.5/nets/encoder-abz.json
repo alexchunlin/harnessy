@@ -1,0 +1,50 @@
+[
+  {
+    "id": "net-22225j",
+    "name": "ABZ L lift",
+    "connectors": [
+      "cmp-222234/ENC1",
+      "cmp-22223d/J1"
+    ]
+  },
+  {
+    "id": "net-22225m",
+    "name": "ABZ L slide",
+    "connectors": [
+      "cmp-222234/ENC2",
+      "cmp-22223e/J1"
+    ]
+  },
+  {
+    "id": "net-22225p",
+    "name": "ABZ R lift",
+    "connectors": [
+      "cmp-222235/ENC1",
+      "cmp-22223f/J1"
+    ]
+  },
+  {
+    "id": "net-22225r",
+    "name": "ABZ R slide",
+    "connectors": [
+      "cmp-222235/ENC2",
+      "cmp-22223g/J1"
+    ]
+  },
+  {
+    "id": "net-22225t",
+    "name": "ABZ rear lift",
+    "connectors": [
+      "cmp-222236/ENC1",
+      "cmp-22223h/J1"
+    ]
+  },
+  {
+    "id": "net-22225v",
+    "name": "ABZ front lift",
+    "connectors": [
+      "cmp-222236/ENC2",
+      "cmp-22223j/J1"
+    ]
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "id": "awg24-blue",
+  "name": "24 AWG PVC, blue",
+  "awg": 24,
+  "od_mm": 1.4,
+  "ampacity_a": 2,
+  "color": "blue"
+}

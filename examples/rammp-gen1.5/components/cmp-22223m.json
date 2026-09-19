@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22223m",
+  "name": "PWM encoder front lift",
+  "definition": "components/pwm-encoder"
+}

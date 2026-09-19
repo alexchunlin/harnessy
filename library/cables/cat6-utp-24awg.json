@@ -1,0 +1,8 @@
+{
+  "id": "cat6-utp-24awg",
+  "name": "Cat6 UTP, 24 AWG",
+  "conductors": 8,
+  "awg": 24,
+  "od_mm": 6,
+  "shielded": false
+}

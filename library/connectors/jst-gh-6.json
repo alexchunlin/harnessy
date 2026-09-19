@@ -1,0 +1,10 @@
+{
+  "id": "jst-gh-6",
+  "name": "JST GH 6-pin",
+  "pins": 6,
+  "mating": {
+    "part_number": "GHR-06V-S",
+    "contacts_part_number": "SSHL-002T-P0.2"
+  },
+  "manufacturer": "JST"
+}

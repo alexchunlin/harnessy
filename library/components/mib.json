@@ -1,0 +1,84 @@
+{
+  "id": "mib",
+  "name": "MIB (main interface board)",
+  "connectors": [
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt60",
+      "label": "48 V in"
+    },
+    {
+      "designator": "ETH",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "CAN-A",
+      "connector": "connectors/jst-gh-4"
+    },
+    {
+      "designator": "CAN-B",
+      "connector": "connectors/jst-gh-4"
+    },
+    {
+      "designator": "AIN1",
+      "connector": "connectors/jst-gh-4",
+      "label": "strain gauge, 10 V supply plus analog"
+    },
+    {
+      "designator": "AIN2",
+      "connector": "connectors/jst-gh-4",
+      "label": "strain gauge, 10 V supply plus analog"
+    },
+    {
+      "designator": "AIN3",
+      "connector": "connectors/jst-gh-4",
+      "label": "strain gauge, 10 V supply plus analog"
+    },
+    {
+      "designator": "AIN4",
+      "connector": "connectors/jst-gh-4",
+      "label": "strain gauge, 10 V supply plus analog"
+    },
+    {
+      "designator": "ENC1",
+      "connector": "connectors/jst-gh-4",
+      "label": "PWM encoder"
+    },
+    {
+      "designator": "ENC2",
+      "connector": "connectors/jst-gh-4",
+      "label": "PWM encoder"
+    },
+    {
+      "designator": "ENC3",
+      "connector": "connectors/jst-gh-4",
+      "label": "PWM encoder"
+    },
+    {
+      "designator": "ENC4",
+      "connector": "connectors/jst-gh-4",
+      "label": "PWM encoder"
+    },
+    {
+      "designator": "DIO1",
+      "connector": "connectors/jst-xh-4",
+      "label": "limit switch pair"
+    },
+    {
+      "designator": "DIO2",
+      "connector": "connectors/jst-xh-4",
+      "label": "limit switch pair"
+    },
+    {
+      "designator": "DIO3",
+      "connector": "connectors/jst-xh-4",
+      "label": "limit switch pair"
+    },
+    {
+      "designator": "DIO4",
+      "connector": "connectors/jst-xh-4",
+      "label": "limit switch pair"
+    }
+  ],
+  "part_number": "TBD"
+}

@@ -1,0 +1,32 @@
+{
+  "id": "dcdc-48-24",
+  "name": "48 V to 24 V DC/DC converter",
+  "connectors": [
+    {
+      "designator": "IN",
+      "connector": "connectors/xt60",
+      "label": "48 V in"
+    },
+    {
+      "designator": "OUT1",
+      "connector": "connectors/xt30",
+      "label": "24 V out"
+    },
+    {
+      "designator": "OUT2",
+      "connector": "connectors/xt30",
+      "label": "24 V out"
+    },
+    {
+      "designator": "OUT3",
+      "connector": "connectors/xt30",
+      "label": "24 V out"
+    },
+    {
+      "designator": "OUT4",
+      "connector": "connectors/xt30",
+      "label": "24 V out"
+    }
+  ],
+  "part_number": "TBD"
+}

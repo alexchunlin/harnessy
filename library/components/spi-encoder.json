@@ -1,0 +1,11 @@
+{
+  "id": "spi-encoder",
+  "name": "SPI encoder",
+  "connectors": [
+    {
+      "designator": "J1",
+      "connector": "connectors/jst-gh-6"
+    }
+  ],
+  "part_number": "TBD"
+}

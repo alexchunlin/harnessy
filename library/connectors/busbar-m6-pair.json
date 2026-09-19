@@ -1,0 +1,8 @@
+{
+  "id": "busbar-m6-pair",
+  "name": "Bus bar M6 stud pair (positive and negative)",
+  "pins": 2,
+  "mating": {
+    "part_number": "TBD"
+  }
+}

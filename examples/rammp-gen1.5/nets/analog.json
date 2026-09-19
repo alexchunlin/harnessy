@@ -1,0 +1,42 @@
+[
+  {
+    "id": "net-22225w",
+    "name": "Strain gauge front",
+    "connectors": [
+      "cmp-22222j/AIN1",
+      "cmp-22223k/J1"
+    ],
+    "spec": "cables/shielded-4c-24awg",
+    "conductors": 1
+  },
+  {
+    "id": "net-22225z",
+    "name": "Strain gauge left",
+    "connectors": [
+      "cmp-22222j/AIN2",
+      "cmp-22223p/J1"
+    ],
+    "spec": "cables/shielded-4c-24awg",
+    "conductors": 1
+  },
+  {
+    "id": "net-222264",
+    "name": "Strain gauge right",
+    "connectors": [
+      "cmp-22222j/AIN3",
+      "cmp-22223s/J1"
+    ],
+    "spec": "cables/shielded-4c-24awg",
+    "conductors": 1
+  },
+  {
+    "id": "net-222267",
+    "name": "Strain gauge rear",
+    "connectors": [
+      "cmp-22222j/AIN4",
+      "cmp-22223v/J1"
+    ],
+    "spec": "cables/shielded-4c-24awg",
+    "conductors": 1
+  }
+]

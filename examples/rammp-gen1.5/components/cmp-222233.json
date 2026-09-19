@@ -1,0 +1,5 @@
+{
+  "id": "cmp-222233",
+  "name": "SPI encoder RR",
+  "definition": "components/spi-encoder"
+}

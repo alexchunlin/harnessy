@@ -1,0 +1,8 @@
+{
+  "id": "awg12-black",
+  "name": "12 AWG silicone, black",
+  "awg": 12,
+  "od_mm": 3.7,
+  "ampacity_a": 20,
+  "color": "black"
+}

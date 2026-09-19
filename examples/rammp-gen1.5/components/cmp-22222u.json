@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222u",
+  "name": "Drive motor FR",
+  "definition": "components/drive-motor-bldc"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "roboclaw-60v",
+  "name": "RoboClaw 60 V dual motor controller",
+  "connectors": [
+    {
+      "designator": "PWR",
+      "connector": "connectors/screw-term-2",
+      "label": "48 V in"
+    },
+    {
+      "designator": "M1",
+      "connector": "connectors/screw-term-2"
+    },
+    {
+      "designator": "M2",
+      "connector": "connectors/screw-term-2"
+    },
+    {
+      "designator": "ENC1",
+      "connector": "connectors/pin-header-254-6"
+    },
+    {
+      "designator": "ENC2",
+      "connector": "connectors/pin-header-254-6"
+    },
+    {
+      "designator": "CAN-A",
+      "connector": "connectors/jst-gh-4"
+    },
+    {
+      "designator": "CAN-B",
+      "connector": "connectors/jst-gh-4"
+    }
+  ],
+  "part_number": "TBD",
+  "manufacturer": "Basicmicro"
+}

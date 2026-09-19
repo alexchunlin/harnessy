@@ -1,0 +1,11 @@
+{
+  "id": "abz-encoder",
+  "name": "Incremental encoder, ABZ",
+  "connectors": [
+    {
+      "designator": "J1",
+      "connector": "connectors/jst-xh-6"
+    }
+  ],
+  "part_number": "TBD"
+}

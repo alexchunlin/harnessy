@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22223w",
+  "name": "PWM encoder rear lift",
+  "definition": "components/pwm-encoder"
+}

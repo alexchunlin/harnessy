@@ -1,0 +1,34 @@
+[
+  {
+    "id": "net-22225a",
+    "name": "SPI encoder FL",
+    "connectors": [
+      "cmp-22222q/ENC",
+      "cmp-22222s/J1"
+    ]
+  },
+  {
+    "id": "net-22225c",
+    "name": "SPI encoder FR",
+    "connectors": [
+      "cmp-22222t/ENC",
+      "cmp-22222v/J1"
+    ]
+  },
+  {
+    "id": "net-22225e",
+    "name": "SPI encoder RL",
+    "connectors": [
+      "cmp-22222w/ENC",
+      "cmp-22222y/J1"
+    ]
+  },
+  {
+    "id": "net-22225g",
+    "name": "SPI encoder RR",
+    "connectors": [
+      "cmp-22222z/ENC",
+      "cmp-222233/J1"
+    ]
+  }
+]

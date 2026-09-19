@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222f",
+  "name": "Joystick + haptics + screen",
+  "definition": "components/joystick-haptics-screen"
+}

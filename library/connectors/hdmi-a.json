@@ -1,0 +1,8 @@
+{
+  "id": "hdmi-a",
+  "name": "HDMI type A receptacle",
+  "pins": 19,
+  "mating": {
+    "part_number": "TBD"
+  }
+}

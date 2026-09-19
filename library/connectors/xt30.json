@@ -1,0 +1,9 @@
+{
+  "id": "xt30",
+  "name": "Amass XT30",
+  "pins": 2,
+  "mating": {
+    "part_number": "XT30U-M"
+  },
+  "manufacturer": "Amass"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "lift-motor-brushed",
+  "name": "Lift or slide motor, brushed DC",
+  "connectors": [
+    {
+      "designator": "MOT",
+      "connector": "connectors/xt30"
+    }
+  ],
+  "part_number": "TBD"
+}

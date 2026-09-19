@@ -1,0 +1,34 @@
+[
+  {
+    "id": "net-22225x",
+    "name": "PWM encoder front lift",
+    "connectors": [
+      "cmp-22222j/ENC1",
+      "cmp-22223m/J1"
+    ]
+  },
+  {
+    "id": "net-222262",
+    "name": "PWM encoder left lift",
+    "connectors": [
+      "cmp-22222j/ENC2",
+      "cmp-22223q/J1"
+    ]
+  },
+  {
+    "id": "net-222265",
+    "name": "PWM encoder right lift",
+    "connectors": [
+      "cmp-22222j/ENC3",
+      "cmp-22223t/J1"
+    ]
+  },
+  {
+    "id": "net-222268",
+    "name": "PWM encoder rear lift",
+    "connectors": [
+      "cmp-22222j/ENC4",
+      "cmp-22223w/J1"
+    ]
+  }
+]

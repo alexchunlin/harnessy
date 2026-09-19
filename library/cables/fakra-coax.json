@@ -1,0 +1,8 @@
+{
+  "id": "fakra-coax",
+  "name": "GMSL2 coax, RG174 class",
+  "conductors": 1,
+  "awg": 26,
+  "od_mm": 2.8,
+  "shielded": true
+}

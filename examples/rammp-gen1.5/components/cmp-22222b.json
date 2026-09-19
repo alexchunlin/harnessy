@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222b",
+  "name": "USB hub (powered)",
+  "definition": "components/usb-hub-powered"
+}

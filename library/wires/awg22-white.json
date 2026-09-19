@@ -1,0 +1,8 @@
+{
+  "id": "awg22-white",
+  "name": "22 AWG PVC, white",
+  "awg": 22,
+  "od_mm": 1.6,
+  "ampacity_a": 3,
+  "color": "white"
+}

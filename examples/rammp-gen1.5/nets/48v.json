@@ -1,0 +1,110 @@
+[
+  {
+    "id": "net-22223y",
+    "name": "Battery to switch",
+    "connectors": [
+      "cmp-22222k/MAIN",
+      "cmp-22222n/IN"
+    ],
+    "spec": "wires/awg8-red",
+    "conductors": 2
+  },
+  {
+    "id": "net-22223z",
+    "name": "Switch to bus bar",
+    "connectors": [
+      "cmp-22222n/OUT",
+      "cmp-22222p/BAT"
+    ],
+    "spec": "wires/awg8-red",
+    "conductors": 2
+  },
+  {
+    "id": "net-222242",
+    "name": "Charge",
+    "connectors": [
+      "cmp-22222k/CHG",
+      "cmp-22222m/J1"
+    ]
+  },
+  {
+    "id": "net-222243",
+    "name": "48 V PACE RACER FL",
+    "connectors": [
+      "cmp-22222p/L1",
+      "cmp-22222q/PWR"
+    ]
+  },
+  {
+    "id": "net-222244",
+    "name": "48 V PACE RACER FR",
+    "connectors": [
+      "cmp-22222p/L2",
+      "cmp-22222t/PWR"
+    ]
+  },
+  {
+    "id": "net-222245",
+    "name": "48 V Ethernet switch",
+    "connectors": [
+      "cmp-22222p/L3",
+      "cmp-22222h/PWR"
+    ]
+  },
+  {
+    "id": "net-222246",
+    "name": "48 V DC/DC",
+    "connectors": [
+      "cmp-22222p/L4",
+      "cmp-22222e/IN"
+    ]
+  },
+  {
+    "id": "net-222247",
+    "name": "48 V MIB",
+    "connectors": [
+      "cmp-22222p/L5",
+      "cmp-22222j/PWR"
+    ]
+  },
+  {
+    "id": "net-222248",
+    "name": "48 V PACE RACER RL",
+    "connectors": [
+      "cmp-22222p/L6",
+      "cmp-22222w/PWR"
+    ]
+  },
+  {
+    "id": "net-222249",
+    "name": "48 V PACE RACER RR",
+    "connectors": [
+      "cmp-22222p/L7",
+      "cmp-22222z/PWR"
+    ]
+  },
+  {
+    "id": "net-22224a",
+    "name": "48 V RoboClaw L",
+    "connectors": [
+      "cmp-22222p/L8",
+      "cmp-222234/PWR"
+    ]
+  },
+  {
+    "id": "net-22224b",
+    "name": "48 V RoboClaw R",
+    "connectors": [
+      "cmp-22222p/L9",
+      "cmp-222235/PWR"
+    ]
+  },
+  {
+    "id": "net-22224c",
+    "name": "48 V RoboClaw rear",
+    "connectors": [
+      "cmp-22222p/L10",
+      "cmp-222236/PWR"
+    ]
+  }
+]

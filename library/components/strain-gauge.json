@@ -1,0 +1,11 @@
+{
+  "id": "strain-gauge",
+  "name": "Strain gauge with amplifier",
+  "connectors": [
+    {
+      "designator": "J1",
+      "connector": "connectors/jst-gh-4"
+    }
+  ],
+  "part_number": "TBD"
+}

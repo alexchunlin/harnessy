@@ -1,0 +1,22 @@
+{
+  "id": "battery-48v-bms",
+  "name": "48 V Li-ion battery with BMS",
+  "connectors": [
+    {
+      "designator": "MAIN",
+      "connector": "connectors/xt90",
+      "label": "main output"
+    },
+    {
+      "designator": "CHG",
+      "connector": "connectors/xt60",
+      "label": "charge"
+    },
+    {
+      "designator": "CAN",
+      "connector": "connectors/jst-gh-4",
+      "label": "BMS CAN"
+    }
+  ],
+  "part_number": "TBD"
+}

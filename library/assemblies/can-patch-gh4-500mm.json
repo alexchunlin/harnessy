@@ -1,0 +1,11 @@
+{
+  "id": "can-patch-gh4-500mm",
+  "name": "CAN patch cable, JST GH 4-pin to JST GH 4-pin, 0.5 m",
+  "part_number": "TBD",
+  "length_mm": 500,
+  "ends": [
+    "connectors/jst-gh-4",
+    "connectors/jst-gh-4"
+  ],
+  "cable": "cables/can-twisted-pair-22awg"
+}

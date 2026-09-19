@@ -1,0 +1,11 @@
+{
+  "id": "fisheye-gmsl-camera",
+  "name": "Fisheye GMSL2 camera",
+  "connectors": [
+    {
+      "designator": "GMSL",
+      "connector": "connectors/fakra-z"
+    }
+  ],
+  "part_number": "TBD"
+}

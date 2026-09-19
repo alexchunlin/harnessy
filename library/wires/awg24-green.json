@@ -1,0 +1,8 @@
+{
+  "id": "awg24-green",
+  "name": "24 AWG PVC, green",
+  "awg": 24,
+  "od_mm": 1.4,
+  "ampacity_a": 2,
+  "color": "green"
+}

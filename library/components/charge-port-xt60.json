@@ -1,0 +1,11 @@
+{
+  "id": "charge-port-xt60",
+  "name": "Charge port, panel mount",
+  "connectors": [
+    {
+      "designator": "J1",
+      "connector": "connectors/xt60"
+    }
+  ],
+  "part_number": "TBD"
+}

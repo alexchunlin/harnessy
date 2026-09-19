@@ -1,0 +1,34 @@
+[
+  {
+    "id": "net-22224d",
+    "name": "24 V Kinova",
+    "connectors": [
+      "cmp-22222e/OUT1",
+      "cmp-22222g/PWR"
+    ]
+  },
+  {
+    "id": "net-22224e",
+    "name": "24 V USB hub",
+    "connectors": [
+      "cmp-22222e/OUT2",
+      "cmp-22222b/PWR"
+    ]
+  },
+  {
+    "id": "net-22224f",
+    "name": "24 V Jetson",
+    "connectors": [
+      "cmp-22222e/OUT3",
+      "cmp-22222c/PWR"
+    ]
+  },
+  {
+    "id": "net-22224g",
+    "name": "24 V joystick",
+    "connectors": [
+      "cmp-22222e/OUT4",
+      "cmp-22222f/PWR"
+    ]
+  }
+]

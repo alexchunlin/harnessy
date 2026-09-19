@@ -1,0 +1,16 @@
+{
+  "id": "joystick-haptics-screen",
+  "name": "Joystick with haptics and screen",
+  "connectors": [
+    {
+      "designator": "ETH",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt30",
+      "label": "24 V in"
+    }
+  ],
+  "part_number": "TBD"
+}

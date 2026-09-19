@@ -1,0 +1,26 @@
+{
+  "id": "pace-racer",
+  "name": "PACE RACER motor controller",
+  "connectors": [
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt60",
+      "label": "48 V in"
+    },
+    {
+      "designator": "MOT",
+      "connector": "connectors/mr30",
+      "label": "three phase out"
+    },
+    {
+      "designator": "ENC",
+      "connector": "connectors/jst-gh-6",
+      "label": "SPI encoder"
+    },
+    {
+      "designator": "ETH",
+      "connector": "connectors/rj45"
+    }
+  ],
+  "part_number": "TBD"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "shielded-6c-24awg",
+  "name": "6-core shielded, 24 AWG",
+  "conductors": 6,
+  "awg": 24,
+  "od_mm": 5.5,
+  "shielded": true
+}

@@ -1,0 +1,15 @@
+{
+  "id": "inline-switch-fuse",
+  "name": "In-line switch and fuse",
+  "connectors": [
+    {
+      "designator": "IN",
+      "connector": "connectors/xt90"
+    },
+    {
+      "designator": "OUT",
+      "connector": "connectors/xt90"
+    }
+  ],
+  "part_number": "TBD"
+}

@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222x",
+  "name": "Drive motor RL",
+  "definition": "components/drive-motor-bldc"
+}

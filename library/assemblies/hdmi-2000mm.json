@@ -1,0 +1,11 @@
+{
+  "id": "hdmi-2000mm",
+  "name": "HDMI 2.0 cable, 2 m",
+  "part_number": "TBD",
+  "length_mm": 2000,
+  "ends": [
+    "connectors/hdmi-a",
+    "connectors/hdmi-a"
+  ],
+  "cable": "cables/hdmi-2m"
+}

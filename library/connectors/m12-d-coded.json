@@ -1,0 +1,8 @@
+{
+  "id": "m12-d-coded",
+  "name": "M12 D-coded 4-pin",
+  "pins": 4,
+  "mating": {
+    "part_number": "TBD"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "awg26-yellow",
+  "name": "26 AWG PVC, yellow",
+  "awg": 26,
+  "od_mm": 1.2,
+  "ampacity_a": 1.5,
+  "color": "yellow"
+}

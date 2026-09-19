@@ -1,0 +1,5 @@
+{
+  "id": "cmp-22222h",
+  "name": "Ethernet switch",
+  "definition": "components/ethernet-switch-poe-8"
+}

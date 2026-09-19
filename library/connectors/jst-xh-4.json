@@ -1,0 +1,10 @@
+{
+  "id": "jst-xh-4",
+  "name": "JST XH 4-pin",
+  "pins": 4,
+  "mating": {
+    "part_number": "XHP-4",
+    "contacts_part_number": "SXH-001T-P0.6"
+  },
+  "manufacturer": "JST"
+}

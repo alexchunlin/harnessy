@@ -1,0 +1,11 @@
+{
+  "id": "ethernet-patch-2000mm",
+  "name": "Ethernet patch cable, Cat6, 2 m",
+  "part_number": "TBD",
+  "length_mm": 2000,
+  "ends": [
+    "connectors/rj45",
+    "connectors/rj45"
+  ],
+  "cable": "cables/cat6-utp-24awg"
+}

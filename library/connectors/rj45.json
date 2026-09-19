@@ -1,0 +1,8 @@
+{
+  "id": "rj45",
+  "name": "RJ45 8P8C jack",
+  "pins": 8,
+  "mating": {
+    "part_number": "TBD"
+  }
+}

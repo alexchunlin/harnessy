@@ -1,0 +1,59 @@
+{
+  "id": "jetson-orin-carrier",
+  "name": "Nvidia Jetson Orin on GMSL carrier",
+  "connectors": [
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt30",
+      "label": "24 V in"
+    },
+    {
+      "designator": "ETH",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "HDMI",
+      "connector": "connectors/hdmi-a"
+    },
+    {
+      "designator": "USB1",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "USB2",
+      "connector": "connectors/usb-a"
+    },
+    {
+      "designator": "CAM1",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 1"
+    },
+    {
+      "designator": "CAM2",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 2"
+    },
+    {
+      "designator": "CAM3",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 3"
+    },
+    {
+      "designator": "CAM4",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 4"
+    },
+    {
+      "designator": "CAM5",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 5"
+    },
+    {
+      "designator": "CAM6",
+      "connector": "connectors/fakra-z",
+      "label": "GMSL2 camera 6"
+    }
+  ],
+  "part_number": "TBD",
+  "manufacturer": "NVIDIA"
+}

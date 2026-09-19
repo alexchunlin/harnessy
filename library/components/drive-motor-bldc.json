@@ -1,0 +1,11 @@
+{
+  "id": "drive-motor-bldc",
+  "name": "Drive motor, BLDC",
+  "connectors": [
+    {
+      "designator": "MOT",
+      "connector": "connectors/mr30"
+    }
+  ],
+  "part_number": "TBD"
+}

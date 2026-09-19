@@ -1,0 +1,8 @@
+{
+  "id": "usb-c",
+  "name": "USB-C receptacle",
+  "pins": 24,
+  "mating": {
+    "part_number": "TBD"
+  }
+}

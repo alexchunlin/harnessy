@@ -1,0 +1,16 @@
+{
+  "id": "touchscreen-10in",
+  "name": "10.1 inch touchscreen",
+  "connectors": [
+    {
+      "designator": "HDMI",
+      "connector": "connectors/hdmi-a"
+    },
+    {
+      "designator": "USB",
+      "connector": "connectors/usb-c",
+      "label": "touch"
+    }
+  ],
+  "part_number": "TBD"
+}

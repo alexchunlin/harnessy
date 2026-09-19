@@ -1,0 +1,17 @@
+{
+  "id": "kinova-gen3",
+  "name": "Kinova Gen3 arm",
+  "connectors": [
+    {
+      "designator": "ETH",
+      "connector": "connectors/rj45"
+    },
+    {
+      "designator": "PWR",
+      "connector": "connectors/xt30",
+      "label": "24 V in"
+    }
+  ],
+  "part_number": "TBD",
+  "manufacturer": "Kinova"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "orbbec-gemini-336l",
+  "name": "Orbbec Gemini 336L depth camera",
+  "connectors": [
+    {
+      "designator": "USB",
+      "connector": "connectors/usb-c"
+    }
+  ],
+  "part_number": "Gemini 336L",
+  "manufacturer": "Orbbec"
+}

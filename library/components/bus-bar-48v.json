@@ -1,0 +1,62 @@
+{
+  "id": "bus-bar-48v",
+  "name": "48 V bus bar",
+  "connectors": [
+    {
+      "designator": "BAT",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "battery feed"
+    },
+    {
+      "designator": "L1",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L2",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L3",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L4",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L5",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L6",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L7",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L8",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L9",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    },
+    {
+      "designator": "L10",
+      "connector": "connectors/busbar-m6-pair",
+      "label": "load"
+    }
+  ],
+  "part_number": "TBD"
+}

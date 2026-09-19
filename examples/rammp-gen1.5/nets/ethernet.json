@@ -1,0 +1,66 @@
+[
+  {
+    "id": "net-22224n",
+    "name": "Ethernet Jetson",
+    "connectors": [
+      "cmp-22222h/P1",
+      "cmp-22222c/ETH"
+    ]
+  },
+  {
+    "id": "net-22224p",
+    "name": "Ethernet MIB",
+    "connectors": [
+      "cmp-22222h/P2",
+      "cmp-22222j/ETH"
+    ]
+  },
+  {
+    "id": "net-22224q",
+    "name": "Ethernet joystick",
+    "connectors": [
+      "cmp-22222h/P3",
+      "cmp-22222f/ETH"
+    ]
+  },
+  {
+    "id": "net-22224r",
+    "name": "Ethernet Kinova",
+    "connectors": [
+      "cmp-22222h/P4",
+      "cmp-22222g/ETH"
+    ]
+  },
+  {
+    "id": "net-22224s",
+    "name": "Ethernet PACE RACER FL",
+    "connectors": [
+      "cmp-22222h/P5",
+      "cmp-22222q/ETH"
+    ]
+  },
+  {
+    "id": "net-22224t",
+    "name": "Ethernet PACE RACER FR",
+    "connectors": [
+      "cmp-22222h/P6",
+      "cmp-22222t/ETH"
+    ]
+  },
+  {
+    "id": "net-22224u",
+    "name": "Ethernet PACE RACER RL",
+    "connectors": [
+      "cmp-22222h/P7",
+      "cmp-22222w/ETH"
+    ]
+  },
+  {
+    "id": "net-22224v",
+    "name": "Ethernet PACE RACER RR",
+    "connectors": [
+      "cmp-22222h/P8",
+      "cmp-22222z/ETH"
+    ]
+  }
+]

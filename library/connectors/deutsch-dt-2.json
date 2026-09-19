@@ -1,0 +1,10 @@
+{
+  "id": "deutsch-dt-2",
+  "name": "Deutsch DT 2-pin",
+  "pins": 2,
+  "mating": {
+    "part_number": "DT06-2S",
+    "contacts_part_number": "0462-201-16141"
+  },
+  "manufacturer": "TE Connectivity"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "awg18-black",
+  "name": "18 AWG PVC, black",
+  "awg": 18,
+  "od_mm": 2.1,
+  "ampacity_a": 7,
+  "color": "black"
+}

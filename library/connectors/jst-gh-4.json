@@ -1,0 +1,10 @@
+{
+  "id": "jst-gh-4",
+  "name": "JST GH 4-pin",
+  "pins": 4,
+  "mating": {
+    "part_number": "GHR-04V-S",
+    "contacts_part_number": "SSHL-002T-P0.2"
+  },
+  "manufacturer": "JST"
+}
