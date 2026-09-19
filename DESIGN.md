@@ -20,7 +20,9 @@ A harness is whatever stays connected when you lift it off the machine: one conn
 
 ## Stack and files
 
-Browser app: Vite, React, TypeScript, React Flow for the canvas, Zustand for the document store. Engineers clone the repo and run it locally; review happens over screen share. A project is a folder of JSON files, one per component, topology, and canvas, opened through the browser's directory picker. Component, connector, wire, cable, and sheath definitions live in a library folder in this repo and are referenced by id, with per-project overrides.
+Browser app: Vite, React, TypeScript, React Flow for the canvas, Zustand for the document store. Engineers clone the repo and run it locally; review happens over screen share. Only Chromium can write to a local folder from page JavaScript, so a Vite server plugin does the file access instead and every browser gets it. A project is any folder on disk, opened through an in-app folder browser the plugin serves. The plugin only touches folders opened in the session plus the repo library.
+
+A project folder holds `project.json` (schema version, name, domains, layers), one file per component under `components/`, one file per domain under `nets/` listing that domain's nets, one file per topology under `topologies/`, and every drawn position under `canvas/` so no model file carries layout. A project `library/` mirrors the repo library and a file with the same id shadows the repo one whole. Ids are generated, never typed and never renumbered: a three-letter type prefix and six unambiguous lowercase characters, `cmp-k3f9qa`, with connectors local to their component as `cmp-k3f9qa/con-p2m4`. Domains and layers are typed slugs because they name files. A file's name is its id and never changes on rename. One serializer writes every file with fixed key order, id-sorted arrays, and integer lengths and positions, so diffs show only what the user changed. Active layer, viewport, and selection live in browser localStorage. ADR-0001 records the trade-offs.
 
 ## Test case
 

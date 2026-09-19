@@ -47,7 +47,7 @@ A segment bought finished rather than built: a USB, HDMI, Ethernet, or CAN patch
 _Avoid_: Off-the-shelf cable, pre-made
 
 **Endpoint**:
-A node in a topology graph that segments end at. Each node stores a drawn position for the topology view. Degree rules: a connector ends exactly one segment, a point exactly two, a breakout three or more, a splice two or more.
+A node in a topology graph that segments end at. Each node has a drawn position on the topology canvas, kept with the canvas rather than the model. Degree rules: a connector ends exactly one segment, a point exactly two, a breakout three or more, a splice two or more.
 _Avoid_: Vertex, junction
 
 **Point**:
@@ -61,6 +61,10 @@ _Avoid_: Split, junction, tee
 **Group**:
 A labelled region on the canvas that components are dragged into, for visual organisation only. A group says nothing about topology or harness membership.
 _Avoid_: Assembly, module, subsystem
+
+**Note**:
+A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.
+_Avoid_: Comment, annotation, label
 
 **Route**:
 The set of segments a net's conductors run through in a topology: the smallest subtree that reaches all of the net's connectors. A route is derived from the topology graph and never stored. Where a route branches there must be a splice for that net.
@@ -85,6 +89,16 @@ _Avoid_: Tie-down, anchor, mount
 **BOM**:
 The list manufacturing builds a harness from: mating connectors, wire and cable by spec and cut length, purchased cables by part number, sheaths by spec and cut length, splices and breakout parts, and tie points by type. Slack and service loops are not modelled in the MVP.
 _Avoid_: Parts list, cut list (a cut list is one section of the BOM)
+
+### Project and library
+
+**Project**:
+One machine's harness design: its components, nets, domains, layers, topologies, and canvases. A project references library entries by id and may shadow any of them with its own copy.
+_Avoid_: Document, workspace, file
+
+**Library**:
+The shared catalogue of component, connector, wire, cable, and sheath definitions that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
+_Avoid_: Catalogue, parts database
 
 ### Specs
 
