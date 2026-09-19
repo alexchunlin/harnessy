@@ -17,5 +17,10 @@ test("both canvases render the example", async ({ page }) => {
   await page.getByRole("button", { name: /DRC/ }).click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "test-results/drc.png" });
+  // Clicking a finding jumps to its canvas and selects the target.
+  await page.locator(".drc-jump").first().click();
+  await expect(page.getByRole("button", { name: "Connectivity" })).toHaveClass(/active/);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(1);
+  await expect(page.locator(".pane-right")).toContainText("Component");
   expect(errors.filter((e) => !e.includes("React DevTools"))).toEqual([]);
 });
