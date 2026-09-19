@@ -7,12 +7,24 @@ A tool for designing the wire harnesses of a machine. It sits between a schemati
 ### Things on the machine
 
 **Component**:
-A physical device with one or more connectors. A motor driver, a compute board, a bus bar, a battery.
-_Avoid_: Node, box, part, device
+A physical device on the machine with one or more connectors. A motor driver, a compute board, a bus bar, a battery. Usually an instance of a component definition from the library; a one-off may declare its connectors itself instead.
+_Avoid_: Node, box, part, device, instance
+
+**Component definition**:
+A library entry describing a kind of device: its name, part number, and connectors, each with a designator such as `J1` or `CAN-A`. Many components in a project can share one definition, and editing it changes all of them.
+_Avoid_: Component type, part, template
 
 **Connector**:
-A pluggable interface on a component, identified by its type (JST-GH-6, M12 D-coded, ring terminal). Holds pins. The library entry for a connector names its mating part, which is the half the harness carries and the BOM lists.
+A pluggable interface on a component, known by its designator (`J1`, `CAN-A`) and its connector type. Holds pins.
 _Avoid_: Port, plug, socket
+
+**Connector type**:
+A library entry for a kind of connector (JST-GH-6, M12 D-coded, ring terminal): pin count and the mating part, which is the half the harness carries and the BOM lists.
+_Avoid_: Connector spec, housing
+
+**Designator**:
+The name a component definition gives one of its connectors, as printed on the board or in its datasheet. Unique within the definition.
+_Avoid_: Slot, port name
 
 **Pin**:
 One electrical contact within a connector. Nets attach to connectors, not pins; pin assignment is a later refinement.
@@ -97,7 +109,7 @@ One machine's harness design: its components, nets, domains, layers, topologies,
 _Avoid_: Document, workspace, file
 
 **Library**:
-The shared catalogue of component, connector, wire, cable, and sheath definitions that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
+The shared catalogue of component definitions, connector types, wire, cable, sheath, and breakout specs, and purchased assemblies that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
 _Avoid_: Catalogue, parts database
 
 ### Specs
@@ -108,3 +120,9 @@ A reusable description of a single conductor: gauge, insulation outer diameter, 
 **Cable spec**:
 A reusable description of a jacketed multi-conductor cable such as Cat6 or a 4-core shielded cable, with its jacket outer diameter and conductor count.
 _Avoid_: Wire type, cable type
+
+**Sheath spec**:
+A reusable description of a covering: braid, spiral wrap, or heat shrink, with its nominal inside diameter.
+
+**Breakout spec**:
+A reusable description of the part fitted at a breakout: a Y-boot, a taped transition, or a heat-shrink transition. Becomes a BOM row when a breakout references it.
