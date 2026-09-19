@@ -31,7 +31,7 @@ test("switching layers is remembered per project and never touches the project f
   await page.getByLabel("Layer").selectOption("power");
   await page.waitForTimeout(200);
   await page.reload();
-  await page.getByRole("button", { name: folder }).click();
+  // The reload reopens the project by itself.
   await expect(page.getByLabel("Layer")).toHaveValue("power");
   expect(await fs.readdir(path.join(folder, "canvas"))).toEqual(before);
 });

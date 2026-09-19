@@ -263,3 +263,15 @@ test("boxes snap to the grid, size to their labels, and arrange in a row one pit
   const boxWidth = await camera.evaluate((el) => (el as unknown as { querySelector(sel: string): { offsetWidth: number } }).querySelector(".cmp-node").offsetWidth);
   expect(Math.abs(after[id2].x - after[id].x)).toBe(boxWidth + 24);
 });
+
+test("reloading the page reopens the last project, and Close returns to the folder browser for good", async ({ page }) => {
+  const folder = await freshExample("feel-reload");
+  await openProject(page, folder);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Connectivity" })).toBeVisible();
+  await expect(page.locator(".toolbar-title")).toHaveText("RAMMP Gen 1.5");
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByPlaceholder("Go to path")).toBeVisible();
+  await page.reload();
+  await expect(page.getByPlaceholder("Go to path")).toBeVisible();
+});

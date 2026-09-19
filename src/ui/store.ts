@@ -47,6 +47,8 @@ interface DocState {
   saving: boolean;
   saveError: string | undefined;
   lastSavedAt: number | undefined;
+  /** True while the last project is being reopened on load. */
+  restoring: boolean;
 
   activeLayer: string;
   activeTopology: string | undefined;
@@ -56,6 +58,8 @@ interface DocState {
   drcOpen: boolean;
 
   openFolder(path: string): Promise<{ isProject: boolean }>;
+  /** Reopen the project from the previous session, if any. Resolves once done either way. */
+  restoreLastProject(): Promise<void>;
   createProjectHere(name: string): Promise<void>;
   closeProject(): void;
   edit(fn: (p: Project) => Project, label?: string): void;
@@ -71,6 +75,8 @@ interface DocState {
 }
 
 const RECENTS_KEY = "harnessy.recents";
+/** The project open when the page was last unloaded, reopened on load. */
+const LAST_PROJECT_KEY = "harnessy.lastProject";
 const UI_KEY = (root: string) => `harnessy.ui.${root}`;
 
 export function recentProjects(): string[] {
@@ -118,6 +124,7 @@ export const useDoc = create<DocState>()(
       saving: false,
       saveError: undefined,
       lastSavedAt: undefined,
+      restoring: localStorage.getItem(LAST_PROJECT_KEY) !== null,
       activeLayer: ALL_LAYER_ID,
       activeTopology: undefined,
       view: "connectivity",
@@ -137,6 +144,7 @@ export const useDoc = create<DocState>()(
         const ui = loadUi(opened.root);
         const firstTopology = [...project.topologies.keys()].sort()[0];
         pushRecent(opened.root);
+        localStorage.setItem(LAST_PROJECT_KEY, opened.root);
         useDoc.temporal.getState().clear();
         set({
           project,
@@ -152,6 +160,19 @@ export const useDoc = create<DocState>()(
         return { isProject: true };
       },
 
+      async restoreLastProject() {
+        const last = localStorage.getItem(LAST_PROJECT_KEY);
+        if (last === null) return;
+        try {
+          const r = await get().openFolder(last);
+          if (!r.isProject) localStorage.removeItem(LAST_PROJECT_KEY);
+        } catch {
+          localStorage.removeItem(LAST_PROJECT_KEY);
+        } finally {
+          set({ restoring: false });
+        }
+      },
+
       async createProjectHere(name) {
         const { root, repoLibrary } = get();
         if (!root) throw new Error("no folder open");
@@ -159,11 +180,13 @@ export const useDoc = create<DocState>()(
         const files = saveProject(project);
         await api.write(root, fromFiles(files));
         pushRecent(root);
+        localStorage.setItem(LAST_PROJECT_KEY, root);
         useDoc.temporal.getState().clear();
         set({ project, problems: [], written: files, activeLayer: ALL_LAYER_ID, activeTopology: undefined, view: "connectivity", selection: { view: "connectivity", ids: [] } });
       },
 
       closeProject() {
+        localStorage.removeItem(LAST_PROJECT_KEY);
         set({ project: undefined, root: undefined, problems: [], written: new Map(), selection: { view: "connectivity", ids: [] } });
       },
 
