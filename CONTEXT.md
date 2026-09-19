@@ -74,6 +74,10 @@ _Avoid_: Split, junction, tee
 A labelled region on the canvas that components are dragged into, for visual organisation only. A group says nothing about topology or harness membership.
 _Avoid_: Assembly, module, subsystem
 
+**Net hub**:
+The small dot on the connectivity canvas that a net with three or more connectors is drawn around, one edge per connector. Visual only; a two-connector net has none.
+_Avoid_: Junction, node
+
 **Note**:
 A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.
 _Avoid_: Comment, annotation, label
@@ -95,8 +99,12 @@ A covering (braided sleeve, spiral wrap, heat shrink) applied over an ordered, c
 _Avoid_: Sleeving, wrap, jacket (jacket is the cable spec's own outer layer)
 
 **Tie point**:
-A location along a segment where the harness is fastened to the machine with a zip tie, P-clip, or adhesive mount. Its position is a distance in millimetres from one named endpoint of the segment. Each tie point is a BOM item.
+A location along a segment where the harness is fastened to the machine. Its position is a distance in millimetres from one named endpoint of the segment, and it references a tie spec. Each tie point is a BOM item.
 _Avoid_: Tie-down, anchor, mount
+
+**Design rule check**:
+A check the app runs continuously over the project and the active topology. An error means the BOM would be wrong and blocks export; a warning can be silenced per item.
+_Avoid_: Lint, validation
 
 **BOM**:
 The list manufacturing builds a harness from: mating connectors, wire and cable by spec and cut length, purchased cables by part number, sheaths by spec and cut length, splices and breakout parts, and tie points by type. Slack and service loops are not modelled in the MVP.
@@ -109,7 +117,7 @@ One machine's harness design: its components, nets, domains, layers, topologies,
 _Avoid_: Document, workspace, file
 
 **Library**:
-The shared catalogue of component definitions, connector types, wire, cable, sheath, and breakout specs, and purchased assemblies that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
+The shared catalogue of component definitions, connector types, wire, cable, sheath, breakout, splice, and tie specs, and purchased assemblies that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
 _Avoid_: Catalogue, parts database
 
 ### Specs
@@ -126,3 +134,9 @@ A reusable description of a covering: braid, spiral wrap, or heat shrink, with i
 
 **Breakout spec**:
 A reusable description of the part fitted at a breakout: a Y-boot, a taped transition, or a heat-shrink transition. Becomes a BOM row when a breakout references it.
+
+**Splice spec**:
+A reusable description of how a splice is made: a solder sleeve or a crimp butt splice. Optional on a splice.
+
+**Tie spec**:
+A reusable description of a fastener: a zip tie, a P-clip, or an adhesive mount.

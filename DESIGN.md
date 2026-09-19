@@ -26,7 +26,23 @@ A project folder holds `project.json` (schema version, name, domains, layers), o
 
 ## Library
 
-The repo carries a library, and a project `library/` mirrors it: one folder per kind (`components`, `connectors`, `wires`, `cables`, `sheaths`, `breakouts`, `assemblies`), one file per entry, filename equals id. A project file at the same path shadows the repo file whole. Library ids are typed slugs (`jst-gh-6`, `xt60`) rather than generated, because the part is the natural key and a readable catalogue tree matters for hand editing. Every reference to a library entry is spelled `<folder>/<id>`, so a domain default or a net override can name either a wire or a cable. A library component is a component definition whose connectors carry designators; a project component references one live, or declares connectors inline for a one-off. Removing a designator a net still uses leaves a dangling reference for the design rule check to list. Zod schemas in the app define every file, and generated JSON Schema is checked in for editor validation. ADR-0002 records the id split.
+The repo carries a library, and a project `library/` mirrors it: one folder per kind (`components`, `connectors`, `wires`, `cables`, `sheaths`, `breakouts`, `splices`, `ties`, `assemblies`), one file per entry, filename equals id. A project file at the same path shadows the repo file whole. Library ids are typed slugs (`jst-gh-6`, `xt60`) rather than generated, because the part is the natural key and a readable catalogue tree matters for hand editing. Every reference to a library entry is spelled `<folder>/<id>`, so a domain default or a net override can name either a wire or a cable. A library component is a component definition whose connectors carry designators; a project component references one live, or declares connectors inline for a one-off. Removing a designator a net still uses leaves a dangling reference for the design rule check to list. Zod schemas in the app define every file, and generated JSON Schema is checked in for editor validation. ADR-0002 records the id split.
+
+## BOM export
+
+One export per topology, downloaded as two CSV files. The cut list has one row per physical piece: housing and contacts per connector end, one wire row per conductor per leg (a spliced net has a leg per connector), one cable row per net, sheaths with their overlap, tie points with segment and distance, splices per net joined, breakouts, and purchased assemblies. Every row carries the harness, so builders filter and buyers sum. The summary aggregates by library reference. No slack allowance; rope-mockup lengths carry their own margin. Export is refused while the topology has design rule errors.
+
+## Design rule checks
+
+Checks run continuously and show in a KiCad-style panel. Errors are anything that would make the BOM wrong: unrouted or single-connector nets, a route branching without a splice, broken endpoint degree rules, missing lengths, sheath gaps or sheaths across two harnesses, two harness anchors in one piece, dangling references. Warnings cover idle connectors and components, an unnamed harness, a tie point past its segment, two domains from the project's optional `keep_apart` list sharing a segment, and a net with no spec. Warnings can be silenced per item in `drc.json`; errors cannot.
+
+## Interaction
+
+Connectivity canvas: library panel, canvas, inspector. Drag a definition from the library to place a component; drag from one connector handle to another to draw a net, choosing its domain on drop. A net with three or more connectors draws as a star around a net hub. Layers hide edges of other domains and dim components with nothing in the layer. Groups wrap a selection and take members by drag. Session undo and autosave.
+
+Topology view: one topology at a time. A tray lists connectors not yet placed; drag to place. Drag from an endpoint to empty canvas to grow a point, which becomes a breakout at three segments or a splice on request. Lengths are typed inline. Shift-click a chain of segments to apply a sheath, drop tie points on a segment and drag them along it, name a harness from any of its segments. Selecting a net highlights its route.
+
+These two models were decided on paper rather than prototyped, at Alex's request. The first working build is where the feel gets checked.
 
 ## Test case
 
@@ -34,7 +50,7 @@ RAMMP Gen 1.5. Roughly 45 components across thirteen domains: 48 V, 24 V, CAN, E
 
 ## Ruled out for now
 
-Onshape export (a future plugin will take segment endpoints and tie points as coordinates), SVG or PDF export for review, KiCad netlist import, volumetric bundle checks, and 3D routing.
+Onshape export (a future plugin will take segment endpoints and tie points as coordinates), SVG or PDF export for review, KiCad netlist import, volumetric bundle checks, and 3D routing. Deferred past the MVP: pin-level assignment, collapsing groups, CAD length import, PoE port budgets, wire sizing help, persistent undo and multi-user editing.
 
 ## Prior art
 
