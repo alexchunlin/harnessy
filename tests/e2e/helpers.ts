@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 
 export const E2E_HOME = process.env.HARNESSY_E2E_HOME ?? "/tmp/harnessy-e2e";
-const REPO = path.resolve(__dirname, "..", "..");
+const REPO = process.cwd();
 
 /** Copy the RAMMP example into the e2e home under a fresh name and return its path. */
 export async function freshExample(name: string): Promise<string> {

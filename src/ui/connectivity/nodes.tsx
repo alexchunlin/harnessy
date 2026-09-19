@@ -1,0 +1,60 @@
+import { Handle, NodeResizer, Position, type NodeProps, type Node } from "@xyflow/react";
+import { HANDLE_ROW, NODE_HEADER, NODE_WIDTH, componentHeight, handleOffset, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
+
+export function ComponentNode({ data, selected }: NodeProps<Node<ComponentNodeData>>) {
+  const { component, connectors, dimmed, netsAt } = data;
+  const height = componentHeight(connectors.length);
+  return (
+    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}`} style={{ width: NODE_WIDTH, height }}>
+      <div className="cmp-title" style={{ height: NODE_HEADER }}>
+        <span>{component.name}</span>
+        {component.definition === undefined && <span className="cmp-oneoff" title="One-off component with inline connectors">one-off</span>}
+      </div>
+      {connectors.map((c, i) => {
+        const off = handleOffset(i, connectors.length);
+        const side = i % 2 === 0 ? "left" : "right";
+        const nets = netsAt[c.designator] ?? [];
+        const title = nets.length ? `${c.designator}: ${nets.map((n) => `${n.net.name ?? n.net.id} (${n.domain.name})`).join(", ")}` : `${c.designator}: no nets`;
+        return (
+          <div key={c.designator} className={`cmp-connector ${side}`} style={{ top: off.y - HANDLE_ROW / 2, height: HANDLE_ROW }} title={title}>
+            <span className="cmp-designator">{c.designator}</span>
+            {nets.length > 0 && (
+              <span className="cmp-dots">
+                {nets.map((n) => (
+                  <i key={n.net.id} style={{ background: n.domain.color }} />
+                ))}
+              </span>
+            )}
+            <Handle id={c.designator} type="source" position={side === "left" ? Position.Left : Position.Right} isConnectable={!dimmed} className="cmp-handle" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function HubNode({ data, selected }: NodeProps<Node<HubNodeData>>) {
+  return (
+    <div className={`hub-node${selected ? " selected" : ""}`} style={{ background: data.color }} title={`${data.label}: ${data.net.connectors.length} connectors`}>
+      <Handle id="hub" type="target" position={Position.Top} className="hub-handle" />
+    </div>
+  );
+}
+
+export function GroupNode({ data, selected }: NodeProps<Node<GroupNodeData>>) {
+  return (
+    <div className={`group-node${selected ? " selected" : ""}`} style={{ width: data.group.rect.w, height: data.group.rect.h }}>
+      <NodeResizer isVisible={selected} minWidth={80} minHeight={60} />
+      <div className="group-label">{data.group.label}</div>
+    </div>
+  );
+}
+
+export function NoteNode({ data, selected }: NodeProps<Node<NoteNodeData>>) {
+  return (
+    <div className={`note-node${selected ? " selected" : ""}`}>
+      {data.note.text || <span className="muted">empty note</span>}
+      <Handle id="anchor" type="source" position={Position.Bottom} className="note-handle" />
+    </div>
+  );
+}

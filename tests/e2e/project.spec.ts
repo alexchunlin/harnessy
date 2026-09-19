@@ -29,7 +29,9 @@ test("switching layers is remembered per project and never touches the project f
   const before = await fs.readdir(path.join(folder, "canvas"));
   await openProject(page, folder);
   await page.getByLabel("Layer").selectOption("power");
+  await page.waitForTimeout(200);
   await page.reload();
+  await page.getByRole("button", { name: folder }).click();
   await expect(page.getByLabel("Layer")).toHaveValue("power");
   expect(await fs.readdir(path.join(folder, "canvas"))).toEqual(before);
 });
@@ -41,7 +43,7 @@ test("renaming the project saves only project.json", async ({ page }) => {
   for (const f of ["project.json", "canvas/connectivity.json", "drc.json"]) stamps.set(f, (await fs.stat(path.join(folder, f))).mtimeMs);
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByLabel("Project name").fill("RAMMP renamed");
-  await page.getByRole("button", { name: "Close" }).first().click();
+  await page.locator(".dialog").getByRole("button", { name: "Close" }).click();
   await waitForFile(folder, "project.json", (v) => (v as { name: string }).name === "RAMMP renamed");
   expect((await readJson(folder, "project.json") as { schema: number }).schema).toBe(1);
   for (const f of ["canvas/connectivity.json", "drc.json"]) expect((await fs.stat(path.join(folder, f))).mtimeMs).toBe(stamps.get(f));

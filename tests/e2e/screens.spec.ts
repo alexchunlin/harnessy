@@ -1,0 +1,21 @@
+import { expect, test } from "@playwright/test";
+import { freshExample, openProject } from "./helpers";
+
+test("both canvases render the example", async ({ page }) => {
+  const folder = await freshExample("screens");
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await openProject(page, folder);
+  await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: "test-results/connectivity.png" });
+  await page.getByRole("button", { name: "Topology" }).click();
+  await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: "test-results/topology.png" });
+  await page.getByRole("button", { name: /DRC/ }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "test-results/drc.png" });
+  expect(errors.filter((e) => !e.includes("React DevTools"))).toEqual([]);
+});

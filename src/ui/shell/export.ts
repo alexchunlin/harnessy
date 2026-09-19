@@ -19,5 +19,6 @@ export function exportBom(project: Project, topology: Topology): void {
   const bom = buildBom(project, topology);
   const base = `${slug(project.file.name)}-${slug(topology.name)}`;
   download(`${base}-cut-list.csv`, cutListCsv(bom));
-  download(`${base}-summary.csv`, summaryCsv(bom));
+  // Browsers drop a second download fired in the same tick.
+  setTimeout(() => download(`${base}-summary.csv`, summaryCsv(bom)), 300);
 }
