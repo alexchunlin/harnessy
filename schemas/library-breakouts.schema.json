@@ -1,0 +1,35 @@
+{
+  "$id": "https://harnessy.dev/schemas/library-breakouts.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "boot",
+        "tape",
+        "heatshrink"
+      ]
+    },
+    "part_number": {
+      "type": "string"
+    },
+    "legs": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "kind"
+  ]
+}

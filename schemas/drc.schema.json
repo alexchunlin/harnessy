@@ -1,0 +1,28 @@
+{
+  "$id": "https://harnessy.dev/schemas/drc.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "silences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "check",
+          "target"
+        ]
+      }
+    }
+  },
+  "required": [
+    "silences"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$id": "https://harnessy.dev/schemas/library-splices.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "solder_sleeve",
+        "crimp_butt"
+      ]
+    },
+    "part_number": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "kind"
+  ]
+}

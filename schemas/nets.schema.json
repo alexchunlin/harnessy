@@ -1,0 +1,37 @@
+{
+  "$id": "https://harnessy.dev/schemas/nets.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^net-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+      },
+      "name": {
+        "type": "string"
+      },
+      "connectors": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^cmp-[23456789abcdefghjkmnpqrstuvwxyz]{6}\\/[A-Za-z0-9_-]+$"
+        }
+      },
+      "spec": {
+        "type": "string",
+        "pattern": "^(wires|cables)\\/[a-z0-9][a-z0-9-]*$"
+      },
+      "conductors": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": [
+      "id",
+      "connectors"
+    ]
+  }
+}

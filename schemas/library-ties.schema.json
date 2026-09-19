@@ -1,0 +1,30 @@
+{
+  "$id": "https://harnessy.dev/schemas/library-ties.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "zip_tie",
+        "p_clip",
+        "adhesive_mount"
+      ]
+    },
+    "part_number": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "kind"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "$id": "https://harnessy.dev/schemas/library-wires.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "awg": {
+      "type": "number"
+    },
+    "od_mm": {
+      "type": "number",
+      "minimum": 0
+    },
+    "ampacity_a": {
+      "type": "number",
+      "minimum": 0
+    },
+    "color": {
+      "type": "string"
+    },
+    "part_number": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "awg",
+    "od_mm",
+    "ampacity_a",
+    "color"
+  ]
+}

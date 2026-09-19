@@ -1,0 +1,161 @@
+{
+  "$id": "https://harnessy.dev/schemas/canvas-connectivity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "components": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "y": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    "hubs": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "y": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^grp-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+          },
+          "label": {
+            "type": "string"
+          },
+          "rect": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "w": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "h": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^cmp-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "rect",
+          "members"
+        ]
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^nte-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+          },
+          "text": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "y": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "component": {
+            "type": "string",
+            "pattern": "^cmp-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+          },
+          "net": {
+            "type": "string",
+            "pattern": "^net-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "x",
+          "y"
+        ]
+      }
+    }
+  },
+  "required": [
+    "components",
+    "hubs",
+    "groups",
+    "notes"
+  ]
+}
