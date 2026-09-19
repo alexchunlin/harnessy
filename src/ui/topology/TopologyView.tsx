@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
+import { useTheme } from "../theme";
 import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
 import { SegmentEdge, setSegmentEdgeCallbacks } from "./edges";
@@ -31,6 +32,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const edit = useDoc((s) => s.edit);
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
+  const theme = useTheme((s) => s.theme);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
@@ -247,9 +249,10 @@ function Canvas({ topologyId }: { topologyId: string }) {
           fitView
           minZoom={0.1}
           proOptions={{ hideAttribution: true }}
+          colorMode={theme}
           elevateEdgesOnSelect
         >
-          <Background gap={20} />
+          <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>

@@ -3,6 +3,7 @@ import { ALL_LAYER_ID, createTopology, runChecks, visibleLayers } from "../../co
 import { redo, undo, useDoc, useProject, useTemporal } from "../store";
 import { exportBom } from "./export";
 import { SettingsDialog } from "./Settings";
+import { useTheme } from "../theme";
 
 export function Toolbar() {
   const project = useProject();
@@ -21,6 +22,8 @@ export function Toolbar() {
   const closeProject = useDoc((s) => s.closeProject);
   const canUndo = useTemporal((t) => t.pastStates.length > 0);
   const canRedo = useTemporal((t) => t.futureStates.length > 0);
+  const theme = useTheme((s) => s.theme);
+  const setTheme = useTheme((s) => s.setTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportError, setExportError] = useState<string | undefined>();
 
@@ -117,6 +120,9 @@ export function Toolbar() {
       </div>
       <div className="toolbar-group toolbar-right">
         <span className="muted">{saveError ? <span className="error">Save failed: {saveError}</span> : saving ? "Saving" : "Saved"}</span>
+        <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Switch between the dark and light canvas" aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>
+          {theme === "dark" ? "Light" : "Dark"}
+        </button>
         <button onClick={() => setSettingsOpen(true)}>Settings</button>
         <button className={drcOpen ? "active" : ""} onClick={() => toggleDrc()} title="Design rule checks">
           DRC <span className={errors ? "badge badge-error" : "badge"}>{errors}</span> <span className={warnings ? "badge badge-warning" : "badge"}>{warnings}</span>

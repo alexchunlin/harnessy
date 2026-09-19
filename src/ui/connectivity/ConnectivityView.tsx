@@ -20,6 +20,7 @@ import {
 } from "@xyflow/react";
 import { addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
+import { useTheme } from "../theme";
 import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, reconcile, type FlowNode, type NetEdgeData } from "./model";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
@@ -57,6 +58,7 @@ function Canvas() {
   const activeLayer = useDoc((s) => s.activeLayer);
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
+  const theme = useTheme((s) => s.theme);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<PendingNet | undefined>();
@@ -356,9 +358,10 @@ function Canvas() {
           fitView
           minZoom={0.1}
           proOptions={{ hideAttribution: true }}
+          colorMode={theme}
           elevateEdgesOnSelect
         >
-          <Background gap={20} />
+          <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
         {pending && <DomainPicker domains={project.file.domains} first={firstDomains} lastUsed={lastUsed} at={pending.at} onPick={pickDomain} onCancel={() => setPending(undefined)} />}

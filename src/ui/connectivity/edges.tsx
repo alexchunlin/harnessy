@@ -21,7 +21,7 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, data, selected, ma
   const labelY = offset === 0 ? my : (sourceY + 2 * cy + targetY) / 4;
   return (
     <>
-      <BaseEdge path={path} markerEnd={markerEnd} style={{ stroke: d.color, strokeWidth: selected ? 4 : 2, opacity: selected ? 1 : 0.85 }} interactionWidth={14} />
+      <BaseEdge path={path} markerEnd={markerEnd} className="net-edge" style={{ stroke: d.color, strokeWidth: selected ? 4 : 2, opacity: selected ? 1 : 0.85 }} interactionWidth={14} />
       {selected && (
         <EdgeLabelRenderer>
           <div className="edge-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, borderColor: d.color }}>

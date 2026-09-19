@@ -35,3 +35,15 @@ test("dragging a component saves its position and repaints no other component", 
     return pos.x !== start.x || pos.y !== start.y;
   });
 });
+
+test("the canvas is dark by default and the light choice survives a reload", async ({ page }) => {
+  const folder = await freshExample("feel-theme");
+  await openProject(page, folder);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".react-flow")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator(".react-flow")).toHaveClass(/light/);
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
