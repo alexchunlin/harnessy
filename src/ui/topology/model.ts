@@ -3,7 +3,7 @@ import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, degree, harnes
 
 /** Derive React Flow nodes and edges for one topology. */
 
-export interface EndpointNodeData { endpoint: Endpoint; label: string; degree: number; onRoute: boolean; [key: string]: unknown }
+export interface EndpointNodeData { endpoint: Endpoint; label: string; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; [key: string]: unknown }
 export interface TieNodeData { tie: TiePoint; label: string; [key: string]: unknown }
 export interface LabelNodeData { harness: Harness; [key: string]: unknown }
 export interface SegmentEdgeData {
@@ -24,7 +24,7 @@ export type TopoEdge = Edge<SegmentEdgeData>;
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
 
 export const ENDPOINT_SIZE: Record<Endpoint["kind"], { w: number; h: number }> = {
-  connector: { w: 150, h: 26 },
+  connector: { w: 54, h: 22 },
   point: { w: 12, h: 12 },
   breakout: { w: 20, h: 20 },
   splice: { w: 22, h: 22 },
@@ -64,8 +64,10 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
 
   const nodes: TopoNode[] = [];
   for (const e of topology.endpoints) {
-    const label = e.kind === "connector" ? connectorLabel(project, e.connector) : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
-    nodes.push({ id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id) }, selected: selected.has(e.id), zIndex: e.kind === "connector" ? 2 : 3, width: ENDPOINT_SIZE[e.kind].w, height: ENDPOINT_SIZE[e.kind].h });
+    // Connectors show only their designator; the component name is the hover title and in the inspector.
+    const label = e.kind === "connector" ? e.connector.split("/")[1] : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
+    const title = e.kind === "connector" ? connectorLabel(project, e.connector) : "";
+    nodes.push({ id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id) }, selected: selected.has(e.id), zIndex: e.kind === "connector" ? 2 : 3, width: ENDPOINT_SIZE[e.kind].w, height: ENDPOINT_SIZE[e.kind].h });
   }
 
   const sheathIndex = new Map<string, { id: string; color: string; index: number; count: number }[]>();

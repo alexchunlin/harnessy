@@ -14,6 +14,10 @@ test("both canvases render the example", async ({ page }) => {
   await expect(page.locator(".react-flow__node").first()).toBeVisible();
   await page.waitForTimeout(800);
   await page.screenshot({ path: "test-results/topology.png" });
+  // Connector endpoints show only their designator; the component name is the hover title.
+  const connector = page.locator(".ep-connector").first();
+  expect(await connector.textContent()).toMatch(/^[A-Za-z0-9_-]+$/);
+  expect(await connector.getAttribute("title")).toMatch(/^.+ [A-Za-z0-9_-]+: connector, 1 segment$/);
   await page.getByRole("button", { name: /DRC/ }).click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "test-results/drc.png" });

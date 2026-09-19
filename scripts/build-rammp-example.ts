@@ -10,12 +10,14 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, relative } from "node:path";
 import { sequentialIdSource, setIdSource } from "../src/core/ids";
 import { loadLibrary, type Files } from "../src/core/library";
-import { saveProject, type Project } from "../src/core/project";
+import { allNets, pinLayout, saveProject, type Project } from "../src/core/project";
 import { starterProject } from "../src/core/starter";
 import * as ops from "../src/core/ops";
 import { runChecks } from "../src/core/drc";
 import { buildBom } from "../src/core/bom";
 import type { Position } from "../src/core/schema";
+import { boxGeometry, fittedWidth } from "../src/ui/connectivity/model";
+import { ENDPOINT_SIZE } from "../src/ui/topology/model";
 
 setIdSource(sequentialIdSource());
 
@@ -418,6 +420,69 @@ drive.forEach((d, i) => {
   anchor(p1.segment, "24 V harness");
   sheath([p1.segment, b2.segment], "braid-6mm");
   tie(p1.segment, "zip-tie-100mm", 150);
+}
+
+// Spread out --------------------------------------------------------------------------
+
+interface Box {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function firstOverlap(boxes: Box[]): [Box, Box] | undefined {
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i];
+      const b = boxes[j];
+      if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) return [a, b];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The hand-typed positions above follow the diagram, where boxes were
+ * smaller. Push overlapping pairs apart along the axis of least overlap,
+ * a pin pitch clear, until nothing overlaps. Deterministic, so the example
+ * regenerates the same way every time.
+ */
+function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): void {
+  const gap = 24;
+  for (let i = 0; i < 10_000; i++) {
+    const pair = firstOverlap(boxes);
+    if (!pair) return;
+    const [a, b] = pair;
+    const dx = Math.min(a.x + a.w - b.x, b.x + b.w - a.x) + gap;
+    const dy = Math.min(a.y + a.h - b.y, b.y + b.h - a.y) + gap;
+    const mover = dy <= dx ? (a.y >= b.y ? a : b) : a.x >= b.x ? a : b;
+    if (dy <= dx) mover.y = snap(mover.y + dy);
+    else mover.x = snap(mover.x + dx);
+    move(mover.id, { x: mover.x, y: mover.y });
+  }
+  throw new Error("boxes still overlap after spreading");
+}
+
+{
+  const dots: Record<string, number> = {};
+  for (const { net } of allNets(p)) for (const a of net.connectors) dots[a] = (dots[a] ?? 0) + 1;
+  const boxes: Box[] = [...p.components.values()].map((c) => {
+    const sides = pinLayout(p, c);
+    const d: Record<string, number> = {};
+    for (const list of Object.values(sides)) for (const des of list) d[des] = dots[`${c.id}/${des}`] ?? 0;
+    const g = boxGeometry(sides, fittedWidth(c.name, sides, d, c.definition === undefined));
+    const pos = p.connectivityCanvas.components[c.id];
+    return { id: c.id, x: pos.x, y: pos.y, w: g.width, h: g.height };
+  });
+  spreadOut(boxes, (id, pos) => (p = ops.moveComponent(p, id, pos)));
+}
+{
+  const t0 = p.topologies.get(top)!;
+  const canvas = p.topologyCanvases.get(top)!;
+  const boxes: Box[] = t0.endpoints.map((e) => ({ id: e.id, ...canvas.endpoints[e.id], ...ENDPOINT_SIZE[e.kind] }));
+  spreadOut(boxes, (id, pos) => (p = ops.moveEndpoint(p, top, id, pos)));
 }
 
 // Check, report, write ----------------------------------------------------------------

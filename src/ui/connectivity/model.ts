@@ -61,12 +61,21 @@ const roundUp = (v: number, step: number) => Math.ceil(v / step) * step;
 const TITLE_FONT = "600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 const PIN_FONT = "11px ui-monospace, Menlo, monospace";
 const measured = new Map<string, number>();
-let context: CanvasRenderingContext2D | null | undefined;
+// Typed loosely so the module compiles for the example generator, which has no DOM lib.
+interface TextContext {
+  font: string;
+  measureText(text: string): { width: number };
+}
+let context: TextContext | null | undefined;
+function makeContext(): TextContext | null {
+  const g = globalThis as unknown as { document?: { createElement(tag: string): { getContext(kind: string): TextContext | null } } };
+  return g.document ? g.document.createElement("canvas").getContext("2d") : null;
+}
 export function textWidth(text: string, font: string): number {
   const key = `${font}|${text}`;
   const hit = measured.get(key);
   if (hit !== undefined) return hit;
-  if (context === undefined) context = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  if (context === undefined) context = makeContext();
   let w: number;
   if (context) {
     context.font = font;

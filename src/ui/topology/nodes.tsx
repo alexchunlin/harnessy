@@ -2,12 +2,12 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ENDPOINT_SIZE, type EndpointNodeData, type LabelNodeData, type TieNodeData } from "./model";
 
 export function EndpointNode({ data, selected }: NodeProps<Node<EndpointNodeData>>) {
-  const { endpoint, label, degree, onRoute } = data;
+  const { endpoint, label, title, degree, onRoute } = data;
   const size = ENDPOINT_SIZE[endpoint.kind];
   const bad =
     (endpoint.kind === "connector" && degree !== 1) || (endpoint.kind === "point" && degree !== 2) || (endpoint.kind === "breakout" && degree < 3) || (endpoint.kind === "splice" && degree < 2);
   return (
-    <div className={`ep ep-${endpoint.kind}${selected ? " selected" : ""}${bad ? " bad" : ""}${onRoute ? " on-route" : ""}`} style={{ width: size.w, height: size.h }} title={`${endpoint.kind}, ${degree} segment${degree === 1 ? "" : "s"}`}>
+    <div className={`ep ep-${endpoint.kind}${selected ? " selected" : ""}${bad ? " bad" : ""}${onRoute ? " on-route" : ""}`} style={{ width: size.w, height: size.h }} title={`${title ? `${title}: ` : ""}${endpoint.kind}, ${degree} segment${degree === 1 ? "" : "s"}`}>
       {endpoint.kind === "connector" && <span className="ep-label">{label}</span>}
       {endpoint.kind === "breakout" && label && <span className="ep-tag">{label}</span>}
       {endpoint.kind === "splice" && <span className="ep-tag">{label}</span>}

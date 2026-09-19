@@ -11,7 +11,8 @@ test("dragging a component saves its position and repaints no other component", 
   const count = await boxes.count();
   expect(count).toBeGreaterThan(3);
 
-  const renderCounts = () => boxes.evaluateAll((els) => els.map((e) => [e.closest(".react-flow__node")!.getAttribute("data-id")!, e.getAttribute("data-renders")!] as [string, string]));
+  type El = { closest(sel: string): El | null; getAttribute(name: string): string | null };
+  const renderCounts = () => boxes.evaluateAll((els) => (els as unknown as El[]).map((e) => [e.closest(".react-flow__node")!.getAttribute("data-id")!, e.getAttribute("data-renders")!] as [string, string]));
   const before = new Map(await renderCounts());
 
   const target = page.locator(".react-flow__node-component").first();
@@ -259,6 +260,6 @@ test("boxes snap to the grid, size to their labels, and arrange in a row one pit
     return c[id].y === c[id2].y;
   });
   const after = (await positions()).components;
-  const boxWidth = await camera.evaluate((el) => (el.querySelector(".cmp-node") as { offsetWidth: number }).offsetWidth);
+  const boxWidth = await camera.evaluate((el) => (el as unknown as { querySelector(sel: string): { offsetWidth: number } }).querySelector(".cmp-node").offsetWidth);
   expect(Math.abs(after[id2].x - after[id].x)).toBe(boxWidth + 24);
 });
