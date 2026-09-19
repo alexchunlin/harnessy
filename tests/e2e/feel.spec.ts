@@ -79,3 +79,28 @@ test("in a layer, inactive components and nets are greyed and cannot be dragged 
   await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
   await expect(page.locator(".cmp-node.dimmed")).toHaveCount(0);
 });
+
+test("hovering an inspector row or an edge glows the net's edges and pins", async ({ page }) => {
+  const folder = await freshExample("feel-glow");
+  await openProject(page, folder);
+  await expect(page.locator(".cmp-node").first()).toBeVisible();
+  await expect(page.locator(".net-halo")).toHaveCount(0);
+
+  // Hover an edge on the canvas: its halo appears and the pins at both ends light up.
+  const edge = page.locator(".react-flow__edge:not(.inactive)").first();
+  await edge.locator("path").first().hover({ force: true });
+  await expect(page.locator(".net-halo").first()).toBeVisible();
+  expect(await page.locator(".cmp-connector.lit").count()).toBeGreaterThanOrEqual(2);
+  await page.mouse.move(5, 300);
+  await expect(page.locator(".net-halo")).toHaveCount(0);
+  await expect(page.locator(".cmp-connector.lit")).toHaveCount(0);
+
+  // Select a component that carries nets; hovering a connector row in the inspector glows those nets.
+  const withNets = page.locator(".react-flow__node-component", { has: page.locator(".cmp-dots") }).first();
+  await withNets.locator(".cmp-title").click();
+  await expect(page.locator(".pane-right")).toContainText("Connectors");
+  await page.locator(".insp-connector", { has: page.locator(".chip") }).first().hover();
+  expect(await page.locator(".net-halo").count()).toBeGreaterThanOrEqual(1);
+  expect(await page.locator(".cmp-connector.lit").count()).toBeGreaterThanOrEqual(2);
+  await expect(page.locator(".cmp-node.selected")).toHaveCount(1);
+});

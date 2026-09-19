@@ -19,7 +19,7 @@ import {
   type Position as FlowPosition,
 } from "@xyflow/react";
 import { ALL_LAYER_ID, addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
-import { useDoc, useProject } from "../store";
+import { NO_HOVER, useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, reconcile, type FlowNode, type NetEdgeData } from "./model";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
@@ -137,6 +137,17 @@ function Canvas() {
     },
     [edit, project, applySelectChanges],
   );
+
+  // Pressing on a box freezes hover until release; the browser fires a
+  // neighbour's mouseenter before the move that starts the drag.
+  const onPointerDownCapture = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest(".react-flow__node")) useDoc.getState().lockHover(true);
+  }, []);
+  useEffect(() => {
+    const up = () => useDoc.getState().lockHover(false);
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, []);
 
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node, dragged: Node[]) => {
@@ -330,13 +341,24 @@ function Canvas() {
   const onNodeClick: NodeMouseHandler = useCallback(() => setPending(undefined), []);
   const onEdgeClick: EdgeMouseHandler = useCallback(() => setPending(undefined), []);
 
+  // Hover glows counterparts: a box glows itself, a hub or edge glows its whole net.
+  const onNodeMouseEnter: NodeMouseHandler = useCallback((_, node) => {
+    const setHover = useDoc.getState().setHover;
+    if (node.type === "component" && node.selectable !== false) setHover({ nets: [], component: node.id });
+    else if (node.type === "hub" && node.selectable !== false) setHover({ nets: [toModelId(node.id)] });
+  }, []);
+  const onEdgeMouseEnter: EdgeMouseHandler<Edge<NetEdgeData>> = useCallback((_, edge) => {
+    if (edge.data?.netId && !edge.data.inactive) useDoc.getState().setHover({ nets: [edge.data.netId] });
+  }, []);
+  const clearHover = useCallback(() => useDoc.getState().setHover(NO_HOVER), []);
+
   const firstDomains = activeDomains(project, activeLayer);
   const lastUsed = localStorage.getItem(LAST_DOMAIN_KEY) ?? undefined;
 
   return (
     <div className="view">
       <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} />
-      <div className={`canvas${activeLayer === ALL_LAYER_ID ? "" : " in-layer"}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} data-testid="connectivity-canvas">
+      <div className={`canvas${activeLayer === ALL_LAYER_ID ? "" : " in-layer"}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} onPointerDownCapture={onPointerDownCapture} data-testid="connectivity-canvas">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -348,6 +370,10 @@ function Canvas() {
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={clearHover}
+          onEdgeMouseEnter={onEdgeMouseEnter}
+          onEdgeMouseLeave={clearHover}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={24}
           deleteKeyCode={null}
@@ -359,7 +385,6 @@ function Canvas() {
           minZoom={0.1}
           proOptions={{ hideAttribution: true }}
           colorMode={theme}
-          elevateEdgesOnSelect
         >
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />

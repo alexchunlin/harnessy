@@ -1,5 +1,6 @@
 import { BaseEdge, EdgeLabelRenderer, getStraightPath, type Edge, type EdgeProps } from "@xyflow/react";
 import type { NetEdgeData } from "./model";
+import { useDoc } from "../store";
 
 /**
  * A net edge. Siblings between the same handle pair fan apart: each gets a
@@ -19,10 +20,13 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, data, selected, ma
   const path = offset === 0 ? `M ${sourceX} ${sourceY} L ${targetX} ${targetY}` : `M ${sourceX} ${sourceY} Q ${cx} ${cy} ${targetX} ${targetY}`;
   const labelX = offset === 0 ? mx : (sourceX + 2 * cx + targetX) / 4;
   const labelY = offset === 0 ? my : (sourceY + 2 * cy + targetY) / 4;
+  const hovered = useDoc((s) => s.hover.nets.includes(d.netId));
   if (d.inactive) return <BaseEdge path={path} className="net-edge inactive" interactionWidth={0} />;
+  const glow = hovered || selected;
   return (
     <>
-      <BaseEdge path={path} markerEnd={markerEnd} className="net-edge" style={{ stroke: d.color, strokeWidth: selected ? 4 : 2, opacity: selected ? 1 : 0.85 }} interactionWidth={14} />
+      {glow && <path d={path} className="net-halo" style={{ stroke: d.color }} />}
+      <BaseEdge path={path} markerEnd={markerEnd} className="net-edge" style={{ stroke: d.color, strokeWidth: glow ? 3 : 2, opacity: glow ? 1 : 0.85 }} interactionWidth={14} />
       {selected && (
         <EdgeLabelRenderer>
           <div className="edge-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, borderColor: d.color }}>

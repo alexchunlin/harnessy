@@ -1,5 +1,9 @@
 import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, moveNetToDomain, netsOnlyOn, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, setInlineConnectors, setNetSpec, updateGroup, updateNote, type Project } from "../../core";
 import { allNets } from "../../core";
+import { NO_HOVER, useDoc, type Hover } from "../store";
+
+const hover = (h: Hover) => useDoc.getState().setHover(h);
+const unhover = () => hover(NO_HOVER);
 
 type Edit = (fn: (p: Project) => Project) => void;
 
@@ -124,7 +128,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
           const address = `${id}/${con.designator}`;
           const attached = nets.filter((n) => n.net.connectors.includes(address));
           return (
-            <li key={con.designator} className="insp-connector">
+            <li key={con.designator} className="insp-connector" onMouseEnter={() => hover({ nets: attached.map((n) => n.net.id) })} onMouseLeave={unhover}>
               {c.connectors ? (
                 <div className="row">
                   <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
@@ -147,7 +151,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
               <div className="insp-nets">
                 {attached.length === 0 && <span className="muted">no nets</span>}
                 {attached.map(({ net, domain }) => (
-                  <span key={net.id} className="chip on" style={{ borderColor: domains.get(domain)?.color }}>
+                  <span key={net.id} className="chip on" style={{ borderColor: domains.get(domain)?.color }} onMouseEnter={() => hover({ nets: [net.id] })} onMouseLeave={() => hover({ nets: attached.map((n) => n.net.id) })}>
                     {net.name ?? net.id}
                   </span>
                 ))}
@@ -223,7 +227,7 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
       <h3>Connectors</h3>
       <ul className="list">
         {net.connectors.map((a) => (
-          <li key={a} className="row">
+          <li key={a} className="row" onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
             <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
             <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
               x

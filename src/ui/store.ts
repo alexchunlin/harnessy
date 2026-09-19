@@ -29,6 +29,14 @@ export interface Selection {
   ids: string[];
 }
 
+/** What the pointer is over, anywhere in the app. The canvas glows the counterparts. */
+export interface Hover {
+  nets: string[];
+  component?: string;
+}
+
+export const NO_HOVER: Hover = { nets: [] };
+
 interface DocState {
   project: Project | undefined;
   root: string | undefined;
@@ -44,6 +52,7 @@ interface DocState {
   activeTopology: string | undefined;
   view: View;
   selection: Selection;
+  hover: Hover;
   drcOpen: boolean;
 
   openFolder(path: string): Promise<{ isProject: boolean }>;
@@ -54,6 +63,9 @@ interface DocState {
   setActiveTopology(id: string | undefined): void;
   setView(view: View): void;
   select(view: View, ids: string[]): void;
+  setHover(hover: Hover): void;
+  /** While the pointer is down on a box, hover is cleared and ignored, so nothing glows under a moving box. */
+  lockHover(locked: boolean): void;
   toggleDrc(open?: boolean): void;
   flush(): Promise<void>;
 }
@@ -93,6 +105,7 @@ function saveUi(root: string, ui: UiState) {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let hoverLocked = false;
 
 export const useDoc = create<DocState>()(
   temporal(
@@ -109,6 +122,7 @@ export const useDoc = create<DocState>()(
       activeTopology: undefined,
       view: "connectivity",
       selection: { view: "connectivity", ids: [] },
+      hover: NO_HOVER,
       drcOpen: false,
 
       async openFolder(path) {
@@ -176,6 +190,16 @@ export const useDoc = create<DocState>()(
       },
       select(view, ids) {
         set({ selection: { view, ids } });
+      },
+      lockHover(locked) {
+        hoverLocked = locked;
+        if (locked && get().hover !== NO_HOVER) set({ hover: NO_HOVER });
+      },
+      setHover(hover) {
+        if (hoverLocked) return;
+        const cur = get().hover;
+        if (cur.component === hover.component && cur.nets.length === hover.nets.length && cur.nets.every((n, i) => n === hover.nets[i])) return;
+        set({ hover });
       },
       toggleDrc(open) {
         set((s) => ({ drcOpen: open ?? !s.drcOpen }));

@@ -90,7 +90,8 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const label = net.name ?? net.id;
     const ends = net.connectors.filter((a) => project.components.has(a.split("/")[0]));
     const isSelected = !inactive && selected.has(net.id);
-    const edgeProps = { selected: isSelected, zIndex: isSelected ? 5 : inactive ? 0 : 1, selectable: !inactive, focusable: !inactive, className: inactive ? "inactive" : undefined };
+    // Edges sit under boxes; a selected edge is lifted above them.
+    const edgeProps = { selected: isSelected, zIndex: isSelected ? 5 : 0, selectable: !inactive, focusable: !inactive, className: inactive ? "inactive" : undefined };
     if (ends.length === 2) {
       const [a, b] = ends;
       const edge: Edge<NetEdgeData> = {

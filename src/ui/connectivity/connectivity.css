@@ -1,5 +1,5 @@
 .cmp-node { position: relative; background: var(--box); border: 1.5px solid var(--box-border); border-radius: 6px; font-size: 12px; box-shadow: 0 1px 3px var(--shadow); }
-.cmp-node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(43,108,176,0.35); }
+.cmp-node.selected, .cmp-node.hovered { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent), 0 0 14px var(--accent); }
 /* Outside the active layer: greyed, darker, and untouchable. */
 .cmp-node.dimmed { border-color: var(--box-dim-border); background: var(--box-dim); box-shadow: none; color: var(--muted); opacity: 0.55; }
 .cmp-node.dimmed .cmp-dots { filter: grayscale(1); opacity: 0.5; }
@@ -14,9 +14,11 @@
 .cmp-dots i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 .cmp-handle { width: 9px; height: 9px; background: var(--box-border); border: 1.5px solid var(--box); }
 .cmp-handle:hover { background: var(--accent); }
+.cmp-connector.lit .cmp-handle { background: var(--glow); border-color: var(--glow); box-shadow: 0 0 0 2px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 10px var(--glow); }
+.cmp-connector.lit .cmp-designator { color: var(--glow); font-weight: 600; }
 
 .hub-node { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--canvas); box-shadow: 0 0 0 1px var(--box-border); }
-.hub-node.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.5); }
+.hub-node.selected, .hub-node.hovered { box-shadow: 0 0 0 3px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 12px var(--glow); }
 .hub-node.inactive { background: var(--box-dim-border); opacity: 0.55; pointer-events: none; }
 .hub-handle { opacity: 0; width: 14px; height: 14px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 
@@ -43,6 +45,7 @@ input.short { width: 5em; }
 
 /* Net strokes keep the stored domain colour; on dark they render a step brighter. */
 .net-edge { filter: var(--edge-lift); }
+.net-halo { fill: none; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: 0.35; pointer-events: none; filter: var(--edge-lift); }
 .net-edge.inactive { filter: none; stroke: var(--box-dim-border); stroke-width: 1.5; opacity: 0.55; }
 .react-flow__edge.inactive { pointer-events: none; }
 /* In a layer the canvas darkens a step so the lit domains stand out. */
