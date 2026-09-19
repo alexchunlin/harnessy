@@ -44,7 +44,7 @@ export function activeDomains(project: Project, layerId: string): Set<string> {
   return new Set(visibleLayers(project).find((l) => l.id === layerId)?.domains ?? []);
 }
 
-export function deriveFlow(project: Project, layerId: string, selected: Set<string>, drafts: Map<string, Position>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
+export function deriveFlow(project: Project, layerId: string, selected: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const visible = activeDomains(project, layerId);
   const nets = allNets(project);
@@ -61,7 +61,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
 
   const nodes: FlowNode[] = [];
   for (const g of project.connectivityCanvas.groups) {
-    const pos = drafts.get(g.id) ?? { x: g.rect.x, y: g.rect.y };
+    const pos = { x: g.rect.x, y: g.rect.y };
     nodes.push({ id: g.id, type: "group", position: pos, data: { group: g }, width: g.rect.w, height: g.rect.h, zIndex: -1, selected: selected.has(g.id), draggable: true, selectable: true });
   }
   for (const c of project.components.values()) {
@@ -72,7 +72,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     nodes.push({
       id: c.id,
       type: "component",
-      position: drafts.get(c.id) ?? project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
+      position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
       data: { component: c, connectors, dimmed, netsAt: at },
       selected: selected.has(c.id),
       selectable: !dimmed,
@@ -100,7 +100,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       pairCount.get(key)!.push(edge);
     } else if (ends.length >= 3) {
       const hubId = `hub:${net.id}`;
-      nodes.push({ id: hubId, type: "hub", position: drafts.get(hubId) ?? project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label }, selected: selected.has(net.id), zIndex: 2 });
+      nodes.push({ id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label }, selected: selected.has(net.id), zIndex: 2 });
       for (const a of ends) {
         edges.push({
           id: `${net.id}:${a}`, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: hubId, targetHandle: "hub",
@@ -117,7 +117,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     });
   }
   for (const n of project.connectivityCanvas.notes) {
-    nodes.push({ id: n.id, type: "note", position: drafts.get(n.id) ?? { x: n.x, y: n.y }, data: { note: n }, selected: selected.has(n.id), zIndex: 3 });
+    nodes.push({ id: n.id, type: "note", position: { x: n.x, y: n.y }, data: { note: n }, selected: selected.has(n.id), zIndex: 3 });
     const netSize = n.net ? (nets.find((x) => x.net.id === n.net)?.net.connectors.length ?? 0) : 0;
     const target = n.component ?? (netSize >= 3 ? `hub:${n.net}` : undefined);
     if (target && nodes.some((x) => x.id === target)) {
@@ -125,4 +125,38 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     }
   }
   return { nodes, edges };
+}
+
+/**
+ * Keep object identity across derivations. React Flow re-renders a node or
+ * edge only when the object it was handed changes, so a derived item that
+ * equals its predecessor is replaced by the predecessor. Equality is
+ * structural to a fixed depth; deeper values compare by reference, which the
+ * model's immutable updates make correct. Nodes also keep their measured
+ * size, which React Flow stores on the object.
+ */
+export function reconcile<T extends { id: string; measured?: unknown }>(prev: T[], derived: T[]): T[] {
+  const byId = new Map(prev.map((p) => [p.id, p]));
+  let changed = prev.length !== derived.length;
+  const out = derived.map((d, i) => {
+    const p = byId.get(d.id);
+    if (p && equalTo(p, d, 5)) {
+      if (p !== prev[i]) changed = true;
+      return p;
+    }
+    changed = true;
+    return p && p.measured !== undefined ? { ...d, measured: p.measured } : d;
+  });
+  return changed ? out : prev;
+}
+
+function equalTo(a: unknown, b: unknown, depth: number): boolean {
+  if (a === b) return true;
+  if (depth === 0 || typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a).filter((k) => k !== "measured");
+  const kb = Object.keys(b).filter((k) => k !== "measured");
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) if (!equalTo((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], depth - 1)) return false;
+  return true;
 }

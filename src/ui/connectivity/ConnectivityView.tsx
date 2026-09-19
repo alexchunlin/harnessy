@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyEdgeChanges,
+  applyNodeChanges,
   Background,
   ConnectionMode,
   Controls,
@@ -18,7 +20,7 @@ import {
 } from "@xyflow/react";
 import { addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
-import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, type FlowNode, type NetEdgeData } from "./model";
+import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, reconcile, type FlowNode, type NetEdgeData } from "./model";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
 import { DRAG_TYPE, LibraryPanel } from "./LibraryPanel";
@@ -57,12 +59,23 @@ function Canvas() {
   const select = useDoc((s) => s.select);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
-  const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
   const [pending, setPending] = useState<PendingNet | undefined>();
   const lastLocalSelection = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "connectivity" ? selection.ids : []), [selection]);
-  const { nodes, edges } = useMemo(() => deriveFlow(project, activeLayer, selected, drafts), [project, activeLayer, selected, drafts]);
+  const derived = useMemo(() => deriveFlow(project, activeLayer, selected), [project, activeLayer, selected]);
+
+  // React Flow owns the nodes and edges it draws, so a drag in flight lives
+  // there and never touches the project. When the derivation changes, the
+  // new items are merged in and anything unchanged keeps its identity.
+  const [nodes, setNodes] = useState<FlowNode[]>(derived.nodes);
+  const [edges, setEdges] = useState<Edge<NetEdgeData>[]>(derived.edges);
+  const [lastDerived, setLastDerived] = useState(derived);
+  if (lastDerived !== derived) {
+    setLastDerived(derived);
+    setNodes(reconcile(nodes, derived.nodes));
+    setEdges(reconcile(edges, derived.edges));
+  }
 
   // Selection arriving from outside (the design rule panel) gets revealed.
   useEffect(() => {
@@ -99,21 +112,18 @@ function Canvas() {
     [select],
   );
 
-  const onEdgesChange = useCallback((changes: EdgeChange<Edge<NetEdgeData>>[]) => applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]), [applySelectChanges]);
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange<Edge<NetEdgeData>>[]) => {
+      setEdges((es) => applyEdgeChanges(changes, es));
+      applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]);
+    },
+    [applySelectChanges],
+  );
 
   const onNodesChange = useCallback(
     (changes: NodeChange<FlowNode>[]) => {
+      setNodes((ns) => applyNodeChanges(changes, ns));
       applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]);
-      setDrafts((prev) => {
-        let next: Map<string, Position> | undefined;
-        for (const c of changes) {
-          if (c.type === "position" && c.position) {
-            next ??= new Map(prev);
-            if (c.dragging) next.set(c.id, c.position);
-          }
-        }
-        return next ?? prev;
-      });
       for (const c of changes) {
         if (c.type === "dimensions" && c.resizing === false && c.dimensions) {
           const g = project.connectivityCanvas.groups.find((g) => g.id === c.id);
@@ -159,7 +169,6 @@ function Canvas() {
         }
         return next;
       });
-      setDrafts(new Map());
     },
     [edit],
   );

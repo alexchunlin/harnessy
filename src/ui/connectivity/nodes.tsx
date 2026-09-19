@@ -1,11 +1,15 @@
+import { useRef } from "react";
 import { Handle, NodeResizer, Position, type NodeProps, type Node } from "@xyflow/react";
 import { HANDLE_ROW, NODE_HEADER, NODE_WIDTH, componentHeight, handleOffset, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
 
 export function ComponentNode({ data, selected }: NodeProps<Node<ComponentNodeData>>) {
   const { component, connectors, dimmed, netsAt } = data;
   const height = componentHeight(connectors.length);
+  // Render count, exposed so a browser test can prove a drag repaints only the dragged box.
+  const renders = useRef(0);
+  renders.current += 1;
   return (
-    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}`} style={{ width: NODE_WIDTH, height }}>
+    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}`} style={{ width: NODE_WIDTH, height }} data-renders={renders.current}>
       <div className="cmp-title" style={{ height: NODE_HEADER }}>
         <span>{component.name}</span>
         {component.definition === undefined && <span className="cmp-oneoff" title="One-off component with inline connectors">one-off</span>}
