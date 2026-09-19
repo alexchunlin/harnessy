@@ -19,6 +19,7 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, data, selected, ma
   const path = offset === 0 ? `M ${sourceX} ${sourceY} L ${targetX} ${targetY}` : `M ${sourceX} ${sourceY} Q ${cx} ${cy} ${targetX} ${targetY}`;
   const labelX = offset === 0 ? mx : (sourceX + 2 * cx + targetX) / 4;
   const labelY = offset === 0 ? my : (sourceY + 2 * cy + targetY) / 4;
+  if (d.inactive) return <BaseEdge path={path} className="net-edge inactive" interactionWidth={0} />;
   return (
     <>
       <BaseEdge path={path} markerEnd={markerEnd} className="net-edge" style={{ stroke: d.color, strokeWidth: selected ? 4 : 2, opacity: selected ? 1 : 0.85 }} interactionWidth={14} />

@@ -11,10 +11,10 @@ export interface ComponentNodeData {
   netsAt: Record<string, { net: Net; domain: Domain }[]>;
   [key: string]: unknown;
 }
-export interface HubNodeData { net: Net; color: string; label: string; [key: string]: unknown }
+export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; [key: string]: unknown }
 export interface GroupNodeData { group: Group; [key: string]: unknown }
 export interface NoteNodeData { note: Note; [key: string]: unknown }
-export interface NetEdgeData { color: string; netId: string; siblingIndex: number; siblingCount: number; label: string; [key: string]: unknown }
+export interface NetEdgeData { color: string; netId: string; siblingIndex: number; siblingCount: number; label: string; inactive: boolean; [key: string]: unknown }
 
 export type FlowNode = Node<ComponentNodeData, "component"> | Node<HubNodeData, "hub"> | Node<GroupNodeData, "group"> | Node<NoteNodeData, "note">;
 
@@ -84,15 +84,18 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
   const edges: Edge<NetEdgeData>[] = [];
   const pairCount = new Map<string, Edge<NetEdgeData>[]>();
   for (const { net, domain } of nets) {
-    if (!visible.has(domain)) continue;
+    // Nets outside the layer stay drawn, greyed and untouchable, like an inactive KiCad layer.
+    const inactive = !visible.has(domain);
     const color = domains.get(domain)?.color ?? "#888";
     const label = net.name ?? net.id;
     const ends = net.connectors.filter((a) => project.components.has(a.split("/")[0]));
+    const isSelected = !inactive && selected.has(net.id);
+    const edgeProps = { selected: isSelected, zIndex: isSelected ? 5 : inactive ? 0 : 1, selectable: !inactive, focusable: !inactive, className: inactive ? "inactive" : undefined };
     if (ends.length === 2) {
       const [a, b] = ends;
       const edge: Edge<NetEdgeData> = {
         id: net.id, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: b.split("/")[0], targetHandle: b.split("/")[1],
-        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label }, selected: selected.has(net.id), zIndex: selected.has(net.id) ? 5 : 1,
+        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive }, ...edgeProps,
       };
       edges.push(edge);
       const key = [a, b].sort().join("|");
@@ -100,11 +103,14 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       pairCount.get(key)!.push(edge);
     } else if (ends.length >= 3) {
       const hubId = `hub:${net.id}`;
-      nodes.push({ id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label }, selected: selected.has(net.id), zIndex: 2 });
+      nodes.push({
+        id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label, inactive },
+        selected: isSelected, zIndex: inactive ? 0 : 2, selectable: !inactive, draggable: !inactive, connectable: !inactive, className: inactive ? "inactive" : undefined,
+      });
       for (const a of ends) {
         edges.push({
           id: `${net.id}:${a}`, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: hubId, targetHandle: "hub",
-          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label }, selected: selected.has(net.id), zIndex: selected.has(net.id) ? 5 : 1,
+          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive }, ...edgeProps,
         });
       }
     }
@@ -121,7 +127,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const netSize = n.net ? (nets.find((x) => x.net.id === n.net)?.net.connectors.length ?? 0) : 0;
     const target = n.component ?? (netSize >= 3 ? `hub:${n.net}` : undefined);
     if (target && nodes.some((x) => x.id === target)) {
-      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "" } });
+      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false } });
     }
   }
   return { nodes, edges };

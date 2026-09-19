@@ -39,7 +39,7 @@ export function ComponentNode({ data, selected }: NodeProps<Node<ComponentNodeDa
 
 export function HubNode({ data, selected }: NodeProps<Node<HubNodeData>>) {
   return (
-    <div className={`hub-node${selected ? " selected" : ""}`} style={{ background: data.color }} title={`${data.label}: ${data.net.connectors.length} connectors`}>
+    <div className={`hub-node${selected ? " selected" : ""}${data.inactive ? " inactive" : ""}`} style={{ background: data.inactive ? undefined : data.color }} title={`${data.label}: ${data.net.connectors.length} connectors`}>
       <Handle id="hub" type="target" position={Position.Top} className="hub-handle" />
     </div>
   );

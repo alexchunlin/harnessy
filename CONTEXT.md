@@ -41,7 +41,7 @@ The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethe
 _Avoid_: Type, category, class, local
 
 **Layer**:
-A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components with no net in the active layer stay drawn with dimmed outlines and hidden text.
+A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components and nets outside the active layer stay drawn, greyed and darker, and cannot be selected, dragged, or connected until the layer changes.
 _Avoid_: View, page, sheet
 
 ### Physical realization

@@ -47,3 +47,35 @@ test("the canvas is dark by default and the light choice survives a reload", asy
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
+
+test("in a layer, inactive components and nets are greyed and cannot be dragged or selected", async ({ page }) => {
+  const folder = await freshExample("feel-layer");
+  await openProject(page, folder);
+  await expect(page.locator(".cmp-node").first()).toBeVisible();
+  await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
+  await page.getByLabel("Layer").selectOption("power");
+  await expect(page.getByTestId("connectivity-canvas")).toHaveClass(/in-layer/);
+  const inactiveEdges = await page.locator(".react-flow__edge.inactive").count();
+  const activeEdges = await page.locator(".react-flow__edge:not(.inactive)").count();
+  expect(inactiveEdges).toBeGreaterThan(0);
+  expect(activeEdges).toBeGreaterThan(0);
+
+  const dimmed = page.locator(".react-flow__node-component", { has: page.locator(".cmp-node.dimmed") }).first();
+  const id = (await dimmed.getAttribute("data-id"))!;
+  const before = await dimmed.evaluate((e) => (e as { style: { transform: string } }).style.transform);
+  const b = (await dimmed.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + 10);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(b.x + b.width / 2 + i * 15, b.y + 10 + i * 10);
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  expect(await dimmed.evaluate((e) => (e as { style: { transform: string } }).style.transform)).toBe(before);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
+  const saved = (await readJson(folder, "canvas/connectivity.json")) as { components: Record<string, { x: number; y: number }> };
+  const original = (await readJson(`${process.cwd()}/examples/rammp-gen1.5`, "canvas/connectivity.json")) as { components: Record<string, { x: number; y: number }> };
+  expect(saved.components[id]).toEqual(original.components[id]);
+
+  await page.getByLabel("Layer").selectOption("all");
+  await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
+  await expect(page.locator(".cmp-node.dimmed")).toHaveCount(0);
+});
