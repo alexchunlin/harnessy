@@ -121,13 +121,18 @@ const assemblies: LibraryEntry["assemblies"][] = [
 // Component definitions -----------------------------------------------------------
 
 type Con = LibraryEntry["components"]["connectors"][number];
+type Side = Con["side"];
 
-function con(designator: string, connector: string, label?: string): Con {
-  return label ? { designator, connector: `connectors/${connector}`, label } : { designator, connector: `connectors/${connector}` };
+/** A connector, with the side of the box it is drawn on. Inputs face left, outputs right, as on a datasheet block diagram. */
+function con(designator: string, connector: string, label?: string, side?: Side): Con {
+  const c: Con = { designator, connector: `connectors/${connector}` };
+  if (label) c.label = label;
+  if (side) c.side = side;
+  return c;
 }
 
-function numbered(prefix: string, count: number, connector: string, label?: (i: number) => string): Con[] {
-  return Array.from({ length: count }, (_, i) => con(`${prefix}${i + 1}`, connector, label?.(i + 1)));
+function numbered(prefix: string, count: number, connector: string, label?: (i: number) => string, side?: Side): Con[] {
+  return Array.from({ length: count }, (_, i) => con(`${prefix}${i + 1}`, connector, label?.(i + 1), side));
 }
 
 const components: LibraryEntry["components"][] = [
@@ -137,26 +142,26 @@ const components: LibraryEntry["components"][] = [
     name: "Nvidia Jetson Orin on GMSL carrier",
     manufacturer: "NVIDIA",
     part_number: TBD,
-    connectors: [con("PWR", "xt30", "24 V in"), con("ETH", "rj45"), con("HDMI", "hdmi-a"), con("USB1", "usb-a"), con("USB2", "usb-a"), ...numbered("CAM", 6, "fakra-z", (i) => `GMSL2 camera ${i}`)],
+    connectors: [con("PWR", "xt30", "24 V in", "left"), con("ETH", "rj45", undefined, "right"), con("HDMI", "hdmi-a", undefined, "right"), con("USB1", "usb-a", undefined, "right"), con("USB2", "usb-a", undefined, "right"), ...numbered("CAM", 6, "fakra-z", (i) => `GMSL2 camera ${i}`, "bottom")],
   },
   { id: "touchscreen-10in", name: "10.1 inch touchscreen", part_number: TBD, connectors: [con("HDMI", "hdmi-a"), con("USB", "usb-c", "touch")] },
-  { id: "usb-hub-powered", name: "USB hub, powered, 4 port", part_number: TBD, connectors: [con("UP", "usb-c", "upstream"), ...numbered("D", 4, "usb-a"), con("PWR", "dc-barrel-5521", "24 V in")] },
+  { id: "usb-hub-powered", name: "USB hub, powered, 4 port", part_number: TBD, connectors: [con("UP", "usb-c", "upstream", "left"), ...numbered("D", 4, "usb-a", undefined, "right"), con("PWR", "dc-barrel-5521", "24 V in", "left")] },
   { id: "orbbec-gemini-336l", name: "Orbbec Gemini 336L depth camera", manufacturer: "Orbbec", part_number: "Gemini 336L", connectors: [con("USB", "usb-c")] },
   { id: "fisheye-gmsl-camera", name: "Fisheye GMSL2 camera", part_number: TBD, connectors: [con("GMSL", "fakra-z")] },
-  { id: "dcdc-48-24", name: "48 V to 24 V DC/DC converter", part_number: TBD, connectors: [con("IN", "xt60", "48 V in"), ...numbered("OUT", 4, "xt30", () => "24 V out")] },
-  { id: "ethernet-switch-poe-8", name: "Ethernet switch, 8 port, PoE", part_number: TBD, connectors: [...numbered("P", 8, "rj45"), con("PWR", "xt60", "48 V in")] },
+  { id: "dcdc-48-24", name: "48 V to 24 V DC/DC converter", part_number: TBD, connectors: [con("IN", "xt60", "48 V in", "left"), ...numbered("OUT", 4, "xt30", () => "24 V out", "right")] },
+  { id: "ethernet-switch-poe-8", name: "Ethernet switch, 8 port, PoE", part_number: TBD, connectors: [...numbered("P", 8, "rj45", undefined, "right"), con("PWR", "xt60", "48 V in", "left")] },
   {
     id: "mib",
     name: "MIB (main interface board)",
     part_number: TBD,
     connectors: [
-      con("PWR", "xt60", "48 V in"),
-      con("ETH", "rj45"),
-      con("CAN-A", "jst-gh-4"),
-      con("CAN-B", "jst-gh-4"),
-      ...numbered("AIN", 4, "jst-gh-4", () => "strain gauge, 10 V supply plus analog"),
-      ...numbered("ENC", 4, "jst-gh-4", () => "PWM encoder"),
-      ...numbered("DIO", 4, "jst-xh-4", () => "limit switch pair"),
+      con("PWR", "xt60", "48 V in", "left"),
+      con("ETH", "rj45", undefined, "left"),
+      con("CAN-A", "jst-gh-4", undefined, "left"),
+      con("CAN-B", "jst-gh-4", undefined, "left"),
+      ...numbered("AIN", 4, "jst-gh-4", () => "strain gauge, 10 V supply plus analog", "right"),
+      ...numbered("ENC", 4, "jst-gh-4", () => "PWM encoder", "right"),
+      ...numbered("DIO", 4, "jst-xh-4", () => "limit switch pair", "right"),
     ],
   },
   { id: "joystick-haptics-screen", name: "Joystick with haptics and screen", part_number: TBD, connectors: [con("ETH", "rj45"), con("PWR", "xt30", "24 V in")] },
@@ -165,11 +170,11 @@ const components: LibraryEntry["components"][] = [
   // Power
   { id: "battery-48v-bms", name: "48 V Li-ion battery with BMS", part_number: TBD, connectors: [con("MAIN", "xt90", "main output"), con("CHG", "xt60", "charge"), con("CAN", "jst-gh-4", "BMS CAN")] },
   { id: "charge-port-xt60", name: "Charge port, panel mount", part_number: TBD, connectors: [con("J1", "xt60")] },
-  { id: "inline-switch-fuse", name: "In-line switch and fuse", part_number: TBD, connectors: [con("IN", "xt90"), con("OUT", "xt90")] },
-  { id: "bus-bar-48v", name: "48 V bus bar", part_number: TBD, connectors: [con("BAT", "busbar-m6-pair", "battery feed"), ...numbered("L", 10, "busbar-m6-pair", () => "load")] },
+  { id: "inline-switch-fuse", name: "In-line switch and fuse", part_number: TBD, connectors: [con("IN", "xt90", undefined, "left"), con("OUT", "xt90", undefined, "right")] },
+  { id: "bus-bar-48v", name: "48 V bus bar", part_number: TBD, connectors: [con("BAT", "busbar-m6-pair", "battery feed", "left"), ...numbered("L", 10, "busbar-m6-pair", () => "load", "right")] },
 
   // Drive corners
-  { id: "pace-racer", name: "PACE RACER motor controller", part_number: TBD, connectors: [con("PWR", "xt60", "48 V in"), con("MOT", "mr30", "three phase out"), con("ENC", "jst-gh-6", "SPI encoder"), con("ETH", "rj45")] },
+  { id: "pace-racer", name: "PACE RACER motor controller", part_number: TBD, connectors: [con("PWR", "xt60", "48 V in", "left"), con("MOT", "mr30", "three phase out", "right"), con("ENC", "jst-gh-6", "SPI encoder", "right"), con("ETH", "rj45", undefined, "left")] },
   { id: "drive-motor-bldc", name: "Drive motor, BLDC", part_number: TBD, connectors: [con("MOT", "mr30")] },
   { id: "spi-encoder", name: "SPI encoder", part_number: TBD, connectors: [con("J1", "jst-gh-6")] },
 
@@ -179,7 +184,7 @@ const components: LibraryEntry["components"][] = [
     name: "RoboClaw 60 V dual motor controller",
     manufacturer: "Basicmicro",
     part_number: TBD,
-    connectors: [con("PWR", "screw-term-2", "48 V in"), con("M1", "screw-term-2"), con("M2", "screw-term-2"), con("ENC1", "pin-header-254-6"), con("ENC2", "pin-header-254-6"), con("CAN-A", "jst-gh-4"), con("CAN-B", "jst-gh-4")],
+    connectors: [con("PWR", "screw-term-2", "48 V in", "left"), con("M1", "screw-term-2", undefined, "right"), con("M2", "screw-term-2", undefined, "right"), con("ENC1", "pin-header-254-6", undefined, "right"), con("ENC2", "pin-header-254-6", undefined, "right"), con("CAN-A", "jst-gh-4", undefined, "left"), con("CAN-B", "jst-gh-4", undefined, "left")],
   },
   { id: "lift-motor-brushed", name: "Lift or slide motor, brushed DC", part_number: TBD, connectors: [con("MOT", "xt30")] },
   { id: "abz-encoder", name: "Incremental encoder, ABZ", part_number: TBD, connectors: [con("J1", "jst-xh-6")] },

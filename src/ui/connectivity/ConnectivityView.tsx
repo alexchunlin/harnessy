@@ -21,7 +21,7 @@ import {
 import { ALL_LAYER_ID, addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
-import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, reconcile, type FlowNode, type NetEdgeData } from "./model";
+import { activeDomains, deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
 import { DRAG_TYPE, LibraryPanel } from "./LibraryPanel";
@@ -285,8 +285,8 @@ function Canvas() {
     if (label === null) return;
     const boxes = selectedComponents.map((id) => {
       const pos = project.connectivityCanvas.components[id] ?? { x: 0, y: 0 };
-      const h = componentHeight((flow.getNode(id)?.data as { connectors?: unknown[] } | undefined)?.connectors?.length ?? 1);
-      return { x1: pos.x, y1: pos.y, x2: pos.x + NODE_WIDTH, y2: pos.y + h };
+      const g = (flow.getNode(id)?.data as ComponentNodeData | undefined)?.geometry;
+      return { x1: pos.x, y1: pos.y, x2: pos.x + (g?.width ?? NODE_WIDTH), y2: pos.y + (g?.height ?? 60) };
     });
     const pad = 24;
     const x = Math.min(...boxes.map((b) => b.x1)) - pad;

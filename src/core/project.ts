@@ -18,6 +18,8 @@ import {
   type Topology,
   type TopologyCanvas,
   type LibraryFolder,
+  type Side,
+  SIDES,
 } from "./schema";
 import { emptyLibrary, explain, loadLibrary, mergeLibraries, resolveRef, type FileProblem, type Files, type Library } from "./library";
 import { serialize } from "./serialize";
@@ -51,7 +53,7 @@ export function emptyProject(name: string, repoLibrary: Library = emptyLibrary()
     components: new Map(),
     nets: new Map(),
     topologies: new Map(),
-    connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [], bends: {} },
+    connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [], bends: {}, pins: {} },
     topologyCanvases: new Map(),
     drc: { silences: [] },
     projectLibrary,
@@ -213,6 +215,32 @@ export function allConnectorAddresses(project: Project): string[] {
   for (const c of [...project.components.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
     for (const con of componentConnectors(project, c) ?? []) out.push(`${c.id}/${con.designator}`);
   }
+  return out;
+}
+
+/**
+ * Where a component's pins sit: the canvas override where it lists a
+ * designator, else the definition's side, else alternating left and right
+ * down the connector list. Order within a side follows the override, then
+ * the definition.
+ */
+export function pinLayout(project: Project, component: Component): Record<Side, string[]> {
+  const connectors = componentConnectors(project, component) ?? [];
+  const override = project.connectivityCanvas.pins[component.id] ?? {};
+  const out: Record<Side, string[]> = { left: [], right: [], top: [], bottom: [] };
+  const known = new Set(connectors.map((c) => c.designator));
+  const placed = new Set<string>();
+  for (const side of SIDES) {
+    for (const d of override[side] ?? []) {
+      if (!known.has(d) || placed.has(d)) continue;
+      out[side].push(d);
+      placed.add(d);
+    }
+  }
+  connectors.forEach((c, i) => {
+    if (placed.has(c.designator)) return;
+    out[c.side ?? (i % 2 === 0 ? "left" : "right")].push(c.designator);
+  });
   return out;
 }
 

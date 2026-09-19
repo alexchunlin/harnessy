@@ -42,3 +42,14 @@ export async function waitForFile(folder: string, rel: string, predicate: (value
     await new Promise((r) => setTimeout(r, 100));
   }
 }
+
+/** Wait until React Flow has fitted the view, so every box has its on-screen position. */
+export async function canvasSettled(page: Page): Promise<void> {
+  await page.locator(".react-flow__node").first().waitFor();
+  await page.waitForFunction(() => {
+    const doc = (globalThis as unknown as { document: { querySelector(sel: string): { style: { transform: string } } | null } }).document;
+    const t = doc.querySelector(".react-flow__viewport")?.style.transform;
+    return !!t && t !== "translate(0px, 0px) scale(1)";
+  });
+  await page.waitForTimeout(150);
+}

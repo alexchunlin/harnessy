@@ -4,11 +4,13 @@
   "connectors": [
     {
       "designator": "IN",
-      "connector": "connectors/xt90"
+      "connector": "connectors/xt90",
+      "side": "left"
     },
     {
       "designator": "OUT",
-      "connector": "connectors/xt90"
+      "connector": "connectors/xt90",
+      "side": "right"
     }
   ],
   "part_number": "TBD"

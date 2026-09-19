@@ -25,6 +25,15 @@
           },
           "label": {
             "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right",
+              "top",
+              "bottom"
+            ]
           }
         },
         "required": [

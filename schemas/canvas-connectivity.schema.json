@@ -179,6 +179,46 @@
           ]
         }
       }
+    },
+    "pins": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          "right": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          "top": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          "bottom": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        }
+      }
     }
   },
   "required": [

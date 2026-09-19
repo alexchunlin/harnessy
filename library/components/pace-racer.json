@@ -5,21 +5,25 @@
     {
       "designator": "PWR",
       "connector": "connectors/xt60",
-      "label": "48 V in"
+      "label": "48 V in",
+      "side": "left"
     },
     {
       "designator": "MOT",
       "connector": "connectors/mr30",
-      "label": "three phase out"
+      "label": "three phase out",
+      "side": "right"
     },
     {
       "designator": "ENC",
       "connector": "connectors/jst-gh-6",
-      "label": "SPI encoder"
+      "label": "SPI encoder",
+      "side": "right"
     },
     {
       "designator": "ETH",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "left"
     }
   ],
   "part_number": "TBD"

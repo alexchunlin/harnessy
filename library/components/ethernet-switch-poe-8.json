@@ -4,40 +4,49 @@
   "connectors": [
     {
       "designator": "P1",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P2",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P3",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P4",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P5",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P6",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P7",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "P8",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "PWR",
       "connector": "connectors/xt60",
-      "label": "48 V in"
+      "label": "48 V in",
+      "side": "left"
     }
   ],
   "part_number": "TBD"

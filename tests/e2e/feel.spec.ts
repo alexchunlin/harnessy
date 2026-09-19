@@ -1,18 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { freshExample, openProject, readJson, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
 test("dragging a component saves its position and repaints no other component", async ({ page }) => {
   const folder = await freshExample("feel-drag");
   await openProject(page, folder);
+  await canvasSettled(page);
   const boxes = page.locator(".cmp-node");
-  await expect(boxes.first()).toBeVisible();
   const count = await boxes.count();
   expect(count).toBeGreaterThan(3);
 
-  // Let React Flow settle its measurements before counting renders.
-  await page.waitForTimeout(300);
   const renderCounts = () => boxes.evaluateAll((els) => els.map((e) => [e.closest(".react-flow__node")!.getAttribute("data-id")!, e.getAttribute("data-renders")!] as [string, string]));
   const before = new Map(await renderCounts());
 
@@ -51,7 +49,7 @@ test("the canvas is dark by default and the light choice survives a reload", asy
 test("in a layer, inactive components and nets are greyed and cannot be dragged or selected", async ({ page }) => {
   const folder = await freshExample("feel-layer");
   await openProject(page, folder);
-  await expect(page.locator(".cmp-node").first()).toBeVisible();
+  await canvasSettled(page);
   await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
   await page.getByLabel("Layer").selectOption("power");
   await expect(page.getByTestId("connectivity-canvas")).toHaveClass(/in-layer/);
@@ -83,7 +81,7 @@ test("in a layer, inactive components and nets are greyed and cannot be dragged 
 test("hovering an inspector row or an edge glows the net's edges and pins", async ({ page }) => {
   const folder = await freshExample("feel-glow");
   await openProject(page, folder);
-  await expect(page.locator(".cmp-node").first()).toBeVisible();
+  await canvasSettled(page);
   await expect(page.locator(".net-halo")).toHaveCount(0);
 
   // Hover an edge on the canvas: its halo appears and the pins at both ends light up.
@@ -131,8 +129,7 @@ async function pointOnAnEdge(page: import("@playwright/test").Page): Promise<{ x
 test("a net is steered: double-click adds a corner, dragging a run shifts it, reset forgets the bends", async ({ page }) => {
   const folder = await freshExample("feel-steer");
   await openProject(page, folder);
-  await expect(page.locator(".cmp-node").first()).toBeVisible();
-  await page.waitForTimeout(300);
+  await canvasSettled(page);
   const bendsFile = () => readJson(folder, "canvas/connectivity.json") as Promise<{ bends: Record<string, { x: number; y: number }[]> }>;
   expect((await bendsFile()).bends).toEqual({});
 
@@ -170,4 +167,46 @@ test("a net is steered: double-click adds a corner, dragging a run shifts it, re
   // Reset: the entry goes and the line routes itself again.
   await page.getByRole("button", { name: "Reset bends" }).click();
   await waitForFile(folder, "canvas/connectivity.json", (v) => Object.keys((v as { bends: object }).bends).length === 0);
+});
+
+test("flipping a component and dragging a pin label rewrite the pin arrangement under the canvas", async ({ page }) => {
+  const folder = await freshExample("feel-pins");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  const original = (await readJson(folder, "canvas/connectivity.json")) as { pins: Record<string, unknown> };
+  expect(original.pins).toEqual({});
+
+  // The DC/DC converter's definition puts IN on the left and OUT1..4 on the right.
+  const dcdc = page.locator(".react-flow__node-component", { hasText: "24 V DC/DC" }).first();
+  const id = (await dcdc.getAttribute("data-id"))!;
+  await expect(dcdc.locator(".cmp-connector.left")).toHaveCount(1);
+  await expect(dcdc.locator(".cmp-connector.right")).toHaveCount(4);
+  await dcdc.locator(".cmp-title").click();
+  await page.getByRole("button", { name: "Flip horizontal" }).click();
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Record<string, { right?: string[] }> }).pins[id]?.right?.join() === "IN");
+  await expect(dcdc.locator(".cmp-connector.left")).toHaveCount(4);
+  const flipped = (await readJson(folder, "canvas/connectivity.json")) as { pins: Record<string, { left: string[]; right: string[]; top: string[]; bottom: string[] }> };
+  expect(flipped.pins[id]).toEqual({ left: ["OUT1", "OUT2", "OUT3", "OUT4"], right: ["IN"], top: [], bottom: [] });
+  // The component file did not change.
+  expect(await readJson(folder, `components/${id}.json`)).toEqual(await readJson(`${process.cwd()}/examples/rammp-gen1.5`, `components/${id}.json`));
+
+  // Drag OUT4's label to the top edge of the box: it moves to the top side.
+  const label = dcdc.locator(".cmp-designator", { hasText: /^OUT4$/ });
+  const l = (await label.boundingBox())!;
+  const box = (await dcdc.boundingBox())!;
+  await page.mouse.move(l.x + l.width / 2, l.y + l.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(l.x + l.width / 2 + ((box.x + box.width / 2 - l.x - l.width / 2) * i) / 8, l.y + l.height / 2 + ((box.y - l.y - l.height / 2) * i) / 8);
+  await expect(dcdc.locator(".pin-slot")).toHaveCount(1);
+  await page.mouse.up();
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Record<string, { top?: string[] }> }).pins[id]?.top?.join() === "OUT4");
+  await expect(dcdc.locator(".cmp-connector.top")).toHaveCount(1);
+  await expect(dcdc.locator(".cmp-connector.left")).toHaveCount(3);
+
+  // The inspector moves pins too.
+  await page.getByRole("button", { name: "Move OUT2 down" }).click();
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Record<string, { left?: string[] }> }).pins[id]?.left?.join() === "OUT1,OUT3,OUT2");
+  await page.getByLabel("Side of IN").selectOption("bottom");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Record<string, { bottom?: string[] }> }).pins[id]?.bottom?.join() === "IN");
+  await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(1);
 });

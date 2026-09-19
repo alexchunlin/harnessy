@@ -1,4 +1,4 @@
-import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, moveNetToDomain, netsOnlyOn, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setInlineConnectors, setNetSpec, updateGroup, updateNote, type Project } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setInlineConnectors, setNetSpec, SIDES, updateGroup, updateNote, type Project, type Side } from "../../core";
 import { allNets } from "../../core";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 
@@ -121,6 +121,16 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
         <label>Id</label>
         <code>{c.id}</code>
       </div>
+      <div className="row">
+        <button onClick={() => edit((p) => flipComponent(p, id, "horizontal"))} title="Swap the left and right pins">
+          Flip horizontal
+        </button>
+        <button onClick={() => edit((p) => flipComponent(p, id, "vertical"))} title="Swap the top and bottom pins">
+          Flip vertical
+        </button>
+      </div>
+      <h3>Pins</h3>
+      <PinList project={project} id={id} edit={edit} />
       <h3>Connectors</h3>
       {connectors === undefined && <p className="error">Definition {c.definition} is missing from the library.</p>}
       <ul className="list">
@@ -181,6 +191,41 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
       >
         Delete component
       </button>
+    </div>
+  );
+}
+
+/** Pins per side, in drawn order, with move controls for when dragging is fiddly. */
+function PinList({ project, id, edit }: { project: Project; id: string; edit: Edit }) {
+  const layout = pinLayout(project, project.components.get(id)!);
+  return (
+    <div className="pin-list">
+      {SIDES.map((side) => (
+        <div key={side} className="pin-side">
+          <div className="pin-side-name">{side}</div>
+          {layout[side].length === 0 && <span className="muted">none</span>}
+          <ul className="list">
+            {layout[side].map((d, i) => (
+              <li key={d} className="row pin-row">
+                <code style={{ flex: 1 }}>{d}</code>
+                <button aria-label={`Move ${d} up`} title="Move up" disabled={i === 0} onClick={() => edit((p) => movePin(p, id, d, side, i - 1))}>
+                  ↑
+                </button>
+                <button aria-label={`Move ${d} down`} title="Move down" disabled={i === layout[side].length - 1} onClick={() => edit((p) => movePin(p, id, d, side, i + 1))}>
+                  ↓
+                </button>
+                <select aria-label={`Side of ${d}`} value={side} onChange={(e) => edit((p) => movePin(p, id, d, e.target.value as Side, layout[e.target.value as Side].length))}>
+                  {SIDES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

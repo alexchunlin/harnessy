@@ -1,8 +1,8 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
-import { componentConnectors, findNet, type Project } from "./project";
+import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { buildGraph, degree, otherEnd } from "./derive";
-import type { Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, TiePoint, Topology } from "./schema";
+import type { Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -143,6 +143,40 @@ export function moveComponent(project: Project, id: string, position: Position):
   return next(project, { connectivityCanvas: { ...project.connectivityCanvas, components: { ...project.connectivityCanvas.components, [id]: round(position) } } });
 }
 
+// Pin placement ----------------------------------------------------------------
+
+/** Store a component's full pin arrangement on the canvas. */
+export function setPinLayout(project: Project, id: string, layout: Record<Side, string[]>): Project {
+  const pins = { ...project.connectivityCanvas.pins, [id]: { left: layout.left, right: layout.right, top: layout.top, bottom: layout.bottom } };
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, pins } });
+}
+
+/** Move one pin to a side at an index within that side. */
+export function movePin(project: Project, id: string, designator: string, side: Side, index: number): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  const layout = pinLayout(project, c);
+  const from = (Object.keys(layout) as Side[]).find((s) => layout[s].includes(designator));
+  if (!from) throw new Error(`no pin ${designator} on ${id}`);
+  const nextLayout: Record<Side, string[]> = { left: [...layout.left], right: [...layout.right], top: [...layout.top], bottom: [...layout.bottom] };
+  nextLayout[from] = nextLayout[from].filter((d) => d !== designator);
+  const at = Math.max(0, Math.min(index, nextLayout[side].length));
+  nextLayout[side] = [...nextLayout[side].slice(0, at), designator, ...nextLayout[side].slice(at)];
+  return setPinLayout(project, id, nextLayout);
+}
+
+/** Mirror a component's pins: horizontal swaps left and right, vertical swaps top and bottom. The other axis reverses order. */
+export function flipComponent(project: Project, id: string, axis: "horizontal" | "vertical"): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  const l = pinLayout(project, c);
+  const flipped: Record<Side, string[]> =
+    axis === "horizontal"
+      ? { left: l.right, right: l.left, top: [...l.top].reverse(), bottom: [...l.bottom].reverse() }
+      : { left: [...l.left].reverse(), right: [...l.right].reverse(), top: l.bottom, bottom: l.top };
+  return setPinLayout(project, id, flipped);
+}
+
 /** Nets that would lose their last other connector if this component went. */
 export function netsOnlyOn(project: Project, componentId: string): Net[] {
   const out: Net[] = [];
@@ -174,6 +208,8 @@ export function removeComponent(project: Project, id: string): Project {
   }
   const canvasComponents = { ...project.connectivityCanvas.components };
   delete canvasComponents[id];
+  const canvasPins = { ...project.connectivityCanvas.pins };
+  delete canvasPins[id];
   const touched = new Set<string>();
   for (const list of project.nets.values()) for (const n of list) if (n.connectors.some((a) => a.startsWith(`${id}/`))) touched.add(n.id);
   let p = dropBends(project, (key) => touched.has(keyNet(key)));
@@ -183,6 +219,7 @@ export function removeComponent(project: Project, id: string): Project {
     connectivityCanvas: {
       ...p.connectivityCanvas,
       components: canvasComponents,
+      pins: canvasPins,
       groups: project.connectivityCanvas.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })),
       notes: project.connectivityCanvas.notes.map((n) => (n.component === id ? { ...n, component: undefined } : n)),
     },

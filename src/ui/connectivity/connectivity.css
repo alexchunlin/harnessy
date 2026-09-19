@@ -4,11 +4,19 @@
 .cmp-node.dimmed { border-color: var(--box-dim-border); background: var(--box-dim); box-shadow: none; color: var(--muted); opacity: 0.55; }
 .cmp-node.dimmed .cmp-dots { filter: grayscale(1); opacity: 0.5; }
 .cmp-node.dimmed .cmp-handle { background: var(--box-dim-border); pointer-events: none; }
-.cmp-title { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 8px; font-weight: 600; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-title { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 8px; font-weight: 600; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmp-oneoff { font-weight: 400; font-size: 10px; color: var(--muted); }
 .cmp-connector { position: absolute; display: flex; align-items: center; gap: 4px; width: 50%; padding: 0 10px; font-size: 11px; }
 .cmp-connector.left { left: 0; }
 .cmp-connector.right { right: 0; flex-direction: row-reverse; text-align: right; }
+.cmp-connector.top, .cmp-connector.bottom { flex-direction: column; justify-content: flex-start; padding: 2px 0; gap: 2px; }
+.cmp-connector.bottom { justify-content: flex-end; }
+.cmp-connector.top .cmp-designator, .cmp-connector.bottom .cmp-designator { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 100%; overflow: hidden; }
+.cmp-designator { cursor: grab; }
+/* Where a dragged pin will land. */
+.pin-slot { position: absolute; background: var(--accent); pointer-events: none; z-index: 2; }
+.pin-slot.horizontal { width: 28px; height: 3px; margin: -1px 0 0 -14px; border-radius: 2px; }
+.pin-slot.vertical { width: 3px; height: 28px; margin: -14px 0 0 -1px; border-radius: 2px; }
 .cmp-designator { font-family: ui-monospace, Menlo, monospace; }
 .cmp-dots { display: inline-flex; gap: 2px; }
 .cmp-dots i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
@@ -56,3 +64,8 @@ input.short { width: 5em; }
 .react-flow__edge.inactive { pointer-events: none; }
 /* In a layer the canvas darkens a step so the lit domains stand out. */
 .canvas.in-layer .react-flow { background: var(--canvas-layer); }
+
+.pin-list { display: flex; flex-direction: column; gap: 4px; }
+.pin-side-name { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+.pin-row { padding: 1px 0; }
+.pin-row button { padding: 0 5px; }

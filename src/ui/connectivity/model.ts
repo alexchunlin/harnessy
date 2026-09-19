@@ -1,11 +1,12 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, pinLayout, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
 export interface ComponentNodeData {
   component: Component;
   connectors: DefinitionConnector[];
+  geometry: BoxGeometry;
   dimmed: boolean;
   /** designator to the nets attached there, for handle tooltips */
   netsAt: Record<string, { net: Net; domain: Domain }[]>;
@@ -32,20 +33,59 @@ export interface NetEdgeData {
 
 export type FlowNode = Node<ComponentNodeData, "component"> | Node<HubNodeData, "hub"> | Node<GroupNodeData, "group"> | Node<NoteNodeData, "note">;
 
-/** Pin pitch. Rows, header, and padding are multiples of the 6 px snap grid so pins land on it. */
+/** Pin pitch. Rows, header, bands, and padding are multiples of the 6 px snap grid so pins land on it. */
 export const HANDLE_ROW = 24;
 export const NODE_HEADER = 30;
+/** Height of the band that holds top or bottom pin labels. */
+export const PIN_BAND = 36;
 export const NODE_WIDTH = 180;
+const MIN_WIDTH = 120;
 
-export function componentHeight(connectorCount: number): number {
-  return NODE_HEADER + Math.max(1, Math.ceil(connectorCount / 2)) * HANDLE_ROW + 6;
+export interface PinSpot extends Position {
+  side: Side;
 }
 
-/** Handle position (relative to the node) for the i-th connector: left side even, right side odd. */
-export function handleOffset(index: number, total: number): Position {
-  void total;
-  const row = Math.floor(index / 2);
-  return { x: index % 2 === 0 ? 0 : NODE_WIDTH, y: NODE_HEADER + row * HANDLE_ROW + HANDLE_ROW / 2 };
+/** A component box: its size and where each pin sits, relative to the box. */
+export interface BoxGeometry {
+  width: number;
+  height: number;
+  /** Top of the title bar; below the top pin band when there is one. */
+  header: number;
+  sides: Record<Side, string[]>;
+  pins: Record<string, PinSpot>;
+}
+
+const roundUp = (v: number, step: number) => Math.ceil(v / step) * step;
+
+export function boxGeometry(sides: Record<Side, string[]>, width = NODE_WIDTH): BoxGeometry {
+  const rows = Math.max(1, sides.left.length, sides.right.length);
+  const topBand = sides.top.length ? PIN_BAND : 0;
+  const bottomBand = sides.bottom.length ? PIN_BAND : 0;
+  const cols = Math.max(sides.top.length, sides.bottom.length);
+  const w = Math.max(MIN_WIDTH, roundUp(width, 6), roundUp((cols + 1) * HANDLE_ROW, 6));
+  const height = topBand + NODE_HEADER + rows * HANDLE_ROW + (bottomBand || 6);
+  const pins: Record<string, PinSpot> = {};
+  sides.left.forEach((d, i) => (pins[d] = { x: 0, y: topBand + NODE_HEADER + i * HANDLE_ROW + HANDLE_ROW / 2, side: "left" }));
+  sides.right.forEach((d, i) => (pins[d] = { x: w, y: topBand + NODE_HEADER + i * HANDLE_ROW + HANDLE_ROW / 2, side: "right" }));
+  sides.top.forEach((d, i) => (pins[d] = { x: HANDLE_ROW + i * HANDLE_ROW, y: 0, side: "top" }));
+  sides.bottom.forEach((d, i) => (pins[d] = { x: HANDLE_ROW + i * HANDLE_ROW, y: height, side: "bottom" }));
+  return { width: w, height, header: topBand, sides, pins };
+}
+
+/** Where a pointer over a box would drop a pin: the nearest side and the slot index among the other pins there. */
+export function pinSlotAt(g: BoxGeometry, rel: Position, moving: string): { side: Side; index: number } {
+  const d: Record<Side, number> = { left: rel.x, right: g.width - rel.x, top: rel.y, bottom: g.height - rel.y };
+  const side = (Object.keys(d) as Side[]).reduce((best, k) => (d[k] < d[best] ? k : best));
+  const others = g.sides[side].filter((x) => x !== moving);
+  const along = side === "left" || side === "right" ? rel.y - g.header - NODE_HEADER : rel.x - HANDLE_ROW / 2;
+  const index = Math.max(0, Math.min(others.length, Math.round(along / HANDLE_ROW)));
+  return { side, index };
+}
+
+/** Where the slot marker draws, relative to the box. */
+export function slotMarker(g: BoxGeometry, side: Side, index: number): { x: number; y: number; horizontal: boolean } {
+  if (side === "left" || side === "right") return { x: side === "left" ? 0 : g.width, y: g.header + NODE_HEADER + index * HANDLE_ROW, horizontal: true };
+  return { x: HANDLE_ROW / 2 + index * HANDLE_ROW, y: side === "top" ? 0 : g.height, horizontal: false };
 }
 
 export function hubDefaultPosition(project: Project, net: Net): Position {
@@ -81,6 +121,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
   }
   for (const c of project.components.values()) {
     const connectors = componentConnectors(project, c) ?? [];
+    const geometry = boxGeometry(pinLayout(project, c));
     const dimmed = !litComponents.has(c.id) && layerId !== ALL_LAYER_ID;
     const at: ComponentNodeData["netsAt"] = {};
     for (const con of connectors) at[con.designator] = netsAt.get(`${c.id}/${con.designator}`) ?? [];
@@ -88,7 +129,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       id: c.id,
       type: "component",
       position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
-      data: { component: c, connectors, dimmed, netsAt: at },
+      data: { component: c, connectors, geometry, dimmed, netsAt: at },
       selected: selected.has(c.id),
       selectable: !dimmed,
       connectable: !dimmed,
@@ -162,7 +203,7 @@ export function reconcile<T extends { id: string; measured?: unknown }>(prev: T[
   let changed = prev.length !== derived.length;
   const out = derived.map((d, i) => {
     const p = byId.get(d.id);
-    if (p && equalTo(p, d, 5)) {
+    if (p && equalTo(p, d, 7)) {
       if (p !== prev[i]) changed = true;
       return p;
     }

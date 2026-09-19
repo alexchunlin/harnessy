@@ -104,10 +104,15 @@ export const AssemblySchema = z.object({
   cable: cableRef.optional(),
 });
 
+/** Which side of a component's box a connector sits on when drawn. */
+export const SideSchema = z.enum(["left", "right", "top", "bottom"]);
+
 export const DefinitionConnectorSchema = z.object({
   designator,
   connector: connectorRef,
   label: z.string().optional(),
+  /** Default side on the connectivity canvas; order within a side follows the list. Unset alternates left and right. */
+  side: SideSchema.optional(),
 });
 
 export const ComponentDefinitionSchema = z.object({
@@ -140,6 +145,8 @@ export type TieSpec = z.infer<typeof TieSpecSchema>;
 export type Assembly = z.infer<typeof AssemblySchema>;
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 export type DefinitionConnector = z.infer<typeof DefinitionConnectorSchema>;
+export type Side = z.infer<typeof SideSchema>;
+export const SIDES: Side[] = ["left", "right", "top", "bottom"];
 export type LibraryEntry = {
   components: ComponentDefinition;
   connectors: ConnectorType;
@@ -263,12 +270,21 @@ export const NoteSchema = z.object({
  */
 export const BendsSchema = z.record(z.string(), z.array(PositionSchema));
 
+/** A component's pin arrangement on the canvas: designators per side, in order. Overrides the definition. */
+export const PinLayoutSchema = z.object({
+  left: z.array(designator).optional(),
+  right: z.array(designator).optional(),
+  top: z.array(designator).optional(),
+  bottom: z.array(designator).optional(),
+});
+
 export const ConnectivityCanvasSchema = z.object({
   components: z.record(z.string(), PositionSchema),
   hubs: z.record(z.string(), PositionSchema),
   groups: z.array(GroupSchema),
   notes: z.array(NoteSchema),
   bends: BendsSchema.default({}),
+  pins: z.record(z.string(), PinLayoutSchema).default({}),
 });
 
 export const TopologyCanvasSchema = z.object({
@@ -295,6 +311,7 @@ export type Position = z.infer<typeof PositionSchema>;
 export type Group = z.infer<typeof GroupSchema>;
 export type Note = z.infer<typeof NoteSchema>;
 export type ConnectivityCanvas = z.infer<typeof ConnectivityCanvasSchema>;
+export type PinLayout = z.infer<typeof PinLayoutSchema>;
 export type TopologyCanvas = z.infer<typeof TopologyCanvasSchema>;
 export type DrcFile = z.infer<typeof DrcFileSchema>;
 
