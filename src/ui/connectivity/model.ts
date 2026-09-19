@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, allNets, componentConnectors, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
@@ -14,16 +14,31 @@ export interface ComponentNodeData {
 export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; [key: string]: unknown }
 export interface GroupNodeData { group: Group; [key: string]: unknown }
 export interface NoteNodeData { note: Note; [key: string]: unknown }
-export interface NetEdgeData { color: string; netId: string; siblingIndex: number; siblingCount: number; label: string; inactive: boolean; [key: string]: unknown }
+export interface NetEdgeData {
+  color: string;
+  netId: string;
+  siblingIndex: number;
+  siblingCount: number;
+  label: string;
+  inactive: boolean;
+  /** Key under the canvas file's bends. */
+  key: string;
+  /** Hand-placed bends, if any. */
+  bends?: Position[];
+  /** The target is a net hub, which has no side and no stub. */
+  hub: boolean;
+  [key: string]: unknown;
+}
 
 export type FlowNode = Node<ComponentNodeData, "component"> | Node<HubNodeData, "hub"> | Node<GroupNodeData, "group"> | Node<NoteNodeData, "note">;
 
-export const HANDLE_ROW = 22;
-export const NODE_HEADER = 28;
+/** Pin pitch. Rows, header, and padding are multiples of the 6 px snap grid so pins land on it. */
+export const HANDLE_ROW = 24;
+export const NODE_HEADER = 30;
 export const NODE_WIDTH = 180;
 
 export function componentHeight(connectorCount: number): number {
-  return NODE_HEADER + Math.max(1, Math.ceil(connectorCount / 2)) * HANDLE_ROW + 8;
+  return NODE_HEADER + Math.max(1, Math.ceil(connectorCount / 2)) * HANDLE_ROW + 6;
 }
 
 /** Handle position (relative to the node) for the i-th connector: left side even, right side odd. */
@@ -96,7 +111,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       const [a, b] = ends;
       const edge: Edge<NetEdgeData> = {
         id: net.id, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: b.split("/")[0], targetHandle: b.split("/")[1],
-        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive }, ...edgeProps,
+        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, key: bendsKey(net.id), bends: project.connectivityCanvas.bends[bendsKey(net.id)], hub: false }, ...edgeProps,
       };
       edges.push(edge);
       const key = [a, b].sort().join("|");
@@ -111,7 +126,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       for (const a of ends) {
         edges.push({
           id: `${net.id}:${a}`, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: hubId, targetHandle: "hub",
-          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive }, ...edgeProps,
+          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, key: bendsKey(net.id, a), bends: project.connectivityCanvas.bends[bendsKey(net.id, a)], hub: true }, ...edgeProps,
         });
       }
     }
@@ -128,7 +143,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const netSize = n.net ? (nets.find((x) => x.net.id === n.net)?.net.connectors.length ?? 0) : 0;
     const target = n.component ?? (netSize >= 3 ? `hub:${n.net}` : undefined);
     if (target && nodes.some((x) => x.id === target)) {
-      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false } });
+      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false, key: "", hub: false } });
     }
   }
   return { nodes, edges };

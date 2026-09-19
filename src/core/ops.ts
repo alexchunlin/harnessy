@@ -174,11 +174,14 @@ export function removeComponent(project: Project, id: string): Project {
   }
   const canvasComponents = { ...project.connectivityCanvas.components };
   delete canvasComponents[id];
-  let p = next(project, {
+  const touched = new Set<string>();
+  for (const list of project.nets.values()) for (const n of list) if (n.connectors.some((a) => a.startsWith(`${id}/`))) touched.add(n.id);
+  let p = dropBends(project, (key) => touched.has(keyNet(key)));
+  p = next(p, {
     components,
     nets,
     connectivityCanvas: {
-      ...project.connectivityCanvas,
+      ...p.connectivityCanvas,
       components: canvasComponents,
       groups: project.connectivityCanvas.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })),
       notes: project.connectivityCanvas.notes.map((n) => (n.component === id ? { ...n, component: undefined } : n)),
@@ -209,11 +212,45 @@ function updateNet(project: Project, id: string, fn: (n: Net) => Net): Project {
 }
 
 export function addConnectorToNet(project: Project, id: string, address: string): Project {
-  return updateNet(project, id, (n) => (n.connectors.includes(address) ? n : { ...n, connectors: [...n.connectors, address] }));
+  const found = findNet(project, id);
+  if (found?.net.connectors.includes(address)) return project;
+  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: [...n.connectors, address] })), (key) => keyNet(key) === id);
 }
 
 export function removeConnectorFromNet(project: Project, id: string, address: string): Project {
-  return updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) }));
+  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), (key) => keyNet(key) === id);
+}
+
+// Bends -------------------------------------------------------------------------
+
+/** The bends key for a net's drawn line: the net id, or `<net>:<address>` for a star net's spoke. */
+export function bendsKey(netId: string, address?: string): string {
+  return address ? `${netId}:${address}` : netId;
+}
+
+function keyNet(key: string): string {
+  return key.split(":")[0];
+}
+
+/** Replace the hand-placed bends on one drawn line. `undefined` returns it to automatic routing. */
+export function setBends(project: Project, key: string, bends: Position[] | undefined): Project {
+  const all = { ...project.connectivityCanvas.bends };
+  if (bends && bends.length) all[key] = bends.map(round);
+  else delete all[key];
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, bends: all } });
+}
+
+/** Forget every hand-placed bend on a net, spokes included. */
+export function resetBends(project: Project, netId: string): Project {
+  return dropBends(project, (key) => keyNet(key) === netId);
+}
+
+function dropBends(project: Project, gone: (key: string) => boolean): Project {
+  const keys = Object.keys(project.connectivityCanvas.bends).filter(gone);
+  if (keys.length === 0) return project;
+  const all = { ...project.connectivityCanvas.bends };
+  for (const k of keys) delete all[k];
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, bends: all } });
 }
 
 export function renameNet(project: Project, id: string, name: string | undefined): Project {
@@ -247,11 +284,14 @@ export function removeNet(project: Project, id: string): Project {
   for (const [tid, t] of project.topologies) {
     topologies.set(tid, { ...t, endpoints: t.endpoints.map((e) => (e.kind === "splice" ? { ...e, nets: e.nets.filter((n) => n !== id) } : e)) });
   }
-  return next(project, {
-    nets,
-    topologies,
-    connectivityCanvas: { ...project.connectivityCanvas, hubs, notes: project.connectivityCanvas.notes.map((n) => (n.net === id ? { ...n, net: undefined } : n)) },
-  });
+  return dropBends(
+    next(project, {
+      nets,
+      topologies,
+      connectivityCanvas: { ...project.connectivityCanvas, hubs, notes: project.connectivityCanvas.notes.map((n) => (n.net === id ? { ...n, net: undefined } : n)) },
+    }),
+    (key) => keyNet(key) === id,
+  );
 }
 
 export function moveHub(project: Project, netId: string, position: Position): Project {

@@ -51,7 +51,7 @@ export function emptyProject(name: string, repoLibrary: Library = emptyLibrary()
     components: new Map(),
     nets: new Map(),
     topologies: new Map(),
-    connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [] },
+    connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [], bends: {} },
     topologyCanvases: new Map(),
     drc: { silences: [] },
     projectLibrary,

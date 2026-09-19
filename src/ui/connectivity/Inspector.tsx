@@ -1,4 +1,4 @@
-import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, moveNetToDomain, netsOnlyOn, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, setInlineConnectors, setNetSpec, updateGroup, updateNote, type Project } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, moveNetToDomain, netsOnlyOn, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setInlineConnectors, setNetSpec, updateGroup, updateNote, type Project } from "../../core";
 import { allNets } from "../../core";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 
@@ -190,6 +190,7 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
   const d = project.file.domains.find((x) => x.id === domain);
   const specs = [...project.library.wires.keys()].map((k) => `wires/${k}`).concat([...project.library.cables.keys()].map((k) => `cables/${k}`));
   const free = allConnectorAddresses(project).filter((a) => !net.connectors.includes(a));
+  const hasBends = Object.keys(project.connectivityCanvas.bends).some((k) => k === id || k.startsWith(`${id}:`));
   return (
     <div className="pane pane-right">
       <h3>Net</h3>
@@ -243,7 +244,12 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
           </option>
         ))}
       </select>
-      <button onClick={() => edit((p) => removeNet(p, id))}>Delete net</button>
+      <div className="row">
+        <button onClick={() => edit((p) => resetBends(p, id))} disabled={!hasBends} title="Forget the hand-placed bends; the line routes itself again">
+          Reset bends
+        </button>
+        <button onClick={() => edit((p) => removeNet(p, id))}>Delete net</button>
+      </div>
     </div>
   );
 }

@@ -256,11 +256,19 @@ export const NoteSchema = z.object({
   net: projectId("net").optional(),
 });
 
+/**
+ * Hand-placed bends on a net's drawn line, keyed by net id for a
+ * two-connector net and by `<net id>:<connector address>` for each spoke of
+ * a star net. A net with no entry routes itself.
+ */
+export const BendsSchema = z.record(z.string(), z.array(PositionSchema));
+
 export const ConnectivityCanvasSchema = z.object({
   components: z.record(z.string(), PositionSchema),
   hubs: z.record(z.string(), PositionSchema),
   groups: z.array(GroupSchema),
   notes: z.array(NoteSchema),
+  bends: BendsSchema.default({}),
 });
 
 export const TopologyCanvasSchema = z.object({

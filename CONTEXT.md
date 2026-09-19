@@ -78,6 +78,10 @@ _Avoid_: Assembly, module, subsystem
 The small dot on the connectivity canvas that a net with three or more connectors is drawn around, one edge per connector. Visual only; a two-connector net has none.
 _Avoid_: Junction, node
 
+**Bend**:
+A hand-placed corner on the line a net is drawn with on the connectivity canvas. A net with no bends draws itself with right-angle corners from its pins' sides; steering a line stores its bends, and resetting them forgets them. Visual only, kept with the canvas.
+_Avoid_: Waypoint, route (a route is a topology term)
+
 **Note**:
 A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.
 _Avoid_: Comment, annotation, label

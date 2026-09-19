@@ -31,6 +31,12 @@
 .note-handle { opacity: 0; }
 
 .edge-label { position: absolute; background: var(--panel); border: 1px solid; border-radius: 4px; padding: 1px 6px; font-size: 11px; pointer-events: none; }
+/* Steering grips on a selected net: squares on runs, circles on corners. */
+.edge-grip { fill: var(--panel); pointer-events: all; }
+.edge-grip.run.ns { cursor: ns-resize; }
+.edge-grip.run.ew { cursor: ew-resize; }
+.edge-grip.corner { cursor: move; }
+.edge-grip:hover { fill: var(--accent); }
 
 .domain-picker { position: absolute; z-index: 20; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 20px var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 180px; max-height: 60vh; overflow: auto; }
 .domain-picker button { text-align: left; border: none; border-left: 4px solid transparent; border-radius: 3px; }
