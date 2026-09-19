@@ -3,7 +3,23 @@ import type { ComponentDefinition, Project } from "../../core";
 
 export const DRAG_TYPE = "application/x-harnessy-definition";
 
-export function LibraryPanel({ project, onBlank, onGroup, canGroup }: { project: Project; onBlank: () => void; onGroup: () => void; canGroup: boolean }) {
+export function LibraryPanel({
+  project,
+  onBlank,
+  onGroup,
+  canGroup,
+  onArrange,
+  onDistribute,
+  canDistribute,
+}: {
+  project: Project;
+  onBlank: () => void;
+  onGroup: () => void;
+  canGroup: boolean;
+  onArrange: (how: "row" | "column") => void;
+  onDistribute: () => void;
+  canDistribute: boolean;
+}) {
   const [q, setQ] = useState("");
   const entries = useMemo(() => {
     const all = [...project.library.components.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -25,6 +41,17 @@ export function LibraryPanel({ project, onBlank, onGroup, canGroup }: { project:
       <button onClick={onBlank}>New blank component</button>
       <button onClick={onGroup} disabled={!canGroup} title="Wrap the selected components in a labelled group">
         Group selection
+      </button>
+      <div className="row">
+        <button onClick={() => onArrange("row")} disabled={!canGroup} title="Line the selected components up left to right, tops aligned, one pin pitch apart">
+          Arrange in row
+        </button>
+        <button onClick={() => onArrange("column")} disabled={!canGroup} title="Stack the selected components top to bottom, left edges aligned, one pin pitch apart">
+          Arrange in column
+        </button>
+      </div>
+      <button onClick={onDistribute} disabled={!canDistribute} title="Space the selected components evenly between the two outermost">
+        Distribute evenly
       </button>
       <p className="muted">Drag a definition onto the canvas to place a component. Drag from one connector handle to another to draw a net. Double-click empty canvas for a note.</p>
     </div>

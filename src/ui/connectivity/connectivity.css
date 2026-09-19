@@ -13,6 +13,7 @@
 .cmp-connector.bottom { justify-content: flex-end; }
 .cmp-connector.top .cmp-designator, .cmp-connector.bottom .cmp-designator { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 100%; overflow: hidden; }
 .cmp-designator { cursor: grab; }
+.cmp-node.labels-hidden .cmp-designator, .cmp-node.labels-hidden .cmp-dots { visibility: hidden; }
 /* Where a dragged pin will land. */
 .pin-slot { position: absolute; background: var(--accent); pointer-events: none; z-index: 2; }
 .pin-slot.horizontal { width: 28px; height: 3px; margin: -1px 0 0 -14px; border-radius: 2px; }

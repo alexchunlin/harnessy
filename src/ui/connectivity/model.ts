@@ -57,6 +57,36 @@ export interface BoxGeometry {
 
 const roundUp = (v: number, step: number) => Math.ceil(v / step) * step;
 
+/** Text width in the canvas fonts, measured once per string. Without a DOM (unit tests) a per-character estimate stands in. */
+const TITLE_FONT = "600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+const PIN_FONT = "11px ui-monospace, Menlo, monospace";
+const measured = new Map<string, number>();
+let context: CanvasRenderingContext2D | null | undefined;
+export function textWidth(text: string, font: string): number {
+  const key = `${font}|${text}`;
+  const hit = measured.get(key);
+  if (hit !== undefined) return hit;
+  if (context === undefined) context = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  let w: number;
+  if (context) {
+    context.font = font;
+    w = context.measureText(text).width;
+  } else {
+    w = text.length * (font === PIN_FONT ? 6.6 : 7);
+  }
+  measured.set(key, w);
+  return w;
+}
+
+/** A box wide enough for its name and its widest left and right pin labels, with room for the net dots. */
+export function fittedWidth(name: string, sides: Record<Side, string[]>, dots: Record<string, number>, oneOff: boolean): number {
+  const pin = (d: string) => textWidth(d, PIN_FONT) + (dots[d] ? dots[d] * 8 + 4 : 0);
+  const widest = (list: string[]) => list.reduce((m, d) => Math.max(m, pin(d)), 0);
+  const pins = 10 + widest(sides.left) + 24 + widest(sides.right) + 10;
+  const title = 8 + textWidth(name, TITLE_FONT) + (oneOff ? 44 : 0) + 8;
+  return Math.max(pins, title);
+}
+
 export function boxGeometry(sides: Record<Side, string[]>, width = NODE_WIDTH): BoxGeometry {
   const rows = Math.max(1, sides.left.length, sides.right.length);
   const topBand = sides.top.length ? PIN_BAND : 0;
@@ -121,10 +151,15 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
   }
   for (const c of project.components.values()) {
     const connectors = componentConnectors(project, c) ?? [];
-    const geometry = boxGeometry(pinLayout(project, c));
     const dimmed = !litComponents.has(c.id) && layerId !== ALL_LAYER_ID;
     const at: ComponentNodeData["netsAt"] = {};
-    for (const con of connectors) at[con.designator] = netsAt.get(`${c.id}/${con.designator}`) ?? [];
+    const dots: Record<string, number> = {};
+    for (const con of connectors) {
+      at[con.designator] = netsAt.get(`${c.id}/${con.designator}`) ?? [];
+      dots[con.designator] = at[con.designator].length;
+    }
+    const sides = pinLayout(project, c);
+    const geometry = boxGeometry(sides, fittedWidth(c.name, sides, dots, c.definition === undefined));
     nodes.push({
       id: c.id,
       type: "component",

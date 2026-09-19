@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Handle, NodeResizer, Position, useReactFlow, useUpdateNodeInternals, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useReactFlow, useStore, useUpdateNodeInternals, type NodeProps, type Node } from "@xyflow/react";
 import { movePin, type Side } from "../../core";
 import { useDoc } from "../store";
 import { HANDLE_ROW, NODE_HEADER, PIN_BAND, pinSlotAt, slotMarker, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
@@ -61,10 +61,12 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
     useDoc.getState().edit((p) => movePin(p, component.id, designator, target.side, target.index));
   };
 
+  // Below this zoom the pin labels are a smear; names stay.
+  const labelsHidden = useStore((s) => s.transform[2] < 0.6);
   const marker = slot ? slotMarker(geometry, slot.side, slot.index) : undefined;
   const byDesignator = new Map(connectors.map((c) => [c.designator, c]));
   return (
-    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
+    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${labelsHidden ? " labels-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
       <div className="cmp-title" style={{ top: geometry.header, height: NODE_HEADER }}>
         <span>{component.name}</span>
         {component.definition === undefined && <span className="cmp-oneoff" title="One-off component with inline connectors">one-off</span>}

@@ -43,8 +43,10 @@ let p: Project = starterProject("RAMMP Gen 1.5", loaded.library);
 // Components -------------------------------------------------------------------
 // Positions follow the diagram roughly, in canvas pixels.
 
+const snap = (v: number) => Math.round(v / 6) * 6;
+
 function place(definition: string, name: string, x: number, y: number): string {
-  const r = ops.placeComponent(p, `components/${definition}`, { x, y }, name);
+  const r = ops.placeComponent(p, `components/${definition}`, { x: snap(x), y: snap(y) }, name);
   p = r.project;
   return r.id;
 }

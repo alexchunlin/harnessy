@@ -190,7 +190,14 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
   // The component file did not change.
   expect(await readJson(folder, `components/${id}.json`)).toEqual(await readJson(`${process.cwd()}/examples/rammp-gen1.5`, `components/${id}.json`));
 
-  // Drag OUT4's label to the top edge of the box: it moves to the top side.
+  // Zoom in on the box so its pin labels show, then drag OUT4's label to the top edge: it moves to the top side.
+  const centre = (await dcdc.boundingBox())!;
+  await page.mouse.move(centre.x + centre.width / 2, centre.y + centre.height / 2);
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(40);
+  }
+  await expect(dcdc.locator(".cmp-node")).not.toHaveClass(/labels-hidden/);
   const label = dcdc.locator(".cmp-designator", { hasText: /^OUT4$/ });
   const l = (await label.boundingBox())!;
   const box = (await dcdc.boundingBox())!;
@@ -209,4 +216,49 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
   await page.getByLabel("Side of IN").selectOption("bottom");
   await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Record<string, { bottom?: string[] }> }).pins[id]?.bottom?.join() === "IN");
   await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(1);
+});
+
+test("boxes snap to the grid, size to their labels, and arrange in a row one pitch apart", async ({ page }) => {
+  const folder = await freshExample("feel-grid");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  const positions = () => readJson(folder, "canvas/connectivity.json") as Promise<{ components: Record<string, { x: number; y: number }> }>;
+
+  // A short-named, one-pin box is narrower than a long-named, many-pin one.
+  const camera = page.locator(".react-flow__node-component", { hasText: "Fisheye camera 1" }).first();
+  const mib = page.locator(".react-flow__node-component", { hasText: "MIB" }).first();
+  const cameraWidth = (await camera.boundingBox())!.width;
+  const mibWidth = (await mib.boundingBox())!.width;
+  expect(mibWidth).toBeGreaterThan(cameraWidth);
+
+  // Drag the camera by an odd amount: it lands on the 6 px grid.
+  const id = (await camera.getAttribute("data-id"))!;
+  const b = (await camera.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + 6);
+  await page.mouse.down();
+  for (let i = 1; i <= 5; i++) await page.mouse.move(b.x + b.width / 2 + i * 7, b.y + 6 + i * 5);
+  await page.mouse.up();
+  const start = (await positions()).components[id];
+  await waitForFile(folder, "canvas/connectivity.json", (v) => {
+    const c = (v as { components: Record<string, { x: number; y: number }> }).components[id];
+    return c.x !== start.x || c.y !== start.y;
+  });
+  const moved = (await positions()).components[id];
+  expect(moved.x % 6).toBe(0);
+  expect(moved.y % 6).toBe(0);
+
+  // Select two cameras and arrange them in a row.
+  const camera2 = page.locator(".react-flow__node-component", { hasText: "Fisheye camera 2" }).first();
+  const id2 = (await camera2.getAttribute("data-id"))!;
+  await camera.locator(".cmp-title").click();
+  await camera2.locator(".cmp-title").click({ modifiers: ["Shift"] });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
+  await page.getByRole("button", { name: "Arrange in row" }).click();
+  await waitForFile(folder, "canvas/connectivity.json", (v) => {
+    const c = (v as { components: Record<string, { x: number; y: number }> }).components;
+    return c[id].y === c[id2].y;
+  });
+  const after = (await positions()).components;
+  const boxWidth = await camera.evaluate((el) => (el.querySelector(".cmp-node") as { offsetWidth: number }).offsetWidth);
+  expect(Math.abs(after[id2].x - after[id].x)).toBe(boxWidth + 24);
 });

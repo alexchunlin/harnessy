@@ -143,6 +143,64 @@ export function moveComponent(project: Project, id: string, position: Position):
   return next(project, { connectivityCanvas: { ...project.connectivityCanvas, components: { ...project.connectivityCanvas.components, [id]: round(position) } } });
 }
 
+// Arrange ----------------------------------------------------------------------
+
+export interface BoxSize {
+  w: number;
+  h: number;
+}
+
+const GRID = 6;
+const PITCH = 24;
+const snapTo = (v: number) => Math.round(v / GRID) * GRID;
+
+/**
+ * Line selected components up in a row (left to right, tops aligned) or a
+ * column (top to bottom, lefts aligned), one pin pitch apart, keeping their
+ * current order along that axis. Sizes come from the canvas, which knows
+ * how big each box draws.
+ */
+export function arrangeComponents(project: Project, ids: string[], how: "row" | "column", sizes: Record<string, BoxSize>): Project {
+  const pos = project.connectivityCanvas.components;
+  const placed = ids.filter((id) => pos[id] && sizes[id]);
+  if (placed.length < 2) return project;
+  const axis = how === "row" ? "x" : "y";
+  const cross = how === "row" ? "y" : "x";
+  const size = how === "row" ? "w" : "h";
+  const sorted = [...placed].sort((a, b) => pos[a][axis] - pos[b][axis]);
+  const origin = snapTo(Math.min(...sorted.map((id) => pos[id][cross])));
+  let cursor = snapTo(pos[sorted[0]][axis]);
+  let p = project;
+  for (const id of sorted) {
+    p = moveComponent(p, id, { [axis]: cursor, [cross]: origin } as unknown as Position);
+    cursor += snapTo(sizes[id][size]) + PITCH;
+  }
+  return p;
+}
+
+/** Space selected components evenly between the two outermost, which stay put. The axis is the one they spread along most. */
+export function distributeComponents(project: Project, ids: string[], sizes: Record<string, BoxSize>): Project {
+  const pos = project.connectivityCanvas.components;
+  const placed = ids.filter((id) => pos[id] && sizes[id]);
+  if (placed.length < 3) return project;
+  const spread = (axis: "x" | "y") => Math.max(...placed.map((id) => pos[id][axis])) - Math.min(...placed.map((id) => pos[id][axis]));
+  const axis = spread("x") >= spread("y") ? "x" : "y";
+  const size = axis === "x" ? "w" : "h";
+  const sorted = [...placed].sort((a, b) => pos[a][axis] - pos[b][axis]);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const span = pos[last][axis] - (pos[first][axis] + sizes[first][size]);
+  const inner = sorted.slice(1, -1);
+  const gap = (span - inner.reduce((sum, id) => sum + sizes[id][size], 0)) / (inner.length + 1);
+  let cursor = pos[first][axis] + sizes[first][size] + gap;
+  let p = project;
+  for (const id of inner) {
+    p = moveComponent(p, id, { ...pos[id], [axis]: snapTo(cursor) });
+    cursor += sizes[id][size] + gap;
+  }
+  return p;
+}
+
 // Pin placement ----------------------------------------------------------------
 
 /** Store a component's full pin arrangement on the canvas. */

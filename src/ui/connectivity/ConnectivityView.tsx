@@ -18,10 +18,11 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { ALL_LAYER_ID, addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, addConnectorToNet, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { activeDomains, deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
+import { GRID, snap } from "./orthogonal";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
 import { DRAG_TYPE, LibraryPanel } from "./LibraryPanel";
@@ -231,7 +232,7 @@ function Canvas() {
       const pos = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       let id = "";
       edit((p) => {
-        const r = placeComponent(p, ref, { x: pos.x - NODE_WIDTH / 2, y: pos.y - 14 });
+        const r = placeComponent(p, ref, { x: snap(pos.x - NODE_WIDTH / 2), y: snap(pos.y - 14) });
         id = r.id;
         return r.project;
       });
@@ -261,7 +262,7 @@ function Canvas() {
     const rect = wrapper.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     const p = flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-    return { x: p.x - NODE_WIDTH / 2, y: p.y - 20 };
+    return { x: snap(p.x - NODE_WIDTH / 2), y: snap(p.y - 20) };
   }, [flow]);
 
   const newBlank = useCallback(() => {
@@ -302,6 +303,20 @@ function Canvas() {
     lastLocalSelection.current = [id];
     select("connectivity", [id]);
   }, [selectedComponents, project, flow, edit, select]);
+
+  const sizesOf = useCallback(
+    (ids: string[]): Record<string, BoxSize> => {
+      const out: Record<string, BoxSize> = {};
+      for (const id of ids) {
+        const g = (flow.getNode(id)?.data as ComponentNodeData | undefined)?.geometry;
+        if (g) out[id] = { w: g.width, h: g.height };
+      }
+      return out;
+    },
+    [flow],
+  );
+  const arrange = useCallback((how: "row" | "column") => edit((p) => arrangeComponents(p, selectedComponents, how, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
+  const distribute = useCallback(() => edit((p) => distributeComponents(p, selectedComponents, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
 
   // Delete and Escape.
   useEffect(() => {
@@ -357,7 +372,7 @@ function Canvas() {
 
   return (
     <div className="view">
-      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} />
+      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} onArrange={arrange} onDistribute={distribute} canDistribute={selectedComponents.length >= 3} />
       <div className={`canvas${activeLayer === ALL_LAYER_ID ? "" : " in-layer"}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} onPointerDownCapture={onPointerDownCapture} data-testid="connectivity-canvas">
         <ReactFlow
           nodes={nodes}
@@ -383,10 +398,13 @@ function Canvas() {
           zoomOnDoubleClick={false}
           fitView
           minZoom={0.1}
+          snapToGrid
+          snapGrid={[GRID, GRID]}
+          multiSelectionKeyCode={["Shift", "Meta", "Control"]}
           proOptions={{ hideAttribution: true }}
           colorMode={theme}
         >
-          <Background gap={20} color="var(--grid)" />
+          <Background gap={24} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
         {pending && <DomainPicker domains={project.file.domains} first={firstDomains} lastUsed={lastUsed} at={pending.at} onPick={pickDomain} onCancel={() => setPending(undefined)} />}
