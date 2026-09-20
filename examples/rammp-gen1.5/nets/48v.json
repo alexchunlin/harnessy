@@ -44,14 +44,6 @@
     ]
   },
   {
-    "id": "net-222245",
-    "name": "48 V Ethernet switch",
-    "connectors": [
-      "cmp-22222p/L3",
-      "cmp-22222h/PWR"
-    ]
-  },
-  {
     "id": "net-222246",
     "name": "48 V DC/DC",
     "connectors": [
@@ -105,6 +97,13 @@
     "connectors": [
       "cmp-22222p/L10",
       "cmp-222236/PWR"
+    ]
+  },
+  {
+    "id": "net-dffbd5",
+    "connectors": [
+      "cmp-22222p/L3",
+      "cmp-22222h/PWR"
     ]
   }
 ]

@@ -2200,13 +2200,6 @@
       "spec": "ties/adhesive-mount-19mm"
     },
     {
-      "id": "tie-2222cw",
-      "segment": "seg-2222bt",
-      "from": "end-2222bq",
-      "distance_mm": 100,
-      "spec": "ties/adhesive-mount-19mm"
-    },
-    {
       "id": "tie-2222h8",
       "segment": "seg-2222gu",
       "from": "end-2222gj",

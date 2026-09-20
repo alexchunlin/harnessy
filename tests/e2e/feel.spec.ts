@@ -132,7 +132,7 @@ test("a net is steered: double-click adds a corner, dragging a run shifts it, re
   await openProject(page, folder);
   await canvasSettled(page);
   const bendsFile = () => readJson(folder, "canvas/connectivity.json") as Promise<{ bends: Record<string, { x: number; y: number }[]> }>;
-  expect((await bendsFile()).bends).toEqual({});
+  const initial = (await bendsFile()).bends;
 
   const at = await pointOnAnEdge(page);
   await page.mouse.click(at.x, at.y);
@@ -141,11 +141,13 @@ test("a net is steered: double-click adds a corner, dragging a run shifts it, re
   expect(edgeId.startsWith(at.netId)).toBe(true);
   const gripsBefore = await page.locator(".edge-grip.corner").count();
 
-  // Double-click the run: a corner is stored under the canvas file.
+  // Double-click the run: a corner is stored under the canvas file, and no other line changes.
   await page.mouse.dblclick(at.x, at.y);
-  await waitForFile(folder, "canvas/connectivity.json", (v) => Object.keys((v as { bends: object }).bends).length === 1);
-  const key = Object.keys((await bendsFile()).bends)[0];
-  expect(key).toBe(edgeId);
+  await waitForFile(folder, "canvas/connectivity.json", (v) => JSON.stringify((v as { bends: Record<string, unknown> }).bends[edgeId]) !== JSON.stringify(initial[edgeId]));
+  const key = edgeId;
+  const { [key]: _mine, ...others } = (await bendsFile()).bends;
+  const { [key]: _was, ...othersBefore } = initial;
+  expect(others).toEqual(othersBefore);
   await expect(page.locator(".edge-grip.corner")).toHaveCount(gripsBefore + 1);
 
   // Drag a run grip along its normal: the bends change and the line stays orthogonal.
@@ -167,7 +169,7 @@ test("a net is steered: double-click adds a corner, dragging a run shifts it, re
 
   // Reset: the entry goes and the line routes itself again.
   await page.getByRole("button", { name: "Reset bends" }).click();
-  await waitForFile(folder, "canvas/connectivity.json", (v) => Object.keys((v as { bends: object }).bends).length === 0);
+  await waitForFile(folder, "canvas/connectivity.json", (v) => !(key in (v as { bends: object }).bends));
 });
 
 test("flipping a component and dragging a pin label rewrite the pin arrangement under the canvas", async ({ page }) => {
@@ -175,11 +177,11 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
   await openProject(page, folder);
   await canvasSettled(page);
   const original = (await readJson(folder, "canvas/connectivity.json")) as { pins: Record<string, unknown> };
-  expect(original.pins).toEqual({});
 
-  // The DC/DC converter's definition puts IN on the left and OUT1..4 on the right.
+  // The DC/DC converter has no override in the example; its definition puts IN on the left and OUT1..4 on the right.
   const dcdc = page.locator(".react-flow__node-component", { hasText: "24 V DC/DC" }).first();
   const id = (await dcdc.getAttribute("data-id"))!;
+  expect(original.pins[id]).toBeUndefined();
   await expect(dcdc.locator(".cmp-connector.left")).toHaveCount(1);
   await expect(dcdc.locator(".cmp-connector.right")).toHaveCount(4);
   await dcdc.locator(".cmp-title").click();
