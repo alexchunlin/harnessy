@@ -6,16 +6,16 @@
  * writes an identical tree. Lengths are placeholders. Run with
  * `pnpm build:example`; the script fails if the topology has design rule errors.
  */
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { sequentialIdSource, setIdSource } from "../src/core/ids";
 import { loadLibrary, type Files } from "../src/core/library";
-import { allNets, pinLayout, saveProject, type Project } from "../src/core/project";
+import { allNets, loadProject, pinLayout, saveProject, type Project } from "../src/core/project";
 import { starterProject } from "../src/core/starter";
 import * as ops from "../src/core/ops";
 import { runChecks } from "../src/core/drc";
 import { buildBom } from "../src/core/bom";
-import type { Position } from "../src/core/schema";
+import type { Position, Side } from "../src/core/schema";
 import { boxGeometry, fittedWidth } from "../src/ui/connectivity/model";
 import { ENDPOINT_SIZE } from "../src/ui/topology/model";
 
@@ -422,6 +422,51 @@ drive.forEach((d, i) => {
   tie(p1.segment, "zip-tie-100mm", 150);
 }
 
+// Keep the layout already on disk ----------------------------------------------------
+
+/**
+ * The example is laid out by hand in the app, and that work must survive a
+ * regeneration. Ids are sequential and the script places things in a fixed
+ * order, so ids match between runs: anything the checked-in canvas files
+ * position, bend, or arrange keeps that, as long as it still exists. Only
+ * new things take the positions typed above.
+ */
+const kept = { components: new Set<string>(), endpoints: new Set<string>() };
+if (existsSync(join(OUT, "project.json"))) {
+  const files: Files = new Map();
+  const walkOut = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walkOut(full);
+      else if (name.endsWith(".json")) files.set(relative(OUT, full), readFileSync(full, "utf8"));
+    }
+  };
+  walkOut(OUT);
+  const before = loadProject(files, loaded.library).project.connectivityCanvas;
+  for (const [id, pos] of Object.entries(before.components)) {
+    if (!p.components.has(id)) continue;
+    p = ops.moveComponent(p, id, pos);
+    kept.components.add(id);
+  }
+  const netIds = new Set(allNets(p).map((n) => n.net.id));
+  for (const [id, pos] of Object.entries(before.hubs)) if (netIds.has(id)) p = ops.moveHub(p, id, pos);
+  for (const [key, bends] of Object.entries(before.bends)) if (netIds.has(key.split(":")[0])) p = ops.setBends(p, key, bends);
+  for (const [id, layout] of Object.entries(before.pins)) {
+    if (!p.components.has(id)) continue;
+    const full: Record<Side, string[]> = { left: layout.left ?? [], right: layout.right ?? [], top: layout.top ?? [], bottom: layout.bottom ?? [] };
+    p = ops.setPinLayout(p, id, full);
+  }
+  const t0 = p.topologies.get(top)!;
+  const ids = new Set(t0.endpoints.map((e) => e.id));
+  for (const canvas of loadProject(files, loaded.library).project.topologyCanvases.values()) {
+    for (const [id, pos] of Object.entries(canvas.endpoints)) {
+      if (!ids.has(id)) continue;
+      p = ops.moveEndpoint(p, top, id, pos);
+      kept.endpoints.add(id);
+    }
+  }
+}
+
 // Spread out --------------------------------------------------------------------------
 
 interface Box {
@@ -430,6 +475,8 @@ interface Box {
   y: number;
   w: number;
   h: number;
+  /** Placed by hand in the app; never moved by the spread. */
+  kept: boolean;
 }
 
 function firstOverlap(boxes: Box[]): [Box, Box] | undefined {
@@ -437,6 +484,7 @@ function firstOverlap(boxes: Box[]): [Box, Box] | undefined {
     for (let j = i + 1; j < boxes.length; j++) {
       const a = boxes[i];
       const b = boxes[j];
+      if (a.kept && b.kept) continue;
       if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) return [a, b];
     }
   }
@@ -446,7 +494,8 @@ function firstOverlap(boxes: Box[]): [Box, Box] | undefined {
 /**
  * The hand-typed positions above follow the diagram, where boxes were
  * smaller. Push overlapping pairs apart along the axis of least overlap,
- * a pin pitch clear, until nothing overlaps. Deterministic, so the example
+ * a pin pitch clear, until nothing overlaps. A box kept from the app never
+ * moves; a new box gives way to it. Deterministic, so the example
  * regenerates the same way every time.
  */
 function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): void {
@@ -457,7 +506,7 @@ function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): voi
     const [a, b] = pair;
     const dx = Math.min(a.x + a.w - b.x, b.x + b.w - a.x) + gap;
     const dy = Math.min(a.y + a.h - b.y, b.y + b.h - a.y) + gap;
-    const mover = dy <= dx ? (a.y >= b.y ? a : b) : a.x >= b.x ? a : b;
+    const mover = a.kept ? b : b.kept ? a : dy <= dx ? (a.y >= b.y ? a : b) : a.x >= b.x ? a : b;
     if (dy <= dx) mover.y = snap(mover.y + dy);
     else mover.x = snap(mover.x + dx);
     move(mover.id, { x: mover.x, y: mover.y });
@@ -474,14 +523,14 @@ function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): voi
     for (const list of Object.values(sides)) for (const des of list) d[des] = dots[`${c.id}/${des}`] ?? 0;
     const g = boxGeometry(sides, fittedWidth(c.name, sides, d, c.definition === undefined));
     const pos = p.connectivityCanvas.components[c.id];
-    return { id: c.id, x: pos.x, y: pos.y, w: g.width, h: g.height };
+    return { id: c.id, x: pos.x, y: pos.y, w: g.width, h: g.height, kept: kept.components.has(c.id) };
   });
   spreadOut(boxes, (id, pos) => (p = ops.moveComponent(p, id, pos)));
 }
 {
   const t0 = p.topologies.get(top)!;
   const canvas = p.topologyCanvases.get(top)!;
-  const boxes: Box[] = t0.endpoints.map((e) => ({ id: e.id, ...canvas.endpoints[e.id], ...ENDPOINT_SIZE[e.kind] }));
+  const boxes: Box[] = t0.endpoints.map((e) => ({ id: e.id, ...canvas.endpoints[e.id], ...ENDPOINT_SIZE[e.kind], kept: kept.endpoints.has(e.id) }));
   spreadOut(boxes, (id, pos) => (p = ops.moveEndpoint(p, top, id, pos)));
 }
 
