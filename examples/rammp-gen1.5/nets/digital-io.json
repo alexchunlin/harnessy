@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-22225y",
+    "id": "net-22225w",
     "name": "Limit switches front",
     "connectors": [
       "cmp-22222j/DIO1",
@@ -9,7 +9,7 @@
     "conductors": 4
   },
   {
-    "id": "net-222263",
+    "id": "net-22225z",
     "name": "Limit switches left",
     "connectors": [
       "cmp-22222j/DIO2",
@@ -18,7 +18,7 @@
     "conductors": 4
   },
   {
-    "id": "net-222266",
+    "id": "net-222264",
     "name": "Limit switches right",
     "connectors": [
       "cmp-22222j/DIO3",
@@ -27,7 +27,7 @@
     "conductors": 4
   },
   {
-    "id": "net-222269",
+    "id": "net-222267",
     "name": "Limit switches rear",
     "connectors": [
       "cmp-22222j/DIO4",

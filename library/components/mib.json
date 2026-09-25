@@ -5,79 +5,95 @@
     {
       "designator": "PWR",
       "connector": "connectors/xt60",
-      "label": "48 V in"
+      "label": "48 V in",
+      "side": "left"
     },
     {
       "designator": "ETH",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "left"
     },
     {
       "designator": "CAN-A",
-      "connector": "connectors/jst-gh-4"
+      "connector": "connectors/jst-gh-4",
+      "side": "left"
     },
     {
       "designator": "CAN-B",
-      "connector": "connectors/jst-gh-4"
+      "connector": "connectors/jst-gh-4",
+      "side": "left"
     },
     {
       "designator": "AIN1",
       "connector": "connectors/jst-gh-4",
-      "label": "strain gauge, 10 V supply plus analog"
+      "label": "strain gauge, 10 V supply plus analog",
+      "side": "right"
     },
     {
       "designator": "AIN2",
       "connector": "connectors/jst-gh-4",
-      "label": "strain gauge, 10 V supply plus analog"
+      "label": "strain gauge, 10 V supply plus analog",
+      "side": "right"
     },
     {
       "designator": "AIN3",
       "connector": "connectors/jst-gh-4",
-      "label": "strain gauge, 10 V supply plus analog"
+      "label": "strain gauge, 10 V supply plus analog",
+      "side": "right"
     },
     {
       "designator": "AIN4",
       "connector": "connectors/jst-gh-4",
-      "label": "strain gauge, 10 V supply plus analog"
+      "label": "strain gauge, 10 V supply plus analog",
+      "side": "right"
     },
     {
       "designator": "ENC1",
       "connector": "connectors/jst-gh-4",
-      "label": "PWM encoder"
+      "label": "PWM encoder",
+      "side": "right"
     },
     {
       "designator": "ENC2",
       "connector": "connectors/jst-gh-4",
-      "label": "PWM encoder"
+      "label": "PWM encoder",
+      "side": "right"
     },
     {
       "designator": "ENC3",
       "connector": "connectors/jst-gh-4",
-      "label": "PWM encoder"
+      "label": "PWM encoder",
+      "side": "right"
     },
     {
       "designator": "ENC4",
       "connector": "connectors/jst-gh-4",
-      "label": "PWM encoder"
+      "label": "PWM encoder",
+      "side": "right"
     },
     {
       "designator": "DIO1",
       "connector": "connectors/jst-xh-4",
-      "label": "limit switch pair"
+      "label": "limit switch pair",
+      "side": "right"
     },
     {
       "designator": "DIO2",
       "connector": "connectors/jst-xh-4",
-      "label": "limit switch pair"
+      "label": "limit switch pair",
+      "side": "right"
     },
     {
       "designator": "DIO3",
       "connector": "connectors/jst-xh-4",
-      "label": "limit switch pair"
+      "label": "limit switch pair",
+      "side": "right"
     },
     {
       "designator": "DIO4",
       "connector": "connectors/jst-xh-4",
-      "label": "limit switch pair"
+      "label": "limit switch pair",
+      "side": "right"
     }
   ],
   "part_number": "TBD"

@@ -1,8 +1,8 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
-import { componentConnectors, findNet, type Project } from "./project";
+import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { buildGraph, degree, otherEnd } from "./derive";
-import type { Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, TiePoint, Topology } from "./schema";
+import type { Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -143,6 +143,98 @@ export function moveComponent(project: Project, id: string, position: Position):
   return next(project, { connectivityCanvas: { ...project.connectivityCanvas, components: { ...project.connectivityCanvas.components, [id]: round(position) } } });
 }
 
+// Arrange ----------------------------------------------------------------------
+
+export interface BoxSize {
+  w: number;
+  h: number;
+}
+
+const GRID = 6;
+const PITCH = 24;
+const snapTo = (v: number) => Math.round(v / GRID) * GRID;
+
+/**
+ * Line selected components up in a row (left to right, tops aligned) or a
+ * column (top to bottom, lefts aligned), one pin pitch apart, keeping their
+ * current order along that axis. Sizes come from the canvas, which knows
+ * how big each box draws.
+ */
+export function arrangeComponents(project: Project, ids: string[], how: "row" | "column", sizes: Record<string, BoxSize>): Project {
+  const pos = project.connectivityCanvas.components;
+  const placed = ids.filter((id) => pos[id] && sizes[id]);
+  if (placed.length < 2) return project;
+  const axis = how === "row" ? "x" : "y";
+  const cross = how === "row" ? "y" : "x";
+  const size = how === "row" ? "w" : "h";
+  const sorted = [...placed].sort((a, b) => pos[a][axis] - pos[b][axis]);
+  const origin = snapTo(Math.min(...sorted.map((id) => pos[id][cross])));
+  let cursor = snapTo(pos[sorted[0]][axis]);
+  let p = project;
+  for (const id of sorted) {
+    p = moveComponent(p, id, { [axis]: cursor, [cross]: origin } as unknown as Position);
+    cursor += snapTo(sizes[id][size]) + PITCH;
+  }
+  return p;
+}
+
+/** Space selected components evenly between the two outermost, which stay put. The axis is the one they spread along most. */
+export function distributeComponents(project: Project, ids: string[], sizes: Record<string, BoxSize>): Project {
+  const pos = project.connectivityCanvas.components;
+  const placed = ids.filter((id) => pos[id] && sizes[id]);
+  if (placed.length < 3) return project;
+  const spread = (axis: "x" | "y") => Math.max(...placed.map((id) => pos[id][axis])) - Math.min(...placed.map((id) => pos[id][axis]));
+  const axis = spread("x") >= spread("y") ? "x" : "y";
+  const size = axis === "x" ? "w" : "h";
+  const sorted = [...placed].sort((a, b) => pos[a][axis] - pos[b][axis]);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const span = pos[last][axis] - (pos[first][axis] + sizes[first][size]);
+  const inner = sorted.slice(1, -1);
+  const gap = (span - inner.reduce((sum, id) => sum + sizes[id][size], 0)) / (inner.length + 1);
+  let cursor = pos[first][axis] + sizes[first][size] + gap;
+  let p = project;
+  for (const id of inner) {
+    p = moveComponent(p, id, { ...pos[id], [axis]: snapTo(cursor) });
+    cursor += sizes[id][size] + gap;
+  }
+  return p;
+}
+
+// Pin placement ----------------------------------------------------------------
+
+/** Store a component's full pin arrangement on the canvas. */
+export function setPinLayout(project: Project, id: string, layout: Record<Side, string[]>): Project {
+  const pins = { ...project.connectivityCanvas.pins, [id]: { left: layout.left, right: layout.right, top: layout.top, bottom: layout.bottom } };
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, pins } });
+}
+
+/** Move one pin to a side at an index within that side. */
+export function movePin(project: Project, id: string, designator: string, side: Side, index: number): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  const layout = pinLayout(project, c);
+  const from = (Object.keys(layout) as Side[]).find((s) => layout[s].includes(designator));
+  if (!from) throw new Error(`no pin ${designator} on ${id}`);
+  const nextLayout: Record<Side, string[]> = { left: [...layout.left], right: [...layout.right], top: [...layout.top], bottom: [...layout.bottom] };
+  nextLayout[from] = nextLayout[from].filter((d) => d !== designator);
+  const at = Math.max(0, Math.min(index, nextLayout[side].length));
+  nextLayout[side] = [...nextLayout[side].slice(0, at), designator, ...nextLayout[side].slice(at)];
+  return setPinLayout(project, id, nextLayout);
+}
+
+/** Mirror a component's pins: horizontal swaps left and right, vertical swaps top and bottom. The other axis reverses order. */
+export function flipComponent(project: Project, id: string, axis: "horizontal" | "vertical"): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  const l = pinLayout(project, c);
+  const flipped: Record<Side, string[]> =
+    axis === "horizontal"
+      ? { left: l.right, right: l.left, top: [...l.top].reverse(), bottom: [...l.bottom].reverse() }
+      : { left: [...l.left].reverse(), right: [...l.right].reverse(), top: l.bottom, bottom: l.top };
+  return setPinLayout(project, id, flipped);
+}
+
 /** Nets that would lose their last other connector if this component went. */
 export function netsOnlyOn(project: Project, componentId: string): Net[] {
   const out: Net[] = [];
@@ -174,12 +266,18 @@ export function removeComponent(project: Project, id: string): Project {
   }
   const canvasComponents = { ...project.connectivityCanvas.components };
   delete canvasComponents[id];
-  let p = next(project, {
+  const canvasPins = { ...project.connectivityCanvas.pins };
+  delete canvasPins[id];
+  const touched = new Set<string>();
+  for (const list of project.nets.values()) for (const n of list) if (n.connectors.some((a) => a.startsWith(`${id}/`))) touched.add(n.id);
+  let p = dropBends(project, (key) => touched.has(keyNet(key)));
+  p = next(p, {
     components,
     nets,
     connectivityCanvas: {
-      ...project.connectivityCanvas,
+      ...p.connectivityCanvas,
       components: canvasComponents,
+      pins: canvasPins,
       groups: project.connectivityCanvas.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })),
       notes: project.connectivityCanvas.notes.map((n) => (n.component === id ? { ...n, component: undefined } : n)),
     },
@@ -209,11 +307,45 @@ function updateNet(project: Project, id: string, fn: (n: Net) => Net): Project {
 }
 
 export function addConnectorToNet(project: Project, id: string, address: string): Project {
-  return updateNet(project, id, (n) => (n.connectors.includes(address) ? n : { ...n, connectors: [...n.connectors, address] }));
+  const found = findNet(project, id);
+  if (found?.net.connectors.includes(address)) return project;
+  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: [...n.connectors, address] })), (key) => keyNet(key) === id);
 }
 
 export function removeConnectorFromNet(project: Project, id: string, address: string): Project {
-  return updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) }));
+  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), (key) => keyNet(key) === id);
+}
+
+// Bends -------------------------------------------------------------------------
+
+/** The bends key for a net's drawn line: the net id, or `<net>:<address>` for a star net's spoke. */
+export function bendsKey(netId: string, address?: string): string {
+  return address ? `${netId}:${address}` : netId;
+}
+
+function keyNet(key: string): string {
+  return key.split(":")[0];
+}
+
+/** Replace the hand-placed bends on one drawn line. `undefined` returns it to automatic routing. */
+export function setBends(project: Project, key: string, bends: Position[] | undefined): Project {
+  const all = { ...project.connectivityCanvas.bends };
+  if (bends && bends.length) all[key] = bends.map(round);
+  else delete all[key];
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, bends: all } });
+}
+
+/** Forget every hand-placed bend on a net, spokes included. */
+export function resetBends(project: Project, netId: string): Project {
+  return dropBends(project, (key) => keyNet(key) === netId);
+}
+
+function dropBends(project: Project, gone: (key: string) => boolean): Project {
+  const keys = Object.keys(project.connectivityCanvas.bends).filter(gone);
+  if (keys.length === 0) return project;
+  const all = { ...project.connectivityCanvas.bends };
+  for (const k of keys) delete all[k];
+  return next(project, { connectivityCanvas: { ...project.connectivityCanvas, bends: all } });
 }
 
 export function renameNet(project: Project, id: string, name: string | undefined): Project {
@@ -247,11 +379,14 @@ export function removeNet(project: Project, id: string): Project {
   for (const [tid, t] of project.topologies) {
     topologies.set(tid, { ...t, endpoints: t.endpoints.map((e) => (e.kind === "splice" ? { ...e, nets: e.nets.filter((n) => n !== id) } : e)) });
   }
-  return next(project, {
-    nets,
-    topologies,
-    connectivityCanvas: { ...project.connectivityCanvas, hubs, notes: project.connectivityCanvas.notes.map((n) => (n.net === id ? { ...n, net: undefined } : n)) },
-  });
+  return dropBends(
+    next(project, {
+      nets,
+      topologies,
+      connectivityCanvas: { ...project.connectivityCanvas, hubs, notes: project.connectivityCanvas.notes.map((n) => (n.net === id ? { ...n, net: undefined } : n)) },
+    }),
+    (key) => keyNet(key) === id,
+  );
 }
 
 export function moveHub(project: Project, netId: string, position: Position): Project {

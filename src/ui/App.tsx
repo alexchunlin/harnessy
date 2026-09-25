@@ -10,6 +10,12 @@ export function App() {
   const project = useDoc((s) => s.project);
   const view = useDoc((s) => s.view);
   const drcOpen = useDoc((s) => s.drcOpen);
+  const restoring = useDoc((s) => s.restoring);
+
+  // A reload reopens the project that was open.
+  useEffect(() => {
+    void useDoc.getState().restoreLastProject();
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -36,6 +42,7 @@ export function App() {
     return () => window.removeEventListener("beforeunload", onUnload);
   }, []);
 
+  if (restoring && !project) return <div className="placeholder">Reopening the last project</div>;
   if (!project) return <FolderBrowser />;
 
   return (

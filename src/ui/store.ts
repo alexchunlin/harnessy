@@ -29,6 +29,14 @@ export interface Selection {
   ids: string[];
 }
 
+/** What the pointer is over, anywhere in the app. The canvas glows the counterparts. */
+export interface Hover {
+  nets: string[];
+  component?: string;
+}
+
+export const NO_HOVER: Hover = { nets: [] };
+
 interface DocState {
   project: Project | undefined;
   root: string | undefined;
@@ -39,14 +47,19 @@ interface DocState {
   saving: boolean;
   saveError: string | undefined;
   lastSavedAt: number | undefined;
+  /** True while the last project is being reopened on load. */
+  restoring: boolean;
 
   activeLayer: string;
   activeTopology: string | undefined;
   view: View;
   selection: Selection;
+  hover: Hover;
   drcOpen: boolean;
 
   openFolder(path: string): Promise<{ isProject: boolean }>;
+  /** Reopen the project from the previous session, if any. Resolves once done either way. */
+  restoreLastProject(): Promise<void>;
   createProjectHere(name: string): Promise<void>;
   closeProject(): void;
   edit(fn: (p: Project) => Project, label?: string): void;
@@ -54,11 +67,16 @@ interface DocState {
   setActiveTopology(id: string | undefined): void;
   setView(view: View): void;
   select(view: View, ids: string[]): void;
+  setHover(hover: Hover): void;
+  /** While the pointer is down on a box, hover is cleared and ignored, so nothing glows under a moving box. */
+  lockHover(locked: boolean): void;
   toggleDrc(open?: boolean): void;
   flush(): Promise<void>;
 }
 
 const RECENTS_KEY = "harnessy.recents";
+/** The project open when the page was last unloaded, reopened on load. */
+const LAST_PROJECT_KEY = "harnessy.lastProject";
 const UI_KEY = (root: string) => `harnessy.ui.${root}`;
 
 export function recentProjects(): string[] {
@@ -93,6 +111,7 @@ function saveUi(root: string, ui: UiState) {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let hoverLocked = false;
 
 export const useDoc = create<DocState>()(
   temporal(
@@ -105,10 +124,12 @@ export const useDoc = create<DocState>()(
       saving: false,
       saveError: undefined,
       lastSavedAt: undefined,
+      restoring: localStorage.getItem(LAST_PROJECT_KEY) !== null,
       activeLayer: ALL_LAYER_ID,
       activeTopology: undefined,
       view: "connectivity",
       selection: { view: "connectivity", ids: [] },
+      hover: NO_HOVER,
       drcOpen: false,
 
       async openFolder(path) {
@@ -123,6 +144,7 @@ export const useDoc = create<DocState>()(
         const ui = loadUi(opened.root);
         const firstTopology = [...project.topologies.keys()].sort()[0];
         pushRecent(opened.root);
+        localStorage.setItem(LAST_PROJECT_KEY, opened.root);
         useDoc.temporal.getState().clear();
         set({
           project,
@@ -138,6 +160,19 @@ export const useDoc = create<DocState>()(
         return { isProject: true };
       },
 
+      async restoreLastProject() {
+        const last = localStorage.getItem(LAST_PROJECT_KEY);
+        if (last === null) return;
+        try {
+          const r = await get().openFolder(last);
+          if (!r.isProject) localStorage.removeItem(LAST_PROJECT_KEY);
+        } catch {
+          localStorage.removeItem(LAST_PROJECT_KEY);
+        } finally {
+          set({ restoring: false });
+        }
+      },
+
       async createProjectHere(name) {
         const { root, repoLibrary } = get();
         if (!root) throw new Error("no folder open");
@@ -145,11 +180,13 @@ export const useDoc = create<DocState>()(
         const files = saveProject(project);
         await api.write(root, fromFiles(files));
         pushRecent(root);
+        localStorage.setItem(LAST_PROJECT_KEY, root);
         useDoc.temporal.getState().clear();
         set({ project, problems: [], written: files, activeLayer: ALL_LAYER_ID, activeTopology: undefined, view: "connectivity", selection: { view: "connectivity", ids: [] } });
       },
 
       closeProject() {
+        localStorage.removeItem(LAST_PROJECT_KEY);
         set({ project: undefined, root: undefined, problems: [], written: new Map(), selection: { view: "connectivity", ids: [] } });
       },
 
@@ -176,6 +213,16 @@ export const useDoc = create<DocState>()(
       },
       select(view, ids) {
         set({ selection: { view, ids } });
+      },
+      lockHover(locked) {
+        hoverLocked = locked;
+        if (locked && get().hover !== NO_HOVER) set({ hover: NO_HOVER });
+      },
+      setHover(hover) {
+        if (hoverLocked) return;
+        const cur = get().hover;
+        if (cur.component === hover.component && cur.nets.length === hover.nets.length && cur.nets.every((n, i) => n === hover.nets[i])) return;
+        set({ hover });
       },
       toggleDrc(open) {
         set((s) => ({ drcOpen: open ?? !s.drcOpen }));

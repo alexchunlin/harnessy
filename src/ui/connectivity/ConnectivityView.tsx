@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyEdgeChanges,
+  applyNodeChanges,
   Background,
   ConnectionMode,
   Controls,
@@ -16,9 +18,11 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { addConnectorToNet, createGroup, createNet, createNote, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type Position, type Project } from "../../core";
-import { useDoc, useProject } from "../store";
-import { activeDomains, componentHeight, deriveFlow, NODE_WIDTH, type FlowNode, type NetEdgeData } from "./model";
+import { ALL_LAYER_ID, addConnectorToNet, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
+import { NO_HOVER, useDoc, useProject } from "../store";
+import { useTheme } from "../theme";
+import { activeDomains, deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
+import { GRID, snap } from "./orthogonal";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
 import { DRAG_TYPE, LibraryPanel } from "./LibraryPanel";
@@ -55,14 +59,26 @@ function Canvas() {
   const activeLayer = useDoc((s) => s.activeLayer);
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
+  const theme = useTheme((s) => s.theme);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
-  const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
   const [pending, setPending] = useState<PendingNet | undefined>();
   const lastLocalSelection = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "connectivity" ? selection.ids : []), [selection]);
-  const { nodes, edges } = useMemo(() => deriveFlow(project, activeLayer, selected, drafts), [project, activeLayer, selected, drafts]);
+  const derived = useMemo(() => deriveFlow(project, activeLayer, selected), [project, activeLayer, selected]);
+
+  // React Flow owns the nodes and edges it draws, so a drag in flight lives
+  // there and never touches the project. When the derivation changes, the
+  // new items are merged in and anything unchanged keeps its identity.
+  const [nodes, setNodes] = useState<FlowNode[]>(derived.nodes);
+  const [edges, setEdges] = useState<Edge<NetEdgeData>[]>(derived.edges);
+  const [lastDerived, setLastDerived] = useState(derived);
+  if (lastDerived !== derived) {
+    setLastDerived(derived);
+    setNodes(reconcile(nodes, derived.nodes));
+    setEdges(reconcile(edges, derived.edges));
+  }
 
   // Selection arriving from outside (the design rule panel) gets revealed.
   useEffect(() => {
@@ -99,21 +115,18 @@ function Canvas() {
     [select],
   );
 
-  const onEdgesChange = useCallback((changes: EdgeChange<Edge<NetEdgeData>>[]) => applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]), [applySelectChanges]);
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange<Edge<NetEdgeData>>[]) => {
+      setEdges((es) => applyEdgeChanges(changes, es));
+      applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]);
+    },
+    [applySelectChanges],
+  );
 
   const onNodesChange = useCallback(
     (changes: NodeChange<FlowNode>[]) => {
+      setNodes((ns) => applyNodeChanges(changes, ns));
       applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]);
-      setDrafts((prev) => {
-        let next: Map<string, Position> | undefined;
-        for (const c of changes) {
-          if (c.type === "position" && c.position) {
-            next ??= new Map(prev);
-            if (c.dragging) next.set(c.id, c.position);
-          }
-        }
-        return next ?? prev;
-      });
       for (const c of changes) {
         if (c.type === "dimensions" && c.resizing === false && c.dimensions) {
           const g = project.connectivityCanvas.groups.find((g) => g.id === c.id);
@@ -125,6 +138,17 @@ function Canvas() {
     },
     [edit, project, applySelectChanges],
   );
+
+  // Pressing on a box freezes hover until release; the browser fires a
+  // neighbour's mouseenter before the move that starts the drag.
+  const onPointerDownCapture = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest(".react-flow__node")) useDoc.getState().lockHover(true);
+  }, []);
+  useEffect(() => {
+    const up = () => useDoc.getState().lockHover(false);
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, []);
 
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node, dragged: Node[]) => {
@@ -159,7 +183,6 @@ function Canvas() {
         }
         return next;
       });
-      setDrafts(new Map());
     },
     [edit],
   );
@@ -209,7 +232,7 @@ function Canvas() {
       const pos = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       let id = "";
       edit((p) => {
-        const r = placeComponent(p, ref, { x: pos.x - NODE_WIDTH / 2, y: pos.y - 14 });
+        const r = placeComponent(p, ref, { x: snap(pos.x - NODE_WIDTH / 2), y: snap(pos.y - 14) });
         id = r.id;
         return r.project;
       });
@@ -239,7 +262,7 @@ function Canvas() {
     const rect = wrapper.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     const p = flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-    return { x: p.x - NODE_WIDTH / 2, y: p.y - 20 };
+    return { x: snap(p.x - NODE_WIDTH / 2), y: snap(p.y - 20) };
   }, [flow]);
 
   const newBlank = useCallback(() => {
@@ -263,8 +286,8 @@ function Canvas() {
     if (label === null) return;
     const boxes = selectedComponents.map((id) => {
       const pos = project.connectivityCanvas.components[id] ?? { x: 0, y: 0 };
-      const h = componentHeight((flow.getNode(id)?.data as { connectors?: unknown[] } | undefined)?.connectors?.length ?? 1);
-      return { x1: pos.x, y1: pos.y, x2: pos.x + NODE_WIDTH, y2: pos.y + h };
+      const g = (flow.getNode(id)?.data as ComponentNodeData | undefined)?.geometry;
+      return { x1: pos.x, y1: pos.y, x2: pos.x + (g?.width ?? NODE_WIDTH), y2: pos.y + (g?.height ?? 60) };
     });
     const pad = 24;
     const x = Math.min(...boxes.map((b) => b.x1)) - pad;
@@ -280,6 +303,20 @@ function Canvas() {
     lastLocalSelection.current = [id];
     select("connectivity", [id]);
   }, [selectedComponents, project, flow, edit, select]);
+
+  const sizesOf = useCallback(
+    (ids: string[]): Record<string, BoxSize> => {
+      const out: Record<string, BoxSize> = {};
+      for (const id of ids) {
+        const g = (flow.getNode(id)?.data as ComponentNodeData | undefined)?.geometry;
+        if (g) out[id] = { w: g.width, h: g.height };
+      }
+      return out;
+    },
+    [flow],
+  );
+  const arrange = useCallback((how: "row" | "column") => edit((p) => arrangeComponents(p, selectedComponents, how, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
+  const distribute = useCallback(() => edit((p) => distributeComponents(p, selectedComponents, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
 
   // Delete and Escape.
   useEffect(() => {
@@ -319,13 +356,24 @@ function Canvas() {
   const onNodeClick: NodeMouseHandler = useCallback(() => setPending(undefined), []);
   const onEdgeClick: EdgeMouseHandler = useCallback(() => setPending(undefined), []);
 
+  // Hover glows counterparts: a box glows itself, a hub or edge glows its whole net.
+  const onNodeMouseEnter: NodeMouseHandler = useCallback((_, node) => {
+    const setHover = useDoc.getState().setHover;
+    if (node.type === "component" && node.selectable !== false) setHover({ nets: [], component: node.id });
+    else if (node.type === "hub" && node.selectable !== false) setHover({ nets: [toModelId(node.id)] });
+  }, []);
+  const onEdgeMouseEnter: EdgeMouseHandler<Edge<NetEdgeData>> = useCallback((_, edge) => {
+    if (edge.data?.netId && !edge.data.inactive) useDoc.getState().setHover({ nets: [edge.data.netId] });
+  }, []);
+  const clearHover = useCallback(() => useDoc.getState().setHover(NO_HOVER), []);
+
   const firstDomains = activeDomains(project, activeLayer);
   const lastUsed = localStorage.getItem(LAST_DOMAIN_KEY) ?? undefined;
 
   return (
     <div className="view">
-      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} />
-      <div className="canvas" ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} data-testid="connectivity-canvas">
+      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} onArrange={arrange} onDistribute={distribute} canDistribute={selectedComponents.length >= 3} />
+      <div className={`canvas${activeLayer === ALL_LAYER_ID ? "" : " in-layer"}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} onPointerDownCapture={onPointerDownCapture} data-testid="connectivity-canvas">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -337,6 +385,10 @@ function Canvas() {
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={clearHover}
+          onEdgeMouseEnter={onEdgeMouseEnter}
+          onEdgeMouseLeave={clearHover}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={24}
           deleteKeyCode={null}
@@ -346,10 +398,13 @@ function Canvas() {
           zoomOnDoubleClick={false}
           fitView
           minZoom={0.1}
+          snapToGrid
+          snapGrid={[GRID, GRID]}
+          multiSelectionKeyCode={["Shift", "Meta", "Control"]}
           proOptions={{ hideAttribution: true }}
-          elevateEdgesOnSelect
+          colorMode={theme}
         >
-          <Background gap={20} />
+          <Background gap={24} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
         {pending && <DomainPicker domains={project.file.domains} first={firstDomains} lastUsed={lastUsed} at={pending.at} onPick={pickDomain} onCancel={() => setPending(undefined)} />}

@@ -41,7 +41,7 @@ The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethe
 _Avoid_: Type, category, class, local
 
 **Layer**:
-A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components with no net in the active layer stay drawn with dimmed outlines and hidden text.
+A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components and nets outside the active layer stay drawn, greyed and darker, and cannot be selected, dragged, or connected until the layer changes.
 _Avoid_: View, page, sheet
 
 ### Physical realization
@@ -77,6 +77,10 @@ _Avoid_: Assembly, module, subsystem
 **Net hub**:
 The small dot on the connectivity canvas that a net with three or more connectors is drawn around, one edge per connector. Visual only; a two-connector net has none.
 _Avoid_: Junction, node
+
+**Bend**:
+A hand-placed corner on the line a net is drawn with on the connectivity canvas. A net with no bends draws itself with right-angle corners from its pins' sides; steering a line stores its bends, and resetting them forgets them. Visual only, kept with the canvas.
+_Avoid_: Waypoint, route (a route is a topology term)
 
 **Note**:
 A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.

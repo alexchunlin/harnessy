@@ -5,53 +5,64 @@
     {
       "designator": "PWR",
       "connector": "connectors/xt30",
-      "label": "24 V in"
+      "label": "24 V in",
+      "side": "left"
     },
     {
       "designator": "ETH",
-      "connector": "connectors/rj45"
+      "connector": "connectors/rj45",
+      "side": "right"
     },
     {
       "designator": "HDMI",
-      "connector": "connectors/hdmi-a"
+      "connector": "connectors/hdmi-a",
+      "side": "right"
     },
     {
       "designator": "USB1",
-      "connector": "connectors/usb-a"
+      "connector": "connectors/usb-a",
+      "side": "right"
     },
     {
       "designator": "USB2",
-      "connector": "connectors/usb-a"
+      "connector": "connectors/usb-a",
+      "side": "right"
     },
     {
       "designator": "CAM1",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 1"
+      "label": "GMSL2 camera 1",
+      "side": "bottom"
     },
     {
       "designator": "CAM2",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 2"
+      "label": "GMSL2 camera 2",
+      "side": "bottom"
     },
     {
       "designator": "CAM3",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 3"
+      "label": "GMSL2 camera 3",
+      "side": "bottom"
     },
     {
       "designator": "CAM4",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 4"
+      "label": "GMSL2 camera 4",
+      "side": "bottom"
     },
     {
       "designator": "CAM5",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 5"
+      "label": "GMSL2 camera 5",
+      "side": "bottom"
     },
     {
       "designator": "CAM6",
       "connector": "connectors/fakra-z",
-      "label": "GMSL2 camera 6"
+      "label": "GMSL2 camera 6",
+      "side": "bottom"
     }
   ],
   "part_number": "TBD",

@@ -58,11 +58,12 @@ test("place two components, draw a 48 V net, then route it on a topology", async
   expect(await netCount(folder, "24v")).toBe(0);
   void box;
 
-  // Switch to a layer without 48 V: the edge hides and both components dim.
+  // Switch to a layer without 48 V: the edge greys out and both components dim.
   await page.getByLabel("Layer").selectOption("signals");
-  await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+  await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(1);
   await expect(page.locator(".cmp-node.dimmed")).toHaveCount(2);
   await page.getByLabel("Layer").selectOption("power");
+  await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
 
   // Topology: create one, place both connectors from the tray, join them, type a length, name the harness.

@@ -1,590 +1,595 @@
 {
-  "id": "top-22226a",
+  "id": "top-222268",
   "name": "Gen 1.5 as built",
   "endpoints": [
     {
-      "id": "end-22226b",
+      "id": "end-222269",
       "kind": "connector",
       "connector": "cmp-22222h/P1"
     },
     {
-      "id": "end-22226c",
+      "id": "end-22226a",
       "kind": "connector",
       "connector": "cmp-22222c/ETH"
     },
     {
-      "id": "end-22226e",
+      "id": "end-22226c",
       "kind": "connector",
       "connector": "cmp-22222h/P2"
     },
     {
-      "id": "end-22226f",
+      "id": "end-22226d",
       "kind": "connector",
       "connector": "cmp-22222j/ETH"
     },
     {
-      "id": "end-22226h",
+      "id": "end-22226f",
       "kind": "connector",
       "connector": "cmp-22222h/P3"
     },
     {
-      "id": "end-22226j",
+      "id": "end-22226g",
       "kind": "connector",
       "connector": "cmp-22222f/ETH"
     },
     {
-      "id": "end-22226m",
+      "id": "end-22226j",
       "kind": "connector",
       "connector": "cmp-22222h/P4"
     },
     {
-      "id": "end-22226n",
+      "id": "end-22226k",
       "kind": "connector",
       "connector": "cmp-22222g/ETH"
     },
     {
-      "id": "end-22226q",
+      "id": "end-22226n",
       "kind": "connector",
       "connector": "cmp-22222h/P5"
     },
     {
-      "id": "end-22226r",
+      "id": "end-22226p",
       "kind": "connector",
       "connector": "cmp-22222q/ETH"
     },
     {
-      "id": "end-22226t",
+      "id": "end-22226r",
       "kind": "connector",
       "connector": "cmp-22222h/P6"
     },
     {
-      "id": "end-22226u",
+      "id": "end-22226s",
       "kind": "connector",
       "connector": "cmp-22222t/ETH"
     },
     {
-      "id": "end-22226w",
+      "id": "end-22226u",
       "kind": "connector",
       "connector": "cmp-22222h/P7"
     },
     {
-      "id": "end-22226x",
+      "id": "end-22226v",
       "kind": "connector",
       "connector": "cmp-22222w/ETH"
     },
     {
-      "id": "end-22226z",
+      "id": "end-22226x",
       "kind": "connector",
       "connector": "cmp-22222h/P8"
     },
     {
-      "id": "end-222272",
+      "id": "end-22226y",
       "kind": "connector",
       "connector": "cmp-22222z/ETH"
     },
     {
-      "id": "end-222274",
-      "kind": "connector",
-      "connector": "cmp-22222j/CAN-B"
-    },
-    {
-      "id": "end-222275",
-      "kind": "connector",
-      "connector": "cmp-22222k/CAN"
-    },
-    {
-      "id": "end-222277",
+      "id": "end-222272",
       "kind": "connector",
       "connector": "cmp-22222j/CAN-A"
     },
     {
-      "id": "end-222278",
+      "id": "end-222273",
       "kind": "connector",
       "connector": "cmp-222234/CAN-A"
     },
     {
-      "id": "end-22227a",
+      "id": "end-222275",
       "kind": "connector",
       "connector": "cmp-222234/CAN-B"
     },
     {
-      "id": "end-22227b",
+      "id": "end-222276",
       "kind": "connector",
       "connector": "cmp-222235/CAN-A"
     },
     {
-      "id": "end-22227d",
+      "id": "end-222278",
       "kind": "connector",
       "connector": "cmp-222235/CAN-B"
     },
     {
-      "id": "end-22227e",
+      "id": "end-222279",
       "kind": "connector",
       "connector": "cmp-222236/CAN-A"
     },
     {
-      "id": "end-22227g",
+      "id": "end-22227b",
       "kind": "connector",
       "connector": "cmp-22222c/USB1"
     },
     {
-      "id": "end-22227h",
+      "id": "end-22227c",
       "kind": "connector",
       "connector": "cmp-22222b/UP"
     },
     {
-      "id": "end-22227k",
+      "id": "end-22227e",
       "kind": "connector",
       "connector": "cmp-22222b/D1"
     },
     {
-      "id": "end-22227m",
+      "id": "end-22227f",
       "kind": "connector",
       "connector": "cmp-222229/USB"
     },
     {
-      "id": "end-22227p",
+      "id": "end-22227h",
       "kind": "connector",
       "connector": "cmp-22222b/D2"
     },
     {
-      "id": "end-22227q",
+      "id": "end-22227j",
       "kind": "connector",
       "connector": "cmp-22222a/USB"
     },
     {
-      "id": "end-22227s",
+      "id": "end-22227m",
       "kind": "connector",
       "connector": "cmp-22222c/USB2"
     },
     {
-      "id": "end-22227t",
+      "id": "end-22227n",
       "kind": "connector",
       "connector": "cmp-22222d/USB"
     },
     {
-      "id": "end-22227v",
+      "id": "end-22227q",
       "kind": "connector",
       "connector": "cmp-22222c/HDMI"
     },
     {
-      "id": "end-22227w",
+      "id": "end-22227r",
       "kind": "connector",
       "connector": "cmp-22222d/HDMI"
     },
     {
-      "id": "end-22227y",
+      "id": "end-22227t",
       "kind": "connector",
       "connector": "cmp-22222c/CAM1"
     },
     {
-      "id": "end-22227z",
+      "id": "end-22227u",
       "kind": "connector",
       "connector": "cmp-222223/GMSL"
     },
     {
-      "id": "end-222283",
+      "id": "end-22227w",
       "kind": "connector",
       "connector": "cmp-22222c/CAM2"
     },
     {
-      "id": "end-222284",
+      "id": "end-22227x",
       "kind": "connector",
       "connector": "cmp-222224/GMSL"
     },
     {
-      "id": "end-222286",
+      "id": "end-22227z",
       "kind": "connector",
       "connector": "cmp-22222c/CAM3"
     },
     {
-      "id": "end-222287",
+      "id": "end-222282",
       "kind": "connector",
       "connector": "cmp-222225/GMSL"
     },
     {
-      "id": "end-222289",
+      "id": "end-222284",
       "kind": "connector",
       "connector": "cmp-22222c/CAM4"
     },
     {
-      "id": "end-22228a",
+      "id": "end-222285",
       "kind": "connector",
       "connector": "cmp-222226/GMSL"
     },
     {
-      "id": "end-22228c",
+      "id": "end-222287",
       "kind": "connector",
       "connector": "cmp-22222c/CAM5"
     },
     {
-      "id": "end-22228d",
+      "id": "end-222288",
       "kind": "connector",
       "connector": "cmp-222227/GMSL"
     },
     {
-      "id": "end-22228f",
+      "id": "end-22228a",
       "kind": "connector",
       "connector": "cmp-22222c/CAM6"
     },
     {
-      "id": "end-22228g",
+      "id": "end-22228b",
       "kind": "connector",
       "connector": "cmp-222228/GMSL"
     },
     {
-      "id": "end-22228j",
+      "id": "end-22228d",
       "kind": "connector",
       "connector": "cmp-22222k/MAIN"
     },
     {
-      "id": "end-22228k",
+      "id": "end-22228e",
       "kind": "connector",
       "connector": "cmp-22222n/IN"
     },
     {
-      "id": "end-22228n",
+      "id": "end-22228g",
       "kind": "connector",
       "connector": "cmp-22222n/OUT"
     },
     {
-      "id": "end-22228p",
+      "id": "end-22228h",
       "kind": "connector",
       "connector": "cmp-22222p/BAT"
     },
     {
-      "id": "end-22228r",
+      "id": "end-22228k",
       "kind": "connector",
       "connector": "cmp-22222k/CHG"
     },
     {
-      "id": "end-22228s",
+      "id": "end-22228m",
       "kind": "connector",
       "connector": "cmp-22222m/J1"
     },
     {
-      "id": "end-22228u",
+      "id": "end-22228p",
       "kind": "connector",
       "connector": "cmp-22222p/L1"
     },
     {
-      "id": "end-22228v",
+      "id": "end-22228q",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-22228x",
+      "id": "end-22228s",
       "kind": "connector",
       "connector": "cmp-22222p/L2"
     },
     {
-      "id": "end-22228z",
+      "id": "end-22228u",
       "kind": "connector",
       "connector": "cmp-22222p/L3"
     },
     {
-      "id": "end-222293",
+      "id": "end-22228w",
       "kind": "connector",
       "connector": "cmp-22222p/L4"
     },
     {
-      "id": "end-222295",
+      "id": "end-22228y",
       "kind": "connector",
       "connector": "cmp-22222p/L5"
     },
     {
-      "id": "end-222297",
+      "id": "end-222292",
       "kind": "point"
     },
     {
-      "id": "end-222299",
+      "id": "end-222294",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-22229b",
+      "id": "end-222296",
       "kind": "connector",
       "connector": "cmp-22222q/PWR"
     },
     {
-      "id": "end-22229d",
+      "id": "end-222298",
       "kind": "connector",
       "connector": "cmp-22222t/PWR"
     },
     {
-      "id": "end-22229f",
+      "id": "end-22229a",
       "kind": "point"
     },
     {
-      "id": "end-22229h",
+      "id": "end-22229c",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-22229k",
+      "id": "end-22229e",
       "kind": "connector",
       "connector": "cmp-22222h/PWR"
     },
     {
-      "id": "end-22229n",
+      "id": "end-22229g",
       "kind": "connector",
       "connector": "cmp-22222e/IN"
     },
     {
-      "id": "end-22229q",
+      "id": "end-22229j",
       "kind": "connector",
       "connector": "cmp-22222j/PWR"
     },
     {
-      "id": "end-22229w",
+      "id": "end-22229r",
       "kind": "connector",
       "connector": "cmp-22222p/L6"
     },
     {
-      "id": "end-22229x",
+      "id": "end-22229s",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-22229z",
+      "id": "end-22229u",
       "kind": "connector",
       "connector": "cmp-22222p/L7"
     },
     {
-      "id": "end-2222a3",
+      "id": "end-22229w",
       "kind": "connector",
       "connector": "cmp-22222p/L8"
     },
     {
-      "id": "end-2222a5",
+      "id": "end-22229y",
       "kind": "connector",
       "connector": "cmp-22222p/L9"
     },
     {
-      "id": "end-2222a7",
+      "id": "end-2222a2",
       "kind": "connector",
       "connector": "cmp-22222p/L10"
     },
     {
-      "id": "end-2222a9",
+      "id": "end-2222a4",
       "kind": "point"
     },
     {
-      "id": "end-2222ab",
+      "id": "end-2222a6",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222ad",
+      "id": "end-2222a8",
       "kind": "connector",
       "connector": "cmp-22222w/PWR"
     },
     {
-      "id": "end-2222af",
+      "id": "end-2222aa",
       "kind": "connector",
       "connector": "cmp-22222z/PWR"
     },
     {
-      "id": "end-2222ah",
+      "id": "end-2222ac",
       "kind": "point"
     },
     {
-      "id": "end-2222ak",
+      "id": "end-2222ae",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222an",
+      "id": "end-2222ag",
       "kind": "connector",
       "connector": "cmp-222234/PWR"
     },
     {
-      "id": "end-2222aq",
+      "id": "end-2222aj",
       "kind": "connector",
       "connector": "cmp-222235/PWR"
     },
     {
-      "id": "end-2222as",
+      "id": "end-2222am",
       "kind": "connector",
       "connector": "cmp-222236/PWR"
     },
     {
-      "id": "end-2222aw",
+      "id": "end-2222aq",
       "kind": "connector",
       "connector": "cmp-22222j/AIN1"
     },
     {
-      "id": "end-2222ax",
+      "id": "end-2222ar",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222az",
+      "id": "end-2222at",
       "kind": "connector",
       "connector": "cmp-22222j/ENC1"
     },
     {
-      "id": "end-2222b3",
+      "id": "end-2222av",
       "kind": "connector",
       "connector": "cmp-22222j/DIO1"
     },
     {
-      "id": "end-2222b5",
+      "id": "end-2222ax",
       "kind": "connector",
       "connector": "cmp-22222j/AIN2"
     },
     {
-      "id": "end-2222b7",
+      "id": "end-2222az",
       "kind": "connector",
       "connector": "cmp-22222j/ENC2"
     },
     {
-      "id": "end-2222b9",
+      "id": "end-2222b3",
       "kind": "connector",
       "connector": "cmp-22222j/DIO2"
     },
     {
-      "id": "end-2222bb",
+      "id": "end-2222b5",
       "kind": "connector",
       "connector": "cmp-22222j/AIN3"
     },
     {
-      "id": "end-2222bd",
+      "id": "end-2222b7",
       "kind": "connector",
       "connector": "cmp-22222j/ENC3"
     },
     {
-      "id": "end-2222bf",
+      "id": "end-2222b9",
       "kind": "connector",
       "connector": "cmp-22222j/DIO3"
     },
     {
-      "id": "end-2222bh",
+      "id": "end-2222bb",
       "kind": "connector",
       "connector": "cmp-22222j/AIN4"
     },
     {
-      "id": "end-2222bk",
+      "id": "end-2222bd",
       "kind": "connector",
       "connector": "cmp-22222j/ENC4"
     },
     {
-      "id": "end-2222bn",
+      "id": "end-2222bf",
       "kind": "connector",
       "connector": "cmp-22222j/DIO4"
     },
     {
-      "id": "end-2222bq",
+      "id": "end-2222bh",
       "kind": "point"
     },
     {
-      "id": "end-2222bs",
+      "id": "end-2222bk",
       "kind": "breakout"
     },
     {
-      "id": "end-2222bu",
+      "id": "end-2222bn",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-2222bw",
+      "id": "end-2222bq",
       "kind": "connector",
       "connector": "cmp-22223k/J1"
     },
     {
-      "id": "end-2222by",
+      "id": "end-2222bs",
       "kind": "connector",
       "connector": "cmp-22223m/J1"
     },
     {
-      "id": "end-2222c2",
+      "id": "end-2222bu",
       "kind": "connector",
       "connector": "cmp-22223n/J1"
     },
     {
-      "id": "end-2222c4",
+      "id": "end-2222bw",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-2222c6",
+      "id": "end-2222by",
       "kind": "connector",
       "connector": "cmp-22223p/J1"
     },
     {
-      "id": "end-2222c8",
+      "id": "end-2222c2",
       "kind": "connector",
       "connector": "cmp-22223q/J1"
     },
     {
-      "id": "end-2222ca",
+      "id": "end-2222c4",
       "kind": "connector",
       "connector": "cmp-22223r/J1"
     },
     {
-      "id": "end-2222cc",
+      "id": "end-2222c6",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-2222ce",
+      "id": "end-2222c8",
       "kind": "connector",
       "connector": "cmp-22223s/J1"
     },
     {
-      "id": "end-2222cg",
+      "id": "end-2222ca",
       "kind": "connector",
       "connector": "cmp-22223t/J1"
     },
     {
-      "id": "end-2222cj",
+      "id": "end-2222cc",
       "kind": "connector",
       "connector": "cmp-22223u/J1"
     },
     {
-      "id": "end-2222cm",
+      "id": "end-2222ce",
       "kind": "breakout",
       "spec": "breakouts/tape-transition"
     },
     {
-      "id": "end-2222cp",
+      "id": "end-2222cg",
       "kind": "connector",
       "connector": "cmp-22223v/J1"
     },
     {
-      "id": "end-2222cr",
+      "id": "end-2222cj",
       "kind": "connector",
       "connector": "cmp-22223w/J1"
     },
     {
-      "id": "end-2222ct",
+      "id": "end-2222cm",
       "kind": "connector",
       "connector": "cmp-22223x/J1"
     },
     {
-      "id": "end-2222cx",
+      "id": "end-2222cr",
       "kind": "connector",
       "connector": "cmp-222234/M1"
     },
     {
-      "id": "end-2222cy",
+      "id": "end-2222cs",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222d2",
+      "id": "end-2222cu",
       "kind": "connector",
       "connector": "cmp-222234/ENC1"
     },
     {
-      "id": "end-2222d4",
+      "id": "end-2222cw",
       "kind": "connector",
       "connector": "cmp-222234/M2"
     },
     {
-      "id": "end-2222d6",
+      "id": "end-2222cy",
       "kind": "connector",
       "connector": "cmp-222234/ENC2"
+    },
+    {
+      "id": "end-2222d2",
+      "kind": "breakout",
+      "spec": "breakouts/y-boot"
+    },
+    {
+      "id": "end-2222d4",
+      "kind": "connector",
+      "connector": "cmp-222237/MOT"
+    },
+    {
+      "id": "end-2222d6",
+      "kind": "connector",
+      "connector": "cmp-22223d/J1"
     },
     {
       "id": "end-2222d8",
@@ -594,52 +599,52 @@
     {
       "id": "end-2222da",
       "kind": "connector",
-      "connector": "cmp-222237/MOT"
+      "connector": "cmp-222238/MOT"
     },
     {
       "id": "end-2222dc",
       "kind": "connector",
-      "connector": "cmp-22223d/J1"
-    },
-    {
-      "id": "end-2222de",
-      "kind": "breakout",
-      "spec": "breakouts/y-boot"
-    },
-    {
-      "id": "end-2222dg",
-      "kind": "connector",
-      "connector": "cmp-222238/MOT"
-    },
-    {
-      "id": "end-2222dj",
-      "kind": "connector",
       "connector": "cmp-22223e/J1"
     },
     {
-      "id": "end-2222dm",
+      "id": "end-2222de",
       "kind": "connector",
       "connector": "cmp-222235/M1"
     },
     {
-      "id": "end-2222dn",
+      "id": "end-2222df",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222dq",
+      "id": "end-2222dh",
       "kind": "connector",
       "connector": "cmp-222235/ENC1"
     },
     {
-      "id": "end-2222ds",
+      "id": "end-2222dk",
       "kind": "connector",
       "connector": "cmp-222235/M2"
     },
     {
-      "id": "end-2222du",
+      "id": "end-2222dn",
       "kind": "connector",
       "connector": "cmp-222235/ENC2"
+    },
+    {
+      "id": "end-2222dq",
+      "kind": "breakout",
+      "spec": "breakouts/y-boot"
+    },
+    {
+      "id": "end-2222ds",
+      "kind": "connector",
+      "connector": "cmp-222239/MOT"
+    },
+    {
+      "id": "end-2222du",
+      "kind": "connector",
+      "connector": "cmp-22223f/J1"
     },
     {
       "id": "end-2222dw",
@@ -649,52 +654,52 @@
     {
       "id": "end-2222dy",
       "kind": "connector",
-      "connector": "cmp-222239/MOT"
+      "connector": "cmp-22223a/MOT"
     },
     {
       "id": "end-2222e2",
       "kind": "connector",
-      "connector": "cmp-22223f/J1"
-    },
-    {
-      "id": "end-2222e4",
-      "kind": "breakout",
-      "spec": "breakouts/y-boot"
-    },
-    {
-      "id": "end-2222e6",
-      "kind": "connector",
-      "connector": "cmp-22223a/MOT"
-    },
-    {
-      "id": "end-2222e8",
-      "kind": "connector",
       "connector": "cmp-22223g/J1"
     },
     {
-      "id": "end-2222ea",
+      "id": "end-2222e4",
       "kind": "connector",
       "connector": "cmp-222236/M1"
     },
     {
-      "id": "end-2222eb",
+      "id": "end-2222e5",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222ed",
+      "id": "end-2222e7",
       "kind": "connector",
       "connector": "cmp-222236/ENC1"
     },
     {
-      "id": "end-2222ef",
+      "id": "end-2222e9",
       "kind": "connector",
       "connector": "cmp-222236/M2"
     },
     {
-      "id": "end-2222eh",
+      "id": "end-2222eb",
       "kind": "connector",
       "connector": "cmp-222236/ENC2"
+    },
+    {
+      "id": "end-2222ed",
+      "kind": "breakout",
+      "spec": "breakouts/y-boot"
+    },
+    {
+      "id": "end-2222ef",
+      "kind": "connector",
+      "connector": "cmp-22223b/MOT"
+    },
+    {
+      "id": "end-2222eh",
+      "kind": "connector",
+      "connector": "cmp-22223h/J1"
     },
     {
       "id": "end-2222ek",
@@ -704,392 +709,369 @@
     {
       "id": "end-2222en",
       "kind": "connector",
-      "connector": "cmp-22223b/MOT"
+      "connector": "cmp-22223c/MOT"
     },
     {
       "id": "end-2222eq",
       "kind": "connector",
-      "connector": "cmp-22223h/J1"
-    },
-    {
-      "id": "end-2222es",
-      "kind": "breakout",
-      "spec": "breakouts/y-boot"
-    },
-    {
-      "id": "end-2222eu",
-      "kind": "connector",
-      "connector": "cmp-22223c/MOT"
-    },
-    {
-      "id": "end-2222ew",
-      "kind": "connector",
       "connector": "cmp-22223j/J1"
     },
     {
-      "id": "end-2222ey",
+      "id": "end-2222es",
       "kind": "connector",
       "connector": "cmp-22222q/MOT"
     },
     {
-      "id": "end-2222ez",
+      "id": "end-2222et",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222f3",
+      "id": "end-2222ev",
       "kind": "connector",
       "connector": "cmp-22222q/ENC"
     },
     {
-      "id": "end-2222f5",
+      "id": "end-2222ex",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222f7",
+      "id": "end-2222ez",
       "kind": "connector",
       "connector": "cmp-22222r/MOT"
     },
     {
-      "id": "end-2222f9",
+      "id": "end-2222f3",
       "kind": "connector",
       "connector": "cmp-22222s/J1"
     },
     {
-      "id": "end-2222fc",
+      "id": "end-2222f6",
       "kind": "connector",
       "connector": "cmp-22222t/MOT"
     },
     {
-      "id": "end-2222fd",
+      "id": "end-2222f7",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222ff",
+      "id": "end-2222f9",
       "kind": "connector",
       "connector": "cmp-22222t/ENC"
     },
     {
-      "id": "end-2222fh",
+      "id": "end-2222fb",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222fk",
+      "id": "end-2222fd",
       "kind": "connector",
       "connector": "cmp-22222u/MOT"
     },
     {
-      "id": "end-2222fn",
+      "id": "end-2222ff",
       "kind": "connector",
       "connector": "cmp-22222v/J1"
     },
     {
-      "id": "end-2222fr",
+      "id": "end-2222fj",
       "kind": "connector",
       "connector": "cmp-22222w/MOT"
     },
     {
-      "id": "end-2222fs",
+      "id": "end-2222fk",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222fu",
+      "id": "end-2222fn",
       "kind": "connector",
       "connector": "cmp-22222w/ENC"
     },
     {
-      "id": "end-2222fw",
+      "id": "end-2222fq",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222fy",
+      "id": "end-2222fs",
       "kind": "connector",
       "connector": "cmp-22222x/MOT"
     },
     {
-      "id": "end-2222g2",
+      "id": "end-2222fu",
       "kind": "connector",
       "connector": "cmp-22222y/J1"
     },
     {
-      "id": "end-2222g5",
+      "id": "end-2222fx",
       "kind": "connector",
       "connector": "cmp-22222z/MOT"
     },
     {
-      "id": "end-2222g6",
+      "id": "end-2222fy",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222g8",
+      "id": "end-2222g2",
       "kind": "connector",
       "connector": "cmp-22222z/ENC"
     },
     {
-      "id": "end-2222ga",
+      "id": "end-2222g4",
       "kind": "breakout",
       "spec": "breakouts/y-boot"
     },
     {
-      "id": "end-2222gc",
+      "id": "end-2222g6",
       "kind": "connector",
       "connector": "cmp-222232/MOT"
     },
     {
-      "id": "end-2222ge",
+      "id": "end-2222g8",
       "kind": "connector",
       "connector": "cmp-222233/J1"
     },
     {
-      "id": "end-2222gh",
+      "id": "end-2222gb",
       "kind": "connector",
       "connector": "cmp-22222e/OUT1"
     },
     {
-      "id": "end-2222gj",
+      "id": "end-2222gc",
       "kind": "breakout",
       "spec": "breakouts/heatshrink-transition"
     },
     {
-      "id": "end-2222gm",
+      "id": "end-2222ge",
       "kind": "connector",
       "connector": "cmp-22222e/OUT2"
     },
     {
-      "id": "end-2222gp",
+      "id": "end-2222gg",
       "kind": "connector",
       "connector": "cmp-22222e/OUT3"
     },
     {
-      "id": "end-2222gr",
+      "id": "end-2222gj",
       "kind": "connector",
       "connector": "cmp-22222e/OUT4"
     },
     {
-      "id": "end-2222gt",
+      "id": "end-2222gm",
       "kind": "point"
     },
     {
-      "id": "end-2222gv",
+      "id": "end-2222gp",
       "kind": "breakout"
     },
     {
-      "id": "end-2222gx",
+      "id": "end-2222gr",
       "kind": "connector",
       "connector": "cmp-22222g/PWR"
     },
     {
-      "id": "end-2222gz",
+      "id": "end-2222gt",
       "kind": "connector",
       "connector": "cmp-22222b/PWR"
     },
     {
-      "id": "end-2222h3",
+      "id": "end-2222gv",
       "kind": "connector",
       "connector": "cmp-22222c/PWR"
     },
     {
-      "id": "end-2222h5",
+      "id": "end-2222gx",
       "kind": "connector",
       "connector": "cmp-22222f/PWR"
     }
   ],
   "segments": [
     {
-      "id": "seg-22226d",
+      "id": "seg-22226b",
       "ends": [
-        "end-22226b",
-        "end-22226c"
+        "end-222269",
+        "end-22226a"
       ],
       "assembly": "assemblies/ethernet-patch-2000mm"
     },
     {
-      "id": "seg-22226g",
+      "id": "seg-22226e",
       "ends": [
-        "end-22226e",
-        "end-22226f"
+        "end-22226c",
+        "end-22226d"
       ],
       "assembly": "assemblies/ethernet-patch-1000mm"
     },
     {
-      "id": "seg-22226k",
+      "id": "seg-22226h",
       "ends": [
-        "end-22226h",
-        "end-22226j"
+        "end-22226f",
+        "end-22226g"
       ],
       "assembly": "assemblies/ethernet-patch-2000mm"
     },
     {
-      "id": "seg-22226p",
+      "id": "seg-22226m",
       "ends": [
-        "end-22226m",
-        "end-22226n"
+        "end-22226j",
+        "end-22226k"
       ],
       "assembly": "assemblies/ethernet-patch-2000mm"
     },
     {
-      "id": "seg-22226s",
+      "id": "seg-22226q",
       "ends": [
-        "end-22226q",
-        "end-22226r"
+        "end-22226n",
+        "end-22226p"
       ],
       "assembly": "assemblies/ethernet-patch-500mm"
     },
     {
-      "id": "seg-22226v",
+      "id": "seg-22226t",
       "ends": [
-        "end-22226t",
-        "end-22226u"
+        "end-22226r",
+        "end-22226s"
       ],
       "assembly": "assemblies/ethernet-patch-500mm"
     },
     {
-      "id": "seg-22226y",
+      "id": "seg-22226w",
       "ends": [
-        "end-22226w",
-        "end-22226x"
+        "end-22226u",
+        "end-22226v"
       ],
       "assembly": "assemblies/ethernet-patch-1000mm"
     },
     {
-      "id": "seg-222273",
+      "id": "seg-22226z",
       "ends": [
-        "end-22226z",
-        "end-222272"
+        "end-22226x",
+        "end-22226y"
       ],
       "assembly": "assemblies/ethernet-patch-1000mm"
     },
     {
-      "id": "seg-222276",
+      "id": "seg-222274",
       "ends": [
-        "end-222274",
-        "end-222275"
+        "end-222272",
+        "end-222273"
       ],
       "assembly": "assemblies/can-patch-gh4-500mm"
     },
     {
-      "id": "seg-222279",
+      "id": "seg-222277",
       "ends": [
-        "end-222277",
-        "end-222278"
+        "end-222275",
+        "end-222276"
       ],
       "assembly": "assemblies/can-patch-gh4-500mm"
     },
     {
-      "id": "seg-22227c",
+      "id": "seg-22227a",
       "ends": [
-        "end-22227a",
-        "end-22227b"
-      ],
-      "assembly": "assemblies/can-patch-gh4-500mm"
-    },
-    {
-      "id": "seg-22227f",
-      "ends": [
-        "end-22227d",
-        "end-22227e"
+        "end-222278",
+        "end-222279"
       ],
       "assembly": "assemblies/can-patch-gh4-300mm"
     },
     {
-      "id": "seg-22227j",
+      "id": "seg-22227d",
       "ends": [
-        "end-22227g",
-        "end-22227h"
+        "end-22227b",
+        "end-22227c"
       ],
       "assembly": "assemblies/usb-a-c-1000mm"
     },
     {
-      "id": "seg-22227n",
+      "id": "seg-22227g",
       "ends": [
-        "end-22227k",
-        "end-22227m"
+        "end-22227e",
+        "end-22227f"
       ],
       "assembly": "assemblies/usb-a-c-2000mm"
     },
     {
-      "id": "seg-22227r",
+      "id": "seg-22227k",
       "ends": [
-        "end-22227p",
-        "end-22227q"
+        "end-22227h",
+        "end-22227j"
       ],
       "assembly": "assemblies/usb-a-c-2000mm"
     },
     {
-      "id": "seg-22227u",
+      "id": "seg-22227p",
       "ends": [
-        "end-22227s",
-        "end-22227t"
+        "end-22227m",
+        "end-22227n"
       ],
       "assembly": "assemblies/usb-a-c-2000mm"
     },
     {
-      "id": "seg-22227x",
+      "id": "seg-22227s",
       "ends": [
-        "end-22227v",
-        "end-22227w"
+        "end-22227q",
+        "end-22227r"
       ],
       "assembly": "assemblies/hdmi-2000mm"
     },
     {
-      "id": "seg-222282",
+      "id": "seg-22227v",
       "ends": [
-        "end-22227y",
-        "end-22227z"
+        "end-22227t",
+        "end-22227u"
       ],
       "assembly": "assemblies/fakra-gmsl-1000mm"
     },
     {
-      "id": "seg-222285",
+      "id": "seg-22227y",
       "ends": [
-        "end-222283",
-        "end-222284"
+        "end-22227w",
+        "end-22227x"
       ],
       "assembly": "assemblies/fakra-gmsl-1000mm"
     },
     {
-      "id": "seg-222288",
+      "id": "seg-222283",
       "ends": [
-        "end-222286",
-        "end-222287"
+        "end-22227z",
+        "end-222282"
       ],
       "assembly": "assemblies/fakra-gmsl-1000mm"
     },
     {
-      "id": "seg-22228b",
+      "id": "seg-222286",
       "ends": [
-        "end-222289",
-        "end-22228a"
+        "end-222284",
+        "end-222285"
       ],
       "assembly": "assemblies/fakra-gmsl-2000mm"
     },
     {
-      "id": "seg-22228e",
+      "id": "seg-222289",
       "ends": [
-        "end-22228c",
-        "end-22228d"
+        "end-222287",
+        "end-222288"
       ],
       "assembly": "assemblies/fakra-gmsl-2000mm"
     },
     {
-      "id": "seg-22228h",
+      "id": "seg-22228c",
       "ends": [
-        "end-22228f",
-        "end-22228g"
+        "end-22228a",
+        "end-22228b"
       ],
       "assembly": "assemblies/fakra-gmsl-2000mm"
     },
     {
-      "id": "seg-22228m",
+      "id": "seg-22228f",
       "ends": [
-        "end-22228j",
-        "end-22228k"
+        "end-22228d",
+        "end-22228e"
       ],
       "length_mm": 300,
       "harness": {
@@ -1097,10 +1079,10 @@
       }
     },
     {
-      "id": "seg-22228q",
+      "id": "seg-22228j",
       "ends": [
-        "end-22228n",
-        "end-22228p"
+        "end-22228g",
+        "end-22228h"
       ],
       "length_mm": 250,
       "harness": {
@@ -1108,10 +1090,10 @@
       }
     },
     {
-      "id": "seg-22228t",
+      "id": "seg-22228n",
       "ends": [
-        "end-22228r",
-        "end-22228s"
+        "end-22228k",
+        "end-22228m"
       ],
       "length_mm": 400,
       "harness": {
@@ -1119,50 +1101,50 @@
       }
     },
     {
-      "id": "seg-22228w",
+      "id": "seg-22228r",
+      "ends": [
+        "end-22228p",
+        "end-22228q"
+      ],
+      "length_mm": 80
+    },
+    {
+      "id": "seg-22228t",
+      "ends": [
+        "end-22228s",
+        "end-22228q"
+      ],
+      "length_mm": 80
+    },
+    {
+      "id": "seg-22228v",
       "ends": [
         "end-22228u",
-        "end-22228v"
+        "end-22228q"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-22228y",
+      "id": "seg-22228x",
       "ends": [
-        "end-22228x",
-        "end-22228v"
+        "end-22228w",
+        "end-22228q"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-222292",
+      "id": "seg-22228z",
       "ends": [
-        "end-22228z",
-        "end-22228v"
+        "end-22228y",
+        "end-22228q"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-222294",
+      "id": "seg-222293",
       "ends": [
-        "end-222293",
-        "end-22228v"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-222296",
-      "ends": [
-        "end-222295",
-        "end-22228v"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-222298",
-      "ends": [
-        "end-22228v",
-        "end-222297"
+        "end-22228q",
+        "end-222292"
       ],
       "length_mm": 400,
       "harness": {
@@ -1170,114 +1152,114 @@
       }
     },
     {
-      "id": "seg-22229a",
+      "id": "seg-222295",
       "ends": [
-        "end-222297",
-        "end-222299"
+        "end-222292",
+        "end-222294"
       ],
       "length_mm": 350
     },
     {
-      "id": "seg-22229c",
+      "id": "seg-222297",
       "ends": [
-        "end-222299",
-        "end-22229b"
+        "end-222294",
+        "end-222296"
       ],
       "length_mm": 500
     },
     {
-      "id": "seg-22229e",
+      "id": "seg-222299",
       "ends": [
-        "end-222299",
-        "end-22229d"
+        "end-222294",
+        "end-222298"
       ],
       "length_mm": 500
     },
     {
-      "id": "seg-22229g",
+      "id": "seg-22229b",
       "ends": [
-        "end-222299",
-        "end-22229f"
+        "end-222294",
+        "end-22229a"
       ],
       "length_mm": 300
     },
     {
-      "id": "seg-22229j",
+      "id": "seg-22229d",
       "ends": [
-        "end-22229f",
-        "end-22229h"
+        "end-22229a",
+        "end-22229c"
       ],
       "length_mm": 200
     },
     {
-      "id": "seg-22229m",
+      "id": "seg-22229f",
       "ends": [
-        "end-22229h",
-        "end-22229k"
+        "end-22229c",
+        "end-22229e"
       ],
       "length_mm": 300
     },
     {
-      "id": "seg-22229p",
+      "id": "seg-22229h",
       "ends": [
-        "end-22229h",
-        "end-22229n"
+        "end-22229c",
+        "end-22229g"
       ],
       "length_mm": 400
     },
     {
-      "id": "seg-22229r",
+      "id": "seg-22229k",
       "ends": [
-        "end-22229h",
-        "end-22229q"
+        "end-22229c",
+        "end-22229j"
       ],
       "length_mm": 350
     },
     {
-      "id": "seg-22229y",
+      "id": "seg-22229t",
+      "ends": [
+        "end-22229r",
+        "end-22229s"
+      ],
+      "length_mm": 80
+    },
+    {
+      "id": "seg-22229v",
+      "ends": [
+        "end-22229u",
+        "end-22229s"
+      ],
+      "length_mm": 80
+    },
+    {
+      "id": "seg-22229x",
       "ends": [
         "end-22229w",
-        "end-22229x"
+        "end-22229s"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-2222a2",
+      "id": "seg-22229z",
       "ends": [
-        "end-22229z",
-        "end-22229x"
+        "end-22229y",
+        "end-22229s"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-2222a4",
+      "id": "seg-2222a3",
       "ends": [
-        "end-2222a3",
-        "end-22229x"
+        "end-2222a2",
+        "end-22229s"
       ],
       "length_mm": 80
     },
     {
-      "id": "seg-2222a6",
+      "id": "seg-2222a5",
       "ends": [
-        "end-2222a5",
-        "end-22229x"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-2222a8",
-      "ends": [
-        "end-2222a7",
-        "end-22229x"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-2222aa",
-      "ends": [
-        "end-22229x",
-        "end-2222a9"
+        "end-22229s",
+        "end-2222a4"
       ],
       "length_mm": 300,
       "harness": {
@@ -1285,74 +1267,98 @@
       }
     },
     {
-      "id": "seg-2222ac",
+      "id": "seg-2222a7",
       "ends": [
-        "end-2222a9",
-        "end-2222ab"
+        "end-2222a4",
+        "end-2222a6"
       ],
       "length_mm": 300
     },
     {
-      "id": "seg-2222ae",
+      "id": "seg-2222a9",
       "ends": [
-        "end-2222ab",
-        "end-2222ad"
+        "end-2222a6",
+        "end-2222a8"
       ],
       "length_mm": 450
     },
     {
-      "id": "seg-2222ag",
+      "id": "seg-2222ab",
       "ends": [
-        "end-2222ab",
-        "end-2222af"
+        "end-2222a6",
+        "end-2222aa"
       ],
       "length_mm": 900
     },
     {
-      "id": "seg-2222aj",
+      "id": "seg-2222ad",
       "ends": [
-        "end-2222ab",
-        "end-2222ah"
+        "end-2222a6",
+        "end-2222ac"
       ],
       "length_mm": 250
     },
     {
-      "id": "seg-2222am",
+      "id": "seg-2222af",
       "ends": [
-        "end-2222ah",
-        "end-2222ak"
+        "end-2222ac",
+        "end-2222ae"
       ],
       "length_mm": 200
     },
     {
-      "id": "seg-2222ap",
+      "id": "seg-2222ah",
       "ends": [
-        "end-2222ak",
-        "end-2222an"
+        "end-2222ae",
+        "end-2222ag"
       ],
       "length_mm": 400
     },
     {
-      "id": "seg-2222ar",
+      "id": "seg-2222ak",
       "ends": [
-        "end-2222ak",
-        "end-2222aq"
+        "end-2222ae",
+        "end-2222aj"
       ],
       "length_mm": 700
     },
     {
-      "id": "seg-2222at",
+      "id": "seg-2222an",
       "ends": [
-        "end-2222ak",
-        "end-2222as"
+        "end-2222ae",
+        "end-2222am"
       ],
       "length_mm": 250
     },
     {
+      "id": "seg-2222as",
+      "ends": [
+        "end-2222aq",
+        "end-2222ar"
+      ],
+      "length_mm": 60
+    },
+    {
+      "id": "seg-2222au",
+      "ends": [
+        "end-2222at",
+        "end-2222ar"
+      ],
+      "length_mm": 60
+    },
+    {
+      "id": "seg-2222aw",
+      "ends": [
+        "end-2222av",
+        "end-2222ar"
+      ],
+      "length_mm": 60
+    },
+    {
       "id": "seg-2222ay",
       "ends": [
-        "end-2222aw",
-        "end-2222ax"
+        "end-2222ax",
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1360,7 +1366,7 @@
       "id": "seg-2222b2",
       "ends": [
         "end-2222az",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1368,7 +1374,7 @@
       "id": "seg-2222b4",
       "ends": [
         "end-2222b3",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1376,7 +1382,7 @@
       "id": "seg-2222b6",
       "ends": [
         "end-2222b5",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1384,7 +1390,7 @@
       "id": "seg-2222b8",
       "ends": [
         "end-2222b7",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1392,7 +1398,7 @@
       "id": "seg-2222ba",
       "ends": [
         "end-2222b9",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1400,7 +1406,7 @@
       "id": "seg-2222bc",
       "ends": [
         "end-2222bb",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1408,7 +1414,7 @@
       "id": "seg-2222be",
       "ends": [
         "end-2222bd",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
@@ -1416,39 +1422,15 @@
       "id": "seg-2222bg",
       "ends": [
         "end-2222bf",
-        "end-2222ax"
+        "end-2222ar"
       ],
       "length_mm": 60
     },
     {
       "id": "seg-2222bj",
       "ends": [
-        "end-2222bh",
-        "end-2222ax"
-      ],
-      "length_mm": 60
-    },
-    {
-      "id": "seg-2222bm",
-      "ends": [
-        "end-2222bk",
-        "end-2222ax"
-      ],
-      "length_mm": 60
-    },
-    {
-      "id": "seg-2222bp",
-      "ends": [
-        "end-2222bn",
-        "end-2222ax"
-      ],
-      "length_mm": 60
-    },
-    {
-      "id": "seg-2222br",
-      "ends": [
-        "end-2222ax",
-        "end-2222bq"
+        "end-2222ar",
+        "end-2222bh"
       ],
       "length_mm": 250,
       "harness": {
@@ -1456,33 +1438,57 @@
       }
     },
     {
-      "id": "seg-2222bt",
+      "id": "seg-2222bm",
       "ends": [
-        "end-2222bq",
-        "end-2222bs"
+        "end-2222bh",
+        "end-2222bk"
       ],
       "length_mm": 200
     },
     {
-      "id": "seg-2222bv",
+      "id": "seg-2222bp",
       "ends": [
-        "end-2222bs",
-        "end-2222bu"
+        "end-2222bk",
+        "end-2222bn"
       ],
       "length_mm": 600
     },
     {
-      "id": "seg-2222bx",
+      "id": "seg-2222br",
       "ends": [
-        "end-2222bu",
-        "end-2222bw"
+        "end-2222bn",
+        "end-2222bq"
       ],
       "length_mm": 150
     },
     {
+      "id": "seg-2222bt",
+      "ends": [
+        "end-2222bn",
+        "end-2222bs"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222bv",
+      "ends": [
+        "end-2222bn",
+        "end-2222bu"
+      ],
+      "length_mm": 200
+    },
+    {
+      "id": "seg-2222bx",
+      "ends": [
+        "end-2222bk",
+        "end-2222bw"
+      ],
+      "length_mm": 500
+    },
+    {
       "id": "seg-2222bz",
       "ends": [
-        "end-2222bu",
+        "end-2222bw",
         "end-2222by"
       ],
       "length_mm": 150
@@ -1490,31 +1496,31 @@
     {
       "id": "seg-2222c3",
       "ends": [
-        "end-2222bu",
+        "end-2222bw",
         "end-2222c2"
-      ],
-      "length_mm": 200
-    },
-    {
-      "id": "seg-2222c5",
-      "ends": [
-        "end-2222bs",
-        "end-2222c4"
-      ],
-      "length_mm": 500
-    },
-    {
-      "id": "seg-2222c7",
-      "ends": [
-        "end-2222c4",
-        "end-2222c6"
       ],
       "length_mm": 150
     },
     {
+      "id": "seg-2222c5",
+      "ends": [
+        "end-2222bw",
+        "end-2222c4"
+      ],
+      "length_mm": 200
+    },
+    {
+      "id": "seg-2222c7",
+      "ends": [
+        "end-2222bk",
+        "end-2222c6"
+      ],
+      "length_mm": 500
+    },
+    {
       "id": "seg-2222c9",
       "ends": [
-        "end-2222c4",
+        "end-2222c6",
         "end-2222c8"
       ],
       "length_mm": 150
@@ -1522,31 +1528,31 @@
     {
       "id": "seg-2222cb",
       "ends": [
-        "end-2222c4",
+        "end-2222c6",
         "end-2222ca"
-      ],
-      "length_mm": 200
-    },
-    {
-      "id": "seg-2222cd",
-      "ends": [
-        "end-2222bs",
-        "end-2222cc"
-      ],
-      "length_mm": 500
-    },
-    {
-      "id": "seg-2222cf",
-      "ends": [
-        "end-2222cc",
-        "end-2222ce"
       ],
       "length_mm": 150
     },
     {
+      "id": "seg-2222cd",
+      "ends": [
+        "end-2222c6",
+        "end-2222cc"
+      ],
+      "length_mm": 200
+    },
+    {
+      "id": "seg-2222cf",
+      "ends": [
+        "end-2222bk",
+        "end-2222ce"
+      ],
+      "length_mm": 400
+    },
+    {
       "id": "seg-2222ch",
       "ends": [
-        "end-2222cc",
+        "end-2222ce",
         "end-2222cg"
       ],
       "length_mm": 150
@@ -1554,85 +1560,85 @@
     {
       "id": "seg-2222ck",
       "ends": [
-        "end-2222cc",
+        "end-2222ce",
         "end-2222cj"
       ],
-      "length_mm": 200
+      "length_mm": 150
     },
     {
       "id": "seg-2222cn",
       "ends": [
-        "end-2222bs",
+        "end-2222ce",
         "end-2222cm"
-      ],
-      "length_mm": 400
-    },
-    {
-      "id": "seg-2222cq",
-      "ends": [
-        "end-2222cm",
-        "end-2222cp"
-      ],
-      "length_mm": 150
-    },
-    {
-      "id": "seg-2222cs",
-      "ends": [
-        "end-2222cm",
-        "end-2222cr"
-      ],
-      "length_mm": 150
-    },
-    {
-      "id": "seg-2222cu",
-      "ends": [
-        "end-2222cm",
-        "end-2222ct"
       ],
       "length_mm": 200
     },
     {
+      "id": "seg-2222ct",
+      "ends": [
+        "end-2222cr",
+        "end-2222cs"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222cv",
+      "ends": [
+        "end-2222cu",
+        "end-2222cs"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222cx",
+      "ends": [
+        "end-2222cw",
+        "end-2222cs"
+      ],
+      "length_mm": 100
+    },
+    {
       "id": "seg-2222cz",
       "ends": [
-        "end-2222cx",
-        "end-2222cy"
+        "end-2222cy",
+        "end-2222cs"
       ],
       "length_mm": 100
     },
     {
       "id": "seg-2222d3",
       "ends": [
-        "end-2222d2",
-        "end-2222cy"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222d5",
-      "ends": [
-        "end-2222d4",
-        "end-2222cy"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222d7",
-      "ends": [
-        "end-2222d6",
-        "end-2222cy"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222d9",
-      "ends": [
-        "end-2222cy",
-        "end-2222d8"
+        "end-2222cs",
+        "end-2222d2"
       ],
       "length_mm": 300,
       "harness": {
         "name": "RoboClaw L axis harness"
       }
+    },
+    {
+      "id": "seg-2222d5",
+      "ends": [
+        "end-2222d2",
+        "end-2222d4"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222d7",
+      "ends": [
+        "end-2222d2",
+        "end-2222d6"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222d9",
+      "ends": [
+        "end-2222cs",
+        "end-2222d8"
+      ],
+      "length_mm": 350
     },
     {
       "id": "seg-2222db",
@@ -1651,71 +1657,71 @@
       "length_mm": 150
     },
     {
-      "id": "seg-2222df",
-      "ends": [
-        "end-2222cy",
-        "end-2222de"
-      ],
-      "length_mm": 350
-    },
-    {
-      "id": "seg-2222dh",
+      "id": "seg-2222dg",
       "ends": [
         "end-2222de",
-        "end-2222dg"
+        "end-2222df"
       ],
-      "length_mm": 150
+      "length_mm": 100
     },
     {
-      "id": "seg-2222dk",
+      "id": "seg-2222dj",
       "ends": [
-        "end-2222de",
-        "end-2222dj"
+        "end-2222dh",
+        "end-2222df"
       ],
-      "length_mm": 150
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222dm",
+      "ends": [
+        "end-2222dk",
+        "end-2222df"
+      ],
+      "length_mm": 100
     },
     {
       "id": "seg-2222dp",
       "ends": [
-        "end-2222dm",
-        "end-2222dn"
+        "end-2222dn",
+        "end-2222df"
       ],
       "length_mm": 100
     },
     {
       "id": "seg-2222dr",
       "ends": [
-        "end-2222dq",
-        "end-2222dn"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222dt",
-      "ends": [
-        "end-2222ds",
-        "end-2222dn"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222dv",
-      "ends": [
-        "end-2222du",
-        "end-2222dn"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222dx",
-      "ends": [
-        "end-2222dn",
-        "end-2222dw"
+        "end-2222df",
+        "end-2222dq"
       ],
       "length_mm": 300,
       "harness": {
         "name": "RoboClaw R axis harness"
       }
+    },
+    {
+      "id": "seg-2222dt",
+      "ends": [
+        "end-2222dq",
+        "end-2222ds"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222dv",
+      "ends": [
+        "end-2222dq",
+        "end-2222du"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222dx",
+      "ends": [
+        "end-2222df",
+        "end-2222dw"
+      ],
+      "length_mm": 350
     },
     {
       "id": "seg-2222dz",
@@ -1734,71 +1740,71 @@
       "length_mm": 150
     },
     {
-      "id": "seg-2222e5",
-      "ends": [
-        "end-2222dn",
-        "end-2222e4"
-      ],
-      "length_mm": 350
-    },
-    {
-      "id": "seg-2222e7",
+      "id": "seg-2222e6",
       "ends": [
         "end-2222e4",
-        "end-2222e6"
+        "end-2222e5"
       ],
-      "length_mm": 150
+      "length_mm": 100
     },
     {
-      "id": "seg-2222e9",
+      "id": "seg-2222e8",
       "ends": [
-        "end-2222e4",
-        "end-2222e8"
+        "end-2222e7",
+        "end-2222e5"
       ],
-      "length_mm": 150
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222ea",
+      "ends": [
+        "end-2222e9",
+        "end-2222e5"
+      ],
+      "length_mm": 100
     },
     {
       "id": "seg-2222ec",
       "ends": [
-        "end-2222ea",
-        "end-2222eb"
+        "end-2222eb",
+        "end-2222e5"
       ],
       "length_mm": 100
     },
     {
       "id": "seg-2222ee",
       "ends": [
-        "end-2222ed",
-        "end-2222eb"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222eg",
-      "ends": [
-        "end-2222ef",
-        "end-2222eb"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222ej",
-      "ends": [
-        "end-2222eh",
-        "end-2222eb"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222em",
-      "ends": [
-        "end-2222eb",
-        "end-2222ek"
+        "end-2222e5",
+        "end-2222ed"
       ],
       "length_mm": 250,
       "harness": {
         "name": "RoboClaw rear axis harness"
       }
+    },
+    {
+      "id": "seg-2222eg",
+      "ends": [
+        "end-2222ed",
+        "end-2222ef"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222ej",
+      "ends": [
+        "end-2222ed",
+        "end-2222eh"
+      ],
+      "length_mm": 150
+    },
+    {
+      "id": "seg-2222em",
+      "ends": [
+        "end-2222e5",
+        "end-2222ek"
+      ],
+      "length_mm": 900
     },
     {
       "id": "seg-2222ep",
@@ -1817,50 +1823,26 @@
       "length_mm": 150
     },
     {
-      "id": "seg-2222et",
-      "ends": [
-        "end-2222eb",
-        "end-2222es"
-      ],
-      "length_mm": 900
-    },
-    {
-      "id": "seg-2222ev",
+      "id": "seg-2222eu",
       "ends": [
         "end-2222es",
-        "end-2222eu"
-      ],
-      "length_mm": 150
-    },
-    {
-      "id": "seg-2222ex",
-      "ends": [
-        "end-2222es",
-        "end-2222ew"
-      ],
-      "length_mm": 150
-    },
-    {
-      "id": "seg-2222f2",
-      "ends": [
-        "end-2222ey",
-        "end-2222ez"
+        "end-2222et"
       ],
       "length_mm": 100
     },
     {
-      "id": "seg-2222f4",
+      "id": "seg-2222ew",
       "ends": [
-        "end-2222f3",
-        "end-2222ez"
+        "end-2222ev",
+        "end-2222et"
       ],
       "length_mm": 100
     },
     {
-      "id": "seg-2222f6",
+      "id": "seg-2222ey",
       "ends": [
-        "end-2222ez",
-        "end-2222f5"
+        "end-2222et",
+        "end-2222ex"
       ],
       "length_mm": 250,
       "harness": {
@@ -1868,9 +1850,25 @@
       }
     },
     {
+      "id": "seg-2222f2",
+      "ends": [
+        "end-2222ex",
+        "end-2222ez"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222f4",
+      "ends": [
+        "end-2222ex",
+        "end-2222f3"
+      ],
+      "length_mm": 100
+    },
+    {
       "id": "seg-2222f8",
       "ends": [
-        "end-2222f5",
+        "end-2222f6",
         "end-2222f7"
       ],
       "length_mm": 100
@@ -1878,32 +1876,16 @@
     {
       "id": "seg-2222fa",
       "ends": [
-        "end-2222f5",
-        "end-2222f9"
+        "end-2222f9",
+        "end-2222f7"
       ],
       "length_mm": 100
     },
     {
-      "id": "seg-2222fe",
+      "id": "seg-2222fc",
       "ends": [
-        "end-2222fc",
-        "end-2222fd"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222fg",
-      "ends": [
-        "end-2222ff",
-        "end-2222fd"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222fj",
-      "ends": [
-        "end-2222fd",
-        "end-2222fh"
+        "end-2222f7",
+        "end-2222fb"
       ],
       "length_mm": 250,
       "harness": {
@@ -1911,9 +1893,25 @@
       }
     },
     {
+      "id": "seg-2222fe",
+      "ends": [
+        "end-2222fb",
+        "end-2222fd"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222fg",
+      "ends": [
+        "end-2222fb",
+        "end-2222ff"
+      ],
+      "length_mm": 100
+    },
+    {
       "id": "seg-2222fm",
       "ends": [
-        "end-2222fh",
+        "end-2222fj",
         "end-2222fk"
       ],
       "length_mm": 100
@@ -1921,32 +1919,16 @@
     {
       "id": "seg-2222fp",
       "ends": [
-        "end-2222fh",
-        "end-2222fn"
+        "end-2222fn",
+        "end-2222fk"
       ],
       "length_mm": 100
     },
     {
-      "id": "seg-2222ft",
+      "id": "seg-2222fr",
       "ends": [
-        "end-2222fr",
-        "end-2222fs"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222fv",
-      "ends": [
-        "end-2222fu",
-        "end-2222fs"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222fx",
-      "ends": [
-        "end-2222fs",
-        "end-2222fw"
+        "end-2222fk",
+        "end-2222fq"
       ],
       "length_mm": 250,
       "harness": {
@@ -1954,9 +1936,25 @@
       }
     },
     {
+      "id": "seg-2222ft",
+      "ends": [
+        "end-2222fq",
+        "end-2222fs"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222fv",
+      "ends": [
+        "end-2222fq",
+        "end-2222fu"
+      ],
+      "length_mm": 100
+    },
+    {
       "id": "seg-2222fz",
       "ends": [
-        "end-2222fw",
+        "end-2222fx",
         "end-2222fy"
       ],
       "length_mm": 100
@@ -1964,32 +1962,16 @@
     {
       "id": "seg-2222g3",
       "ends": [
-        "end-2222fw",
-        "end-2222g2"
+        "end-2222g2",
+        "end-2222fy"
       ],
       "length_mm": 100
     },
     {
-      "id": "seg-2222g7",
+      "id": "seg-2222g5",
       "ends": [
-        "end-2222g5",
-        "end-2222g6"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222g9",
-      "ends": [
-        "end-2222g8",
-        "end-2222g6"
-      ],
-      "length_mm": 100
-    },
-    {
-      "id": "seg-2222gb",
-      "ends": [
-        "end-2222g6",
-        "end-2222ga"
+        "end-2222fy",
+        "end-2222g4"
       ],
       "length_mm": 250,
       "harness": {
@@ -1997,58 +1979,58 @@
       }
     },
     {
-      "id": "seg-2222gd",
+      "id": "seg-2222g7",
       "ends": [
-        "end-2222ga",
-        "end-2222gc"
+        "end-2222g4",
+        "end-2222g6"
       ],
       "length_mm": 100
+    },
+    {
+      "id": "seg-2222g9",
+      "ends": [
+        "end-2222g4",
+        "end-2222g8"
+      ],
+      "length_mm": 100
+    },
+    {
+      "id": "seg-2222gd",
+      "ends": [
+        "end-2222gb",
+        "end-2222gc"
+      ],
+      "length_mm": 80
     },
     {
       "id": "seg-2222gf",
       "ends": [
-        "end-2222ga",
-        "end-2222ge"
+        "end-2222ge",
+        "end-2222gc"
       ],
-      "length_mm": 100
+      "length_mm": 80
+    },
+    {
+      "id": "seg-2222gh",
+      "ends": [
+        "end-2222gg",
+        "end-2222gc"
+      ],
+      "length_mm": 80
     },
     {
       "id": "seg-2222gk",
       "ends": [
-        "end-2222gh",
-        "end-2222gj"
+        "end-2222gj",
+        "end-2222gc"
       ],
       "length_mm": 80
     },
     {
       "id": "seg-2222gn",
       "ends": [
-        "end-2222gm",
-        "end-2222gj"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-2222gq",
-      "ends": [
-        "end-2222gp",
-        "end-2222gj"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-2222gs",
-      "ends": [
-        "end-2222gr",
-        "end-2222gj"
-      ],
-      "length_mm": 80
-    },
-    {
-      "id": "seg-2222gu",
-      "ends": [
-        "end-2222gj",
-        "end-2222gt"
+        "end-2222gc",
+        "end-2222gm"
       ],
       "length_mm": 300,
       "harness": {
@@ -2056,160 +2038,153 @@
       }
     },
     {
-      "id": "seg-2222gw",
+      "id": "seg-2222gq",
       "ends": [
-        "end-2222gt",
-        "end-2222gv"
+        "end-2222gm",
+        "end-2222gp"
       ],
       "length_mm": 200
     },
     {
-      "id": "seg-2222gy",
+      "id": "seg-2222gs",
       "ends": [
-        "end-2222gv",
-        "end-2222gx"
+        "end-2222gp",
+        "end-2222gr"
       ],
       "length_mm": 600
     },
     {
-      "id": "seg-2222h2",
+      "id": "seg-2222gu",
       "ends": [
-        "end-2222gv",
-        "end-2222gz"
+        "end-2222gp",
+        "end-2222gt"
       ],
       "length_mm": 700
     },
     {
-      "id": "seg-2222h4",
+      "id": "seg-2222gw",
       "ends": [
-        "end-2222gv",
-        "end-2222h3"
+        "end-2222gp",
+        "end-2222gv"
       ],
       "length_mm": 500
     },
     {
-      "id": "seg-2222h6",
+      "id": "seg-2222gy",
       "ends": [
-        "end-2222gv",
-        "end-2222h5"
+        "end-2222gp",
+        "end-2222gx"
       ],
       "length_mm": 900
     }
   ],
   "sheaths": [
     {
-      "id": "sht-22229s",
+      "id": "sht-22229m",
       "spec": "sheaths/braid-10mm",
       "segments": [
-        "seg-222298",
-        "seg-22229a",
-        "seg-22229g",
-        "seg-22229j"
+        "seg-222293",
+        "seg-222295",
+        "seg-22229b",
+        "seg-22229d"
       ],
       "overlap_mm": 20
     },
     {
-      "id": "sht-2222au",
+      "id": "sht-2222ap",
       "spec": "sheaths/spiral-wrap-8mm",
       "segments": [
-        "seg-2222aa",
-        "seg-2222ac",
-        "seg-2222aj",
-        "seg-2222am"
+        "seg-2222a5",
+        "seg-2222a7",
+        "seg-2222ad",
+        "seg-2222af"
       ],
       "overlap_mm": 0
     },
     {
-      "id": "sht-2222cv",
+      "id": "sht-2222cp",
       "spec": "sheaths/braid-6mm",
       "segments": [
-        "seg-2222br",
-        "seg-2222bt"
+        "seg-2222bj",
+        "seg-2222bm"
       ],
       "overlap_mm": 10
     },
     {
-      "id": "sht-2222fb",
+      "id": "sht-2222f5",
       "spec": "sheaths/heatshrink-12mm",
       "segments": [
-        "seg-2222f6"
+        "seg-2222ey"
       ],
       "overlap_mm": 0
     },
     {
-      "id": "sht-2222fq",
+      "id": "sht-2222fh",
       "spec": "sheaths/heatshrink-12mm",
       "segments": [
-        "seg-2222fj"
+        "seg-2222fc"
       ],
       "overlap_mm": 0
     },
     {
-      "id": "sht-2222g4",
+      "id": "sht-2222fw",
       "spec": "sheaths/heatshrink-12mm",
       "segments": [
-        "seg-2222fx"
+        "seg-2222fr"
       ],
       "overlap_mm": 0
     },
     {
-      "id": "sht-2222gg",
+      "id": "sht-2222ga",
       "spec": "sheaths/heatshrink-12mm",
       "segments": [
-        "seg-2222gb"
+        "seg-2222g5"
       ],
       "overlap_mm": 0
     },
     {
-      "id": "sht-2222h7",
+      "id": "sht-2222gz",
       "spec": "sheaths/braid-6mm",
       "segments": [
-        "seg-2222gu",
-        "seg-2222gw"
+        "seg-2222gn",
+        "seg-2222gq"
       ],
       "overlap_mm": 0
     }
   ],
   "ties": [
     {
-      "id": "tie-22229t",
-      "segment": "seg-222298",
-      "from": "end-22228v",
+      "id": "tie-22229n",
+      "segment": "seg-222293",
+      "from": "end-22228q",
       "distance_mm": 200,
       "spec": "ties/p-clip-10mm"
     },
     {
-      "id": "tie-22229u",
-      "segment": "seg-22229a",
-      "from": "end-222297",
+      "id": "tie-22229p",
+      "segment": "seg-222295",
+      "from": "end-222292",
       "distance_mm": 150,
       "spec": "ties/zip-tie-100mm"
     },
     {
-      "id": "tie-22229v",
-      "segment": "seg-22229g",
-      "from": "end-222299",
+      "id": "tie-22229q",
+      "segment": "seg-22229b",
+      "from": "end-222294",
       "distance_mm": 150,
       "spec": "ties/zip-tie-100mm"
     },
     {
-      "id": "tie-2222av",
-      "segment": "seg-2222ac",
-      "from": "end-2222a9",
+      "id": "tie-2222cq",
+      "segment": "seg-2222bm",
+      "from": "end-2222bh",
       "distance_mm": 100,
       "spec": "ties/adhesive-mount-19mm"
     },
     {
-      "id": "tie-2222cw",
-      "segment": "seg-2222bt",
-      "from": "end-2222bq",
-      "distance_mm": 100,
-      "spec": "ties/adhesive-mount-19mm"
-    },
-    {
-      "id": "tie-2222h8",
-      "segment": "seg-2222gu",
-      "from": "end-2222gj",
+      "id": "tie-2222h2",
+      "segment": "seg-2222gn",
+      "from": "end-2222gc",
       "distance_mm": 150,
       "spec": "ties/zip-tie-100mm"
     }

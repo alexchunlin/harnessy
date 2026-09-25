@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-22225a",
+    "id": "net-222258",
     "name": "SPI encoder FL",
     "connectors": [
       "cmp-22222q/ENC",
@@ -8,7 +8,7 @@
     ]
   },
   {
-    "id": "net-22225c",
+    "id": "net-22225a",
     "name": "SPI encoder FR",
     "connectors": [
       "cmp-22222t/ENC",
@@ -16,7 +16,7 @@
     ]
   },
   {
-    "id": "net-22225e",
+    "id": "net-22225c",
     "name": "SPI encoder RL",
     "connectors": [
       "cmp-22222w/ENC",
@@ -24,7 +24,7 @@
     ]
   },
   {
-    "id": "net-22225g",
+    "id": "net-22225e",
     "name": "SPI encoder RR",
     "connectors": [
       "cmp-22222z/ENC",

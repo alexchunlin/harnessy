@@ -5,27 +5,32 @@
     {
       "designator": "IN",
       "connector": "connectors/xt60",
-      "label": "48 V in"
+      "label": "48 V in",
+      "side": "left"
     },
     {
       "designator": "OUT1",
       "connector": "connectors/xt30",
-      "label": "24 V out"
+      "label": "24 V out",
+      "side": "right"
     },
     {
       "designator": "OUT2",
       "connector": "connectors/xt30",
-      "label": "24 V out"
+      "label": "24 V out",
+      "side": "right"
     },
     {
       "designator": "OUT3",
       "connector": "connectors/xt30",
-      "label": "24 V out"
+      "label": "24 V out",
+      "side": "right"
     },
     {
       "designator": "OUT4",
       "connector": "connectors/xt30",
-      "label": "24 V out"
+      "label": "24 V out",
+      "side": "right"
     }
   ],
   "part_number": "TBD"

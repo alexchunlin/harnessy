@@ -22,13 +22,5 @@
       "cmp-22222e/OUT3",
       "cmp-22222c/PWR"
     ]
-  },
-  {
-    "id": "net-22224g",
-    "name": "24 V joystick",
-    "connectors": [
-      "cmp-22222e/OUT4",
-      "cmp-22222f/PWR"
-    ]
   }
 ]

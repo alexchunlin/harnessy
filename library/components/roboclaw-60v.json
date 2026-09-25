@@ -5,31 +5,38 @@
     {
       "designator": "PWR",
       "connector": "connectors/screw-term-2",
-      "label": "48 V in"
+      "label": "48 V in",
+      "side": "left"
     },
     {
       "designator": "M1",
-      "connector": "connectors/screw-term-2"
+      "connector": "connectors/screw-term-2",
+      "side": "right"
     },
     {
       "designator": "M2",
-      "connector": "connectors/screw-term-2"
+      "connector": "connectors/screw-term-2",
+      "side": "right"
     },
     {
       "designator": "ENC1",
-      "connector": "connectors/pin-header-254-6"
+      "connector": "connectors/pin-header-254-6",
+      "side": "right"
     },
     {
       "designator": "ENC2",
-      "connector": "connectors/pin-header-254-6"
+      "connector": "connectors/pin-header-254-6",
+      "side": "right"
     },
     {
       "designator": "CAN-A",
-      "connector": "connectors/jst-gh-4"
+      "connector": "connectors/jst-gh-4",
+      "side": "left"
     },
     {
       "designator": "CAN-B",
-      "connector": "connectors/jst-gh-4"
+      "connector": "connectors/jst-gh-4",
+      "side": "left"
     }
   ],
   "part_number": "TBD",

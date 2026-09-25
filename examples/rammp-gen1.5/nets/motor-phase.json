@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-222259",
+    "id": "net-222257",
     "name": "Motor phase FL",
     "connectors": [
       "cmp-22222q/MOT",
@@ -8,7 +8,7 @@
     ]
   },
   {
-    "id": "net-22225b",
+    "id": "net-222259",
     "name": "Motor phase FR",
     "connectors": [
       "cmp-22222t/MOT",
@@ -16,7 +16,7 @@
     ]
   },
   {
-    "id": "net-22225d",
+    "id": "net-22225b",
     "name": "Motor phase RL",
     "connectors": [
       "cmp-22222w/MOT",
@@ -24,7 +24,7 @@
     ]
   },
   {
-    "id": "net-22225f",
+    "id": "net-22225d",
     "name": "Motor phase RR",
     "connectors": [
       "cmp-22222z/MOT",
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "id": "net-22225h",
+    "id": "net-22225f",
     "name": "Motor L lift",
     "connectors": [
       "cmp-222234/M1",
@@ -41,7 +41,7 @@
     "conductors": 2
   },
   {
-    "id": "net-22225k",
+    "id": "net-22225h",
     "name": "Motor L slide",
     "connectors": [
       "cmp-222234/M2",
@@ -50,7 +50,7 @@
     "conductors": 2
   },
   {
-    "id": "net-22225n",
+    "id": "net-22225k",
     "name": "Motor R lift",
     "connectors": [
       "cmp-222235/M1",
@@ -59,7 +59,7 @@
     "conductors": 2
   },
   {
-    "id": "net-22225q",
+    "id": "net-22225n",
     "name": "Motor R slide",
     "connectors": [
       "cmp-222235/M2",
@@ -68,7 +68,7 @@
     "conductors": 2
   },
   {
-    "id": "net-22225s",
+    "id": "net-22225q",
     "name": "Motor rear lift",
     "connectors": [
       "cmp-222236/M1",
@@ -77,7 +77,7 @@
     "conductors": 2
   },
   {
-    "id": "net-22225u",
+    "id": "net-22225s",
     "name": "Motor front lift",
     "connectors": [
       "cmp-222236/M2",
