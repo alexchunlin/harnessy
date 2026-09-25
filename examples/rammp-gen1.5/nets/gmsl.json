@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-222253",
+    "id": "net-22224z",
     "name": "GMSL camera 1",
     "connectors": [
       "cmp-22222c/CAM1",
@@ -8,7 +8,7 @@
     ]
   },
   {
-    "id": "net-222254",
+    "id": "net-222252",
     "name": "GMSL camera 2",
     "connectors": [
       "cmp-22222c/CAM2",
@@ -16,7 +16,7 @@
     ]
   },
   {
-    "id": "net-222255",
+    "id": "net-222253",
     "name": "GMSL camera 3",
     "connectors": [
       "cmp-22222c/CAM3",
@@ -24,7 +24,7 @@
     ]
   },
   {
-    "id": "net-222256",
+    "id": "net-222254",
     "name": "GMSL camera 4",
     "connectors": [
       "cmp-22222c/CAM4",
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "id": "net-222257",
+    "id": "net-222255",
     "name": "GMSL camera 5",
     "connectors": [
       "cmp-22222c/CAM5",
@@ -40,7 +40,7 @@
     ]
   },
   {
-    "id": "net-222258",
+    "id": "net-222256",
     "name": "GMSL camera 6",
     "connectors": [
       "cmp-22222c/CAM6",

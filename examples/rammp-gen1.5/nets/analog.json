@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-22225w",
+    "id": "net-22225u",
     "name": "Strain gauge front",
     "connectors": [
       "cmp-22222j/AIN1",
@@ -10,7 +10,7 @@
     "conductors": 1
   },
   {
-    "id": "net-22225z",
+    "id": "net-22225x",
     "name": "Strain gauge left",
     "connectors": [
       "cmp-22222j/AIN2",
@@ -20,7 +20,7 @@
     "conductors": 1
   },
   {
-    "id": "net-222264",
+    "id": "net-222262",
     "name": "Strain gauge right",
     "connectors": [
       "cmp-22222j/AIN3",
@@ -30,7 +30,7 @@
     "conductors": 1
   },
   {
-    "id": "net-222267",
+    "id": "net-222265",
     "name": "Strain gauge rear",
     "connectors": [
       "cmp-22222j/AIN4",

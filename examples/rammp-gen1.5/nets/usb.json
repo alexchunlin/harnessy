@@ -1,6 +1,6 @@
 [
   {
-    "id": "net-22224w",
+    "id": "net-22224u",
     "name": "USB Jetson to hub",
     "connectors": [
       "cmp-22222c/USB1",
@@ -8,7 +8,7 @@
     ]
   },
   {
-    "id": "net-22224x",
+    "id": "net-22224v",
     "name": "USB Orbbec 1",
     "connectors": [
       "cmp-22222b/D1",
@@ -16,7 +16,7 @@
     ]
   },
   {
-    "id": "net-22224y",
+    "id": "net-22224w",
     "name": "USB Orbbec 2",
     "connectors": [
       "cmp-22222b/D2",
@@ -24,7 +24,7 @@
     ]
   },
   {
-    "id": "net-22224z",
+    "id": "net-22224x",
     "name": "USB touchscreen",
     "connectors": [
       "cmp-22222c/USB2",

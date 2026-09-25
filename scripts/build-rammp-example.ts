@@ -15,7 +15,7 @@ import { starterProject } from "../src/core/starter";
 import * as ops from "../src/core/ops";
 import { runChecks } from "../src/core/drc";
 import { buildBom } from "../src/core/bom";
-import type { Position, Side } from "../src/core/schema";
+import type { Endpoint, Net, Position, Side, Topology } from "../src/core/schema";
 import { boxGeometry, fittedWidth } from "../src/ui/connectivity/model";
 import { ENDPOINT_SIZE } from "../src/ui/topology/model";
 
@@ -154,11 +154,9 @@ for (const [load, pos, name] of loads48) net("48v", [at(busBar, pos), load], nam
 net("24v", [at(dcdc, "OUT1"), at(kinova, "PWR")], "24 V Kinova");
 net("24v", [at(dcdc, "OUT2"), at(hub, "PWR")], "24 V USB hub");
 net("24v", [at(dcdc, "OUT3"), at(jetson, "PWR")], "24 V Jetson");
-net("24v", [at(dcdc, "OUT4"), at(joystick, "PWR")], "24 V joystick");
 
 // CAN daisy chain: battery BMS, MIB, RoboClaw L, R, rear. One net per hop.
 const canHops: [string, string, string, string][] = [
-  [at(mib, "CAN-B"), at(battery, "CAN"), "CAN MIB to BMS", "can-patch-gh4-500mm"],
   [at(mib, "CAN-A"), at(rcL, "CAN-A"), "CAN MIB to RoboClaw L", "can-patch-gh4-500mm"],
   [at(rcL, "CAN-B"), at(rcR, "CAN-A"), "CAN RoboClaw L to R", "can-patch-gh4-500mm"],
   [at(rcR, "CAN-B"), at(rcRear, "CAN-A"), "CAN RoboClaw R to rear", "can-patch-gh4-300mm"],
@@ -350,7 +348,6 @@ for (const n of gmslNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
   breakoutSpec(b5.endpoint, "heatshrink-transition");
   anchor(p1.segment, "Power harness, rear");
   sheath([p1.segment, b4.segment, p2.segment, b5.segment], "spiral-wrap-8mm");
-  tie(b4.segment, "adhesive-mount-19mm", 100);
 }
 
 // MIB sensor harness: twelve MIB connectors through one trunk to four sensor clusters.
@@ -426,11 +423,53 @@ drive.forEach((d, i) => {
 
 /**
  * The example is laid out by hand in the app, and that work must survive a
- * regeneration. Ids are sequential and the script places things in a fixed
- * order, so ids match between runs: anything the checked-in canvas files
- * position, bend, or arrange keeps that, as long as it still exists. Only
- * new things take the positions typed above.
+ * regeneration. Ids are drawn in creation order, so editing this script
+ * renumbers everything after the edit; nothing below is matched by id. A
+ * component is matched by its name, a net by the connectors it joins, a
+ * connector endpoint by its address, and a breakout or point by the
+ * connectors hanging directly off it. Anything left takes the position
+ * typed above.
  */
+
+/** `cmp-k3f9qa/CAN-A` as `MIB/CAN-A`: stable while the component keeps its name. */
+function addressKey(project: Project, address: string): string {
+  const [id, designator] = address.split("/");
+  return `${project.components.get(id)?.name ?? id}/${designator}`;
+}
+
+function netKey(project: Project, net: Net): string {
+  return net.connectors
+    .map((a) => addressKey(project, a))
+    .sort()
+    .join("|");
+}
+
+/**
+ * A stable key per endpoint: its address for a connector, the connectors
+ * one segment away for a breakout or point. Endpoints with no key, and
+ * keys two endpoints share, are left out.
+ */
+function endpointKeys(project: Project, t: Topology): [string, Endpoint][] {
+  const byId = new Map(t.endpoints.map((e) => [e.id, e]));
+  const out: [string, Endpoint][] = [];
+  for (const e of t.endpoints) {
+    if (e.kind === "connector") {
+      out.push([addressKey(project, e.connector), e]);
+      continue;
+    }
+    const near = t.segments
+      .filter((s) => s.ends.includes(e.id))
+      .map((s) => byId.get(s.ends[0] === e.id ? s.ends[1] : s.ends[0]))
+      .filter((n) => n?.kind === "connector")
+      .map((n) => addressKey(project, (n as Extract<Endpoint, { kind: "connector" }>).connector))
+      .sort();
+    if (near.length) out.push([`via ${near.join("|")}`, e]);
+  }
+  const seen = new Map<string, number>();
+  for (const [key] of out) seen.set(key, (seen.get(key) ?? 0) + 1);
+  return out.filter(([key]) => seen.get(key) === 1);
+}
+
 const kept = { components: new Set<string>(), endpoints: new Set<string>() };
 if (existsSync(join(OUT, "project.json"))) {
   const files: Files = new Map();
@@ -442,27 +481,65 @@ if (existsSync(join(OUT, "project.json"))) {
     }
   };
   walkOut(OUT);
-  const before = loadProject(files, loaded.library).project.connectivityCanvas;
-  for (const [id, pos] of Object.entries(before.components)) {
-    if (!p.components.has(id)) continue;
-    p = ops.moveComponent(p, id, pos);
-    kept.components.add(id);
+  const old = loadProject(files, loaded.library).project;
+  const canvas = old.connectivityCanvas;
+
+  const positions = new Map<string, Position>();
+  const pins = new Map<string, Record<Side, string[]>>();
+  for (const c of old.components.values()) {
+    const pos = canvas.components[c.id];
+    if (pos) positions.set(c.name, pos);
+    const layout = canvas.pins[c.id];
+    if (layout) pins.set(c.name, { left: layout.left ?? [], right: layout.right ?? [], top: layout.top ?? [], bottom: layout.bottom ?? [] });
   }
-  const netIds = new Set(allNets(p).map((n) => n.net.id));
-  for (const [id, pos] of Object.entries(before.hubs)) if (netIds.has(id)) p = ops.moveHub(p, id, pos);
-  for (const [key, bends] of Object.entries(before.bends)) if (netIds.has(key.split(":")[0])) p = ops.setBends(p, key, bends);
-  for (const [id, layout] of Object.entries(before.pins)) {
-    if (!p.components.has(id)) continue;
-    const full: Record<Side, string[]> = { left: layout.left ?? [], right: layout.right ?? [], top: layout.top ?? [], bottom: layout.bottom ?? [] };
-    p = ops.setPinLayout(p, id, full);
+  const hubs = new Map<string, Position>();
+  const bends = new Map<string, Position[]>();
+  for (const { net } of allNets(old)) {
+    const key = netKey(old, net);
+    const hub = canvas.hubs[net.id];
+    if (hub) hubs.set(key, hub);
+    const whole = canvas.bends[net.id];
+    if (whole) bends.set(key, whole);
+    for (const a of net.connectors) {
+      const spoke = canvas.bends[`${net.id}:${a}`];
+      if (spoke) bends.set(`${key}@${addressKey(old, a)}`, spoke);
+    }
   }
-  const t0 = p.topologies.get(top)!;
-  const ids = new Set(t0.endpoints.map((e) => e.id));
-  for (const canvas of loadProject(files, loaded.library).project.topologyCanvases.values()) {
-    for (const [id, pos] of Object.entries(canvas.endpoints)) {
-      if (!ids.has(id)) continue;
-      p = ops.moveEndpoint(p, top, id, pos);
-      kept.endpoints.add(id);
+  const endpoints = new Map<string, Position>();
+  for (const [id, t] of old.topologies) {
+    const c = old.topologyCanvases.get(id);
+    if (!c) continue;
+    for (const [key, e] of endpointKeys(old, t)) {
+      const pos = c.endpoints[e.id];
+      if (pos) endpoints.set(key, pos);
+    }
+  }
+
+  for (const c of [...p.components.values()]) {
+    const pos = positions.get(c.name);
+    if (pos) {
+      p = ops.moveComponent(p, c.id, pos);
+      kept.components.add(c.id);
+    }
+    const layout = pins.get(c.name);
+    if (layout) p = ops.setPinLayout(p, c.id, layout);
+  }
+  for (const { net } of allNets(p)) {
+    const key = netKey(p, net);
+    const hub = hubs.get(key);
+    if (hub) p = ops.moveHub(p, net.id, hub);
+    const whole = bends.get(key);
+    if (whole) p = ops.setBends(p, ops.bendsKey(net.id), whole);
+    for (const a of net.connectors) {
+      const spoke = bends.get(`${key}@${addressKey(p, a)}`);
+      if (spoke) p = ops.setBends(p, ops.bendsKey(net.id, a), spoke);
+    }
+  }
+  for (const [key, e] of endpointKeys(p, p.topologies.get(top)!)) {
+    const pos = endpoints.get(key);
+    if (pos) {
+      p = ops.moveEndpoint(p, top, e.id, pos);
+      kept.endpoints.add(e.id);
     }
   }
 }
