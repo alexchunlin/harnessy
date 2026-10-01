@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
+import { promises as fs } from "node:fs";
+import path from "node:path";import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
@@ -342,4 +343,74 @@ test("dragging from the ring around an endpoint still grows a segment", async ({
   await waitForFile(folder, TOPOLOGY, (v) => (v as Topo).segments.length === before.segments.length + 1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
   expect(after.endpoints).toHaveLength(before.endpoints.length + 1);
+});
+
+/**
+ * A segment's length is typed into a field opened by double-clicking the
+ * segment. The rest of the time the label is plain text.
+ */
+type Lengths = { segments: { id: string; length_mm?: number; assembly?: string }[] };
+
+async function stripLengths(folder: string, count: number): Promise<string[]> {
+  const file = path.join(folder, TOPOLOGY);
+  const topo = JSON.parse(await fs.readFile(file, "utf8")) as Lengths;
+  const loose = topo.segments.filter((s) => s.assembly === undefined);
+  const picked = [loose[2], loose[4], loose[6]].slice(0, count);
+  for (const s of picked) delete s.length_mm;
+  await fs.writeFile(file, JSON.stringify(topo, null, 2));
+  return picked.map((s) => s.id);
+}
+
+const lengthOf = async (folder: string, id: string) => ((await readJson(folder, TOPOLOGY)) as Lengths).segments.find((s) => s.id === id)!.length_mm;
+
+test("double-clicking a segment opens its length field: Enter writes the length, Escape leaves it alone", async ({ page }) => {
+  const folder = await freshExample("feel-length");
+  const [id] = await stripLengths(folder, 1);
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  const label = page.locator(`.seg-label[data-segment="${id}"]`);
+  const text = label.locator(".seg-length");
+  await expect(text).toHaveText("?");
+  await expect(page.getByLabel("Segment length in mm")).toHaveCount(0);
+  await label.dblclick();
+  const field = page.getByLabel("Segment length in mm");
+  await expect(field).toBeFocused();
+  await page.keyboard.type("450");
+  await page.keyboard.press("Enter");
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === id)!.length_mm === 450);
+  await expect(text).toHaveText("450 mm");
+  await expect(field).toHaveCount(0);
+
+  await label.dblclick();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("450");
+  await page.keyboard.type("999");
+  await page.keyboard.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(text).toHaveText("450 mm");
+  await page.waitForTimeout(500);
+  expect(await lengthOf(folder, id)).toBe(450);
+});
+
+test("Tab commits a length and opens the next segment that has none", async ({ page }) => {
+  const folder = await freshExample("feel-length-tab");
+  const [first, second] = await stripLengths(folder, 2);
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  await page.locator(`.seg-label[data-segment="${first}"]`).dblclick();
+  const field = page.getByLabel("Segment length in mm");
+  await expect(field).toBeFocused();
+  await page.keyboard.type("300");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(`.seg-label[data-segment="${second}"] input`)).toBeFocused();
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === first)!.length_mm === 300);
+  await page.keyboard.type("310");
+  await page.keyboard.press("Tab");
+  // Nothing is left without a length, so Tab just closes the field.
+  await expect(field).toHaveCount(0);
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === second)!.length_mm === 310);
 });

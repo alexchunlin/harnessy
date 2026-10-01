@@ -24,10 +24,12 @@
 .harness-label.doubled { color: var(--error); border-color: var(--error); }
 
 .seg-label { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 11px; display: flex; gap: 6px; align-items: center; pointer-events: all; }
-.seg-label.missing { border-color: var(--error); color: var(--error); }
+.seg-label.missing { border-color: var(--error); color: var(--error); font-weight: 700; }
+.seg-label:not(.purchased) { cursor: text; }
+.seg-label.editing { z-index: 1; }
 .seg-label.purchased { border-style: dashed; color: var(--muted); }
 .seg-label.faded { opacity: 0.35; }
-.seg-length input { border: none; border-bottom: 1px dotted var(--muted); padding: 0 2px; text-align: right; font-size: 11px; background: transparent; min-width: 2ch; }
+.seg-length input { border: none; border-bottom: 1px solid var(--accent); padding: 0 2px; text-align: right; font-size: 11px; background: transparent; min-width: 8ch; color: var(--text); }
 .seg-length input:focus { outline: none; border-bottom-color: var(--accent); }
 .seg-harness { color: var(--text); font-weight: 600; }
 
@@ -40,3 +42,5 @@
 .netlist .mark { font-family: ui-monospace, Menlo, monospace; color: var(--muted); }
 .netlist .mark.unrouted { color: var(--error); }
 .insp-list li { display: flex; justify-content: space-between; gap: 6px; }
+/* Labels are click targets. A selected edge rises above 1000, so the label layer sits above that or the second click of a double-click lands on the edge. */
+[data-testid="topology-canvas"] .react-flow__edgelabel-renderer { z-index: 1010; }

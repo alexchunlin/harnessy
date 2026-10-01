@@ -67,7 +67,9 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     // Connectors show only their designator; the component name is the hover title and in the inspector.
     const label = e.kind === "connector" ? e.connector.split("/")[1] : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
     const title = e.kind === "connector" ? connectorLabel(project, e.connector) : "";
-    nodes.push({ id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id) }, selected: selected.has(e.id), zIndex: e.kind === "connector" ? 2 : 3, width: ENDPOINT_SIZE[e.kind].w, height: ENDPOINT_SIZE[e.kind].h });
+    // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
+    const size = ENDPOINT_SIZE[e.kind];
+    nodes.push({ id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id) }, selected: selected.has(e.id), zIndex: e.kind === "connector" ? 2 : 3, width: size.w, height: size.h, measured: { width: size.w, height: size.h } });
   }
 
   const sheathIndex = new Map<string, { id: string; color: string; index: number; count: number }[]>();
@@ -105,7 +107,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;
     const pos = drafts.get(t.id) ?? { x: a.x + (b.x - a.x) * f - 6, y: a.y + (b.y - a.y) * f - 6 };
     const spec = resolveRef(project.library, t.spec, "ties");
-    nodes.push({ id: t.id, type: "tie", position: pos, data: { tie: t, label: `${spec?.name ?? t.spec}, ${t.distance_mm} mm from ${endpointName(project, graph.endpoints.get(t.from))}` }, selected: selected.has(t.id), zIndex: 5, width: 12, height: 12 });
+    nodes.push({ id: t.id, type: "tie", position: pos, data: { tie: t, label: `${spec?.name ?? t.spec}, ${t.distance_mm} mm from ${endpointName(project, graph.endpoints.get(t.from))}` }, selected: selected.has(t.id), zIndex: 5, width: 12, height: 12, measured: { width: 12, height: 12 } });
   }
 
   for (const h of hs) {

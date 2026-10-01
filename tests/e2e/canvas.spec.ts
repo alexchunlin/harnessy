@@ -83,6 +83,8 @@ test("place two components, draw a 48 V net, then route it on a topology", async
   await page.mouse.move(e2.x + e2.width / 2, e2.y + e2.height / 2, { steps: 10 });
   await page.mouse.up();
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  // The length field opens on a double-click of the segment label.
+  await page.locator(".seg-label").dblclick();
   await page.getByLabel("Segment length in mm").fill("420");
   await page.getByLabel("Segment length in mm").press("Enter");
   await page.getByPlaceholder("unnamed").fill("Battery leads");
