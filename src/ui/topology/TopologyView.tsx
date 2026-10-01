@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
@@ -44,7 +44,19 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const selected = useMemo(() => new Set(selection.view === "topology" ? selection.ids : []), [selection]);
   const layerDomains = useMemo(() => (activeLayer === ALL_LAYER_ID ? undefined : activeDomains(project, activeLayer)), [project, activeLayer]);
-  const options = useMemo(() => ({ ratsnest, layerDomains }), [ratsnest, layerDomains]);
+  // What the connectivity canvas has selected lights up here too, read-only: nets by route, components by their connectors.
+  const highlight = useMemo(() => {
+    const nets = new Set<string>();
+    const components = new Set<string>();
+    if (selection.view === "connectivity") {
+      for (const id of selection.ids) {
+        if (project.components.has(id)) components.add(id);
+        else if (findNet(project, id)) nets.add(id);
+      }
+    }
+    return { nets, components };
+  }, [selection, project]);
+  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components }), [ratsnest, layerDomains, highlight]);
   const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;

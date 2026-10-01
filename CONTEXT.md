@@ -94,6 +94,10 @@ _Avoid_: Waypoint, route (a route is a topology term)
 A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.
 _Avoid_: Comment, annotation, label
 
+**Side by side**:
+The view that shows the connectivity canvas on the left and the topology view on the right, each with its own viewport and one shared selection: a net or component picked on one side lights its counterpart on the other. A draggable divider sets the share of the width, and the browser remembers it.
+_Avoid_: Split, split view, dual pane
+
 **Route**:
 The set of segments a net's conductors run through in a topology: the smallest subtree that reaches all of the net's connectors. A route is derived from the topology graph and never stored. Where a route branches there must be a splice for that net.
 _Avoid_: Path, routing, assignment

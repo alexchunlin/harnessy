@@ -22,10 +22,14 @@ import { api, fromFiles, toFiles } from "./api";
  * and sends only what changed.
  */
 
-export type View = "connectivity" | "topology" | "3d";
+export type View = "connectivity" | "topology" | "side-by-side" | "3d";
+const VIEWS: View[] = ["connectivity", "topology", "side-by-side", "3d"];
+
+/** The canvas a selection belongs to. Side by side shows both canvases, so a selection still names one. */
+export type SelectionView = "connectivity" | "topology";
 
 export interface Selection {
-  view: View;
+  view: SelectionView;
   ids: string[];
 }
 
@@ -66,7 +70,7 @@ interface DocState {
   setActiveLayer(id: string): void;
   setActiveTopology(id: string | undefined): void;
   setView(view: View): void;
-  select(view: View, ids: string[]): void;
+  select(view: SelectionView, ids: string[]): void;
   setHover(hover: Hover): void;
   /** While the pointer is down on a box, hover is cleared and ignored, so nothing glows under a moving box. */
   lockHover(locked: boolean): void;
@@ -154,7 +158,7 @@ export const useDoc = create<DocState>()(
           written: saveProject(project),
           activeLayer: ui.activeLayer && (ui.activeLayer === ALL_LAYER_ID || project.file.layers.some((l) => l.id === ui.activeLayer)) ? ui.activeLayer : ALL_LAYER_ID,
           activeTopology: ui.activeTopology && project.topologies.has(ui.activeTopology) ? ui.activeTopology : firstTopology,
-          view: ui.view ?? "connectivity",
+          view: ui.view && VIEWS.includes(ui.view) ? ui.view : "connectivity",
           selection: { view: "connectivity", ids: [] },
         });
         return { isProject: true };

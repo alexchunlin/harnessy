@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
@@ -105,29 +105,6 @@ test("hovering an inspector row or an edge glows the net's edges and pins", asyn
   expect(await page.locator(".cmp-connector.lit").count()).toBeGreaterThanOrEqual(2);
   await expect(page.locator(".cmp-node.selected")).toHaveCount(1);
 });
-
-/** A screen point halfway along a visible, uncovered net edge, plus its net id. */
-async function pointOnAnEdge(page: import("@playwright/test").Page): Promise<{ x: number; y: number; netId: string }> {
-  // Runs in the browser; the e2e tsconfig has no DOM lib, so the DOM is typed loosely here.
-  return page.evaluate(() => {
-    type Path = { getTotalLength(): number; getPointAtLength(n: number): { x: number; y: number }; getScreenCTM(): { a: number; b: number; c: number; d: number; e: number; f: number } };
-    type El = { closest(sel: string): El | null; querySelector(sel: string): (El & Path) | null; getAttribute(name: string): string | null };
-    const doc = (globalThis as unknown as { document: { querySelectorAll(sel: string): Iterable<El>; elementFromPoint(x: number, y: number): El | null } }).document;
-    for (const g of doc.querySelectorAll(".react-flow__edge:not(.inactive)")) {
-      const path = g.querySelector("path.net-edge");
-      if (!path) continue;
-      const total = path.getTotalLength();
-      for (const f of [0.5, 0.35, 0.65]) {
-        const m = path.getPointAtLength(total * f);
-        const c = path.getScreenCTM()!;
-        const x = m.x * c.a + m.y * c.c + c.e;
-        const y = m.x * c.b + m.y * c.d + c.f;
-        if (doc.elementFromPoint(x, y)?.closest(".react-flow__edge") === g) return { x, y, netId: g.getAttribute("data-id")!.split(":")[0] };
-      }
-    }
-    throw new Error("no uncovered edge");
-  });
-}
 
 test("a net is steered: double-click adds a corner, dragging a run shifts it, reset forgets the bends", async ({ page }) => {
   const folder = await freshExample("feel-steer");

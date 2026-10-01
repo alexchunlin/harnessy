@@ -53,3 +53,26 @@ export async function canvasSettled(page: Page): Promise<void> {
   });
   await page.waitForTimeout(150);
 }
+
+/** A screen point halfway along a visible, uncovered net edge, plus its net id. */
+export async function pointOnAnEdge(page: Page): Promise<{ x: number; y: number; netId: string }> {
+  // Runs in the browser; the e2e tsconfig has no DOM lib, so the DOM is typed loosely here.
+  return page.evaluate(() => {
+    type Path = { getTotalLength(): number; getPointAtLength(n: number): { x: number; y: number }; getScreenCTM(): { a: number; b: number; c: number; d: number; e: number; f: number } };
+    type El = { closest(sel: string): El | null; querySelector(sel: string): (El & Path) | null; getAttribute(name: string): string | null };
+    const doc = (globalThis as unknown as { document: { querySelectorAll(sel: string): Iterable<El>; elementFromPoint(x: number, y: number): El | null } }).document;
+    for (const g of doc.querySelectorAll(".react-flow__edge:not(.inactive)")) {
+      const path = g.querySelector("path.net-edge");
+      if (!path) continue;
+      const total = path.getTotalLength();
+      for (const f of [0.5, 0.35, 0.65]) {
+        const m = path.getPointAtLength(total * f);
+        const c = path.getScreenCTM()!;
+        const x = m.x * c.a + m.y * c.c + c.e;
+        const y = m.x * c.b + m.y * c.d + c.f;
+        if (doc.elementFromPoint(x, y)?.closest(".react-flow__edge") === g) return { x, y, netId: g.getAttribute("data-id")!.split(":")[0] };
+      }
+    }
+    throw new Error("no uncovered edge");
+  });
+}

@@ -15,6 +15,7 @@
 .ep.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.45); }
 .ep.bad { border-color: var(--error) !important; box-shadow: 0 0 0 2px rgba(198,40,40,0.4); }
 .ep.on-route { box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
+.ep.lit { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent), 0 0 10px var(--accent); }
 /* Outside the active layer: greyed, darker, and untouchable, as on the connectivity canvas. */
 .ep.out-of-layer { border-color: var(--box-dim-border) !important; background: var(--box-dim); color: var(--muted); box-shadow: none; opacity: 0.55; }
 .ep.out-of-layer .ep-handle { pointer-events: none; }

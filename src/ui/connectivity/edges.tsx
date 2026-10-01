@@ -96,7 +96,7 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, ta
   );
 
   if (d.inactive) return <BaseEdge path={path} className="net-edge inactive" interactionWidth={0} />;
-  const glow = hovered || selected;
+  const glow = hovered || selected || d.lit;
   const label = labelPoint(pts);
   return (
     <g onDoubleClick={onDoubleClick}>

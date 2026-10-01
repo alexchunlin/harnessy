@@ -45,7 +45,7 @@ export function Toolbar() {
       return r.project;
     });
     setActiveTopology(id);
-    setView("topology");
+    if (view === "connectivity") setView("topology");
   }
 
   function doExport() {
@@ -76,6 +76,9 @@ export function Toolbar() {
         <button className={view === "topology" ? "active" : ""} onClick={() => setView("topology")}>
           Topology
         </button>
+        <button className={view === "side-by-side" ? "active" : ""} onClick={() => setView("side-by-side")} title="Connectivity on the left, topology on the right">
+          Side by side
+        </button>
         <button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>
           3D Harness
         </button>
@@ -93,7 +96,7 @@ export function Toolbar() {
         </label>
         {activeLayer !== ALL_LAYER_ID && <span className="muted">{visibleLayers(project).find((l) => l.id === activeLayer)?.domains.length} domains</span>}
       </div>
-      {view === "topology" && (
+      {view !== "connectivity" && (
         <div className="toolbar-group">
           <label>
             Topology{" "}

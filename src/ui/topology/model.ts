@@ -3,7 +3,7 @@ import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShort
 
 /** Derive React Flow nodes and edges for one topology. */
 
-export interface EndpointNodeData { endpoint: Endpoint; label: string; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+export interface EndpointNodeData { endpoint: Endpoint; label: string; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** the connector's component is selected on the connectivity canvas */ lit: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface TieNodeData { tie: TiePoint; label: string; outOfLayer: boolean; [key: string]: unknown }
 export interface LabelNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface SegmentEdgeData {
@@ -37,6 +37,10 @@ export interface TopologyOptions {
   ratsnest: boolean;
   /** The active layer's domains, or undefined for the All layer, which dims nothing. */
   layerDomains: Set<string> | undefined;
+  /** Nets selected on the connectivity canvas: their routes colour as if selected here. */
+  highlightNets: Set<string>;
+  /** Components selected on the connectivity canvas: their connector endpoints light up. */
+  highlightComponents: Set<string>;
 }
 
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
@@ -70,7 +74,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const hs = harnesses(project, graph);
 
-  const selectedRoutes = routes.filter((r) => selected.has(r.net.id));
+  const selectedRoutes = routes.filter((r) => selected.has(r.net.id) || options.highlightNets.has(r.net.id));
   const routeSegments = new Map<string, string>();
   for (const r of selectedRoutes) for (const s of r.segments) routeSegments.set(s, domains.get(r.domain)?.color ?? "#888");
   const routeEndpoints = new Set(selectedRoutes.flatMap((r) => [...r.endpoints]));
@@ -110,10 +114,11 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const label = e.kind === "connector" ? connectorEndpointLabel(project, e.connector) : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
     const title = e.kind === "connector" ? connectorLabel(project, e.connector) : "";
     const outOfLayer = endpointOut(e);
+    const lit = e.kind === "connector" && options.highlightComponents.has(e.connector.split("/")[0]);
     // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
     const size = ENDPOINT_SIZE[e.kind];
     nodes.push({
-      id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), outOfLayer },
+      id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
       selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer, connectable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined,
       zIndex: e.kind === "connector" ? 2 : 3, width: size.w, height: size.h, measured: { width: size.w, height: size.h },
     });

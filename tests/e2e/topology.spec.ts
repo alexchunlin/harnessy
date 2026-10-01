@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
 
 /** Topology round two: the ratsnest, layer filtering, and the side by side view. */
 
@@ -96,4 +96,41 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await page.getByLabel("Layer").selectOption("all");
   await expect(dimmed).toHaveCount(0);
   await expect(lines).toHaveCount(1);
+});
+
+test("side by side shows both canvases, a net picked on either side lights it on the other, and the divider is remembered", async ({ page }) => {
+  const folder = await freshExample("side-by-side");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Side by side" }).click();
+  await expect(page.getByTestId("connectivity-canvas")).toBeVisible();
+  await expect(page.getByTestId("topology-canvas")).toBeVisible();
+  await canvasSettled(page);
+  await page.waitForTimeout(400);
+
+  // A net clicked on the left colours its route on the right.
+  const onRoute = page.locator(".react-flow__edge.on-route");
+  await expect(onRoute).toHaveCount(0);
+  const at = await pointOnAnEdge(page);
+  await page.mouse.click(at.x, at.y);
+  expect(await onRoute.count()).toBeGreaterThan(0);
+
+  // A net picked in the topology's net list glows on the left, and the net clicked before stops glowing as the selection moves.
+  await page.locator(".netlist li", { hasText: "Battery to switch" }).click();
+  await expect(page.locator('.react-flow__edge[data-id="net-22223y"] .net-halo')).toHaveCount(1);
+  await expect(page.locator(".net-halo")).toHaveCount(1);
+  await expect(onRoute).toHaveCount(1);
+
+  // Dragging the divider shares the width, and the share survives a reload.
+  const divider = page.getByRole("separator", { name: "Divider between connectivity and topology" });
+  const d = (await divider.boundingBox())!;
+  await page.mouse.move(d.x + d.width / 2, d.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(d.x - 150, d.y + 200, { steps: 6 });
+  await page.mouse.up();
+  const width = await page.locator(".side-pane-left").evaluate((e) => (e as { style: { width: string } }).style.width);
+  expect(parseFloat(width)).toBeLessThan(45);
+  expect(parseFloat(width)).toBeGreaterThanOrEqual(20);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Side by side" })).toHaveClass(/active/);
+  expect(await page.locator(".side-pane-left").evaluate((e) => (e as { style: { width: string } }).style.width)).toBe(width);
 });

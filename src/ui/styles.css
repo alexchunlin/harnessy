@@ -77,6 +77,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .app-view { flex: 1; min-width: 0; display: flex; }
 .placeholder { flex: 1; display: grid; place-items: center; color: var(--muted); }
 
+/* Side by side: connectivity left, topology right, a draggable divider between. The left side is canvas only; the right keeps its tray and net list. */
+.side-by-side { display: flex; flex: 1; min-width: 0; }
+.side-pane { display: flex; min-width: 0; overflow: hidden; }
+.side-pane-right { flex: 1; }
+.side-pane-left .pane { display: none; }
+.side-pane-right .pane-right { display: none; }
+.side-divider { flex: none; width: 6px; cursor: col-resize; background: var(--border); touch-action: none; }
+.side-divider:hover, .side-divider:active { background: var(--accent); }
+
 .toolbar { display: flex; gap: 16px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
 .toolbar-group { display: flex; gap: 6px; align-items: center; }
 .toolbar-right { margin-left: auto; }

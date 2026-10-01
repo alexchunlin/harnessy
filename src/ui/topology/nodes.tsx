@@ -5,12 +5,12 @@ import { ENDPOINT_SIZE, type EndpointNodeData, type LabelNodeData, type TieNodeD
 const RING = 7;
 
 export function EndpointNode({ data, selected }: NodeProps<Node<EndpointNodeData>>) {
-  const { endpoint, label, title, degree, onRoute, outOfLayer } = data;
+  const { endpoint, label, title, degree, onRoute, lit, outOfLayer } = data;
   const size = ENDPOINT_SIZE[endpoint.kind];
   const bad =
     (endpoint.kind === "connector" && degree !== 1) || (endpoint.kind === "point" && degree !== 2) || (endpoint.kind === "breakout" && degree < 3) || (endpoint.kind === "splice" && degree < 2);
   return (
-    <div className={`ep ep-${endpoint.kind}${selected ? " selected" : ""}${bad && !outOfLayer ? " bad" : ""}${onRoute ? " on-route" : ""}${outOfLayer ? " out-of-layer" : ""}`} style={{ width: size.w, height: size.h }} title={`${title ? `${title}: ` : ""}${endpoint.kind}, ${degree} segment${degree === 1 ? "" : "s"}`}>
+    <div className={`ep ep-${endpoint.kind}${selected ? " selected" : ""}${bad && !outOfLayer ? " bad" : ""}${onRoute || lit ? " on-route" : ""}${lit ? " lit" : ""}${outOfLayer ? " out-of-layer" : ""}`} style={{ width: size.w, height: size.h }} title={`${title ? `${title}: ` : ""}${endpoint.kind}, ${degree} segment${degree === 1 ? "" : "s"}`}>
       <Handle id="h" type="source" position={Position.Top} className="ep-handle" isConnectable={!outOfLayer} style={{ top: -RING, left: -RING, right: -RING, bottom: -RING, width: "auto", height: "auto", transform: "none" }} />
       <span className="ep-body" />
       {endpoint.kind === "connector" && <span className="ep-label">{label}</span>}
