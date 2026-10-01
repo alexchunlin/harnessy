@@ -277,3 +277,69 @@ test("reloading the page reopens the last project, and Close returns to the fold
   await page.reload();
   await expect(page.getByPlaceholder("Go to path")).toBeVisible();
 });
+
+/**
+ * A topology endpoint carries a connect ring just outside its box. Before this,
+ * the handle covered the whole endpoint, so every drag grew a segment and no
+ * endpoint could be moved at all.
+ */
+const TOPOLOGY = "topologies/top-222268.json";
+const TOPOLOGY_CANVAS = "canvas/top-222268.json";
+type Topo = { endpoints: { id: string }[]; segments: { id: string }[] };
+type Placed = { endpoints: Record<string, { x: number; y: number }> };
+
+test("dragging a topology endpoint moves it and grows no segment", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-move");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  const before = (await readJson(folder, TOPOLOGY)) as Topo;
+  const node = page.locator(".react-flow__node-endpoint").first();
+  const id = (await node.getAttribute("data-id"))!;
+  const from = ((await readJson(folder, TOPOLOGY_CANVAS)) as Placed).endpoints[id];
+  const b = (await node.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 10, b.y + b.height / 2 + i * 8);
+  await page.mouse.up();
+
+  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => {
+    const to = (v as Placed).endpoints[id];
+    return to.x !== from.x || to.y !== from.y;
+  });
+  const after = (await readJson(folder, TOPOLOGY)) as Topo;
+  expect(after.segments).toHaveLength(before.segments.length);
+  expect(after.endpoints).toHaveLength(before.endpoints.length);
+});
+
+test("dragging from the ring around an endpoint still grows a segment", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-grow");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+  for (let i = 0; i < 6; i++) await page.locator(".react-flow__controls-zoomin").click();
+  await page.waitForTimeout(400);
+
+  const before = (await readJson(folder, TOPOLOGY)) as Topo;
+  const size = page.viewportSize()!;
+  const all = page.locator(".react-flow__node-endpoint");
+  let node = all.first();
+  for (let i = 0; i < (await all.count()); i++) {
+    const box = await all.nth(i).boundingBox();
+    if (box && box.x > 220 && box.y > 120 && box.x + box.width < size.width - 320 && box.y + box.height < size.height - 120) {
+      node = all.nth(i);
+      break;
+    }
+  }
+  const b = (await node.boundingBox())!;
+  const ring = (await node.locator(".ep-handle").boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, ring.y + 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, ring.y + 2 - i * 9);
+  await page.mouse.up();
+
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Topo).segments.length === before.segments.length + 1);
+  const after = (await readJson(folder, TOPOLOGY)) as Topo;
+  expect(after.endpoints).toHaveLength(before.endpoints.length + 1);
+});

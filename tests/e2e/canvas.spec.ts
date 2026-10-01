@@ -75,9 +75,10 @@ test("place two components, draw a 48 V net, then route it on a topology", async
   await page.locator(".tray-item", { hasText: new RegExp(`^${c1}$`) }).first().dragTo(topo, { targetPosition: { x: 150, y: 200 } });
   await page.locator(".tray-item", { hasText: new RegExp(`^${c2}$`) }).first().dragTo(topo, { targetPosition: { x: 500, y: 200 } });
   await expect(page.locator(".ep-connector")).toHaveCount(2);
-  const e1 = (await page.locator(".ep-connector").nth(0).boundingBox())!;
+  // Joining starts on the ring around an endpoint; the endpoint itself drags to move it.
+  const r1 = (await page.locator(".react-flow__node-endpoint").nth(0).locator(".ep-handle").boundingBox())!;
   const e2 = (await page.locator(".ep-connector").nth(1).boundingBox())!;
-  await page.mouse.move(e1.x + e1.width / 2, e1.y + e1.height / 2);
+  await page.mouse.move(r1.x + r1.width / 2, r1.y + 2);
   await page.mouse.down();
   await page.mouse.move(e2.x + e2.width / 2, e2.y + e2.height / 2, { steps: 10 });
   await page.mouse.up();

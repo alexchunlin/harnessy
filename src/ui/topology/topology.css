@@ -1,7 +1,12 @@
 .ep { position: relative; display: flex; align-items: center; justify-content: center; font-size: 11px; }
-.ep-handle { opacity: 0; width: 100%; height: 100%; border-radius: 0; background: transparent; border: none; min-width: 0; min-height: 0; }
-.ep-connector { background: var(--box); border: 1.5px solid var(--box-border); border-radius: 4px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, Menlo, monospace; box-shadow: 0 1px 2px var(--shadow); }
-.ep-connector .ep-label { overflow: hidden; text-overflow: ellipsis; }
+.ep-handle { opacity: 0; border-radius: inherit; background: transparent; border: none; min-width: 0; min-height: 0; z-index: 0; }
+/* Above the connect ring, so a drag on the endpoint itself moves it instead of growing a segment. */
+.ep-body { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.ep-label, .ep-tag { position: relative; z-index: 2; }
+.ep:hover .ep-handle { opacity: 1; box-shadow: 0 0 0 1px var(--accent, #2b6cb0) inset; }
+/* No overflow clipping here: it would cut off the connect ring, which sits outside the box. */
+.ep-connector { background: var(--box); border: 1.5px solid var(--box-border); border-radius: 4px; padding: 0 4px; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; box-shadow: 0 1px 2px var(--shadow); }
+.ep-connector .ep-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ep-point { background: var(--muted); border-radius: 50%; border: 2px solid var(--canvas); box-shadow: 0 0 0 1px var(--muted); }
 .ep-breakout { background: var(--box); border: 2.5px solid var(--box-border); border-radius: 50%; }
 .ep-splice { background: #ffd54f; border: 2px solid #8d6e00; transform: rotate(45deg); }
