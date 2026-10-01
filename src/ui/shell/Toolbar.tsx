@@ -80,21 +80,20 @@ export function Toolbar() {
           3D Harness
         </button>
       </div>
-      {view === "connectivity" ? (
-        <div className="toolbar-group">
-          <label>
-            Layer{" "}
-            <select value={activeLayer} onChange={(e) => setActiveLayer(e.target.value)}>
-              {visibleLayers(project).map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {activeLayer !== ALL_LAYER_ID && <span className="muted">{visibleLayers(project).find((l) => l.id === activeLayer)?.domains.length} domains</span>}
-        </div>
-      ) : (
+      <div className="toolbar-group">
+        <label>
+          Layer{" "}
+          <select value={activeLayer} onChange={(e) => setActiveLayer(e.target.value)}>
+            {visibleLayers(project).map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {activeLayer !== ALL_LAYER_ID && <span className="muted">{visibleLayers(project).find((l) => l.id === activeLayer)?.domains.length} domains</span>}
+      </div>
+      {view === "topology" && (
         <div className="toolbar-group">
           <label>
             Topology{" "}

@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
+import { ALL_LAYER_ID, activeDomains, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
@@ -133,11 +133,6 @@ export function hubDefaultPosition(project: Project, net: Net): Position {
   const pts = net.connectors.map((a) => project.connectivityCanvas.components[a.split("/")[0]]).filter(Boolean);
   if (pts.length === 0) return { x: 0, y: 0 };
   return { x: Math.round(pts.reduce((s, p) => s + p.x, 0) / pts.length + NODE_WIDTH / 2), y: Math.round(pts.reduce((s, p) => s + p.y, 0) / pts.length + 60) };
-}
-
-export function activeDomains(project: Project, layerId: string): Set<string> {
-  if (layerId === ALL_LAYER_ID) return new Set(project.file.domains.map((d) => d.id));
-  return new Set(visibleLayers(project).find((l) => l.id === layerId)?.domains ?? []);
 }
 
 export function deriveFlow(project: Project, layerId: string, selected: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {

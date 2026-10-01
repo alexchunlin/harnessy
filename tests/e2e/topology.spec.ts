@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** Topology round two: the ratsnest, layer filtering, and the side by side view. */
 
@@ -60,4 +60,40 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   await expect(lines).toHaveCount(0);
   await waitForFile(folder, TOPOLOGY, (v) => (v as { segments: unknown[] }).segments.length === SEGMENT_COUNT);
   await expect(page.locator(".netlist .mark.unrouted")).toHaveCount(0);
+});
+
+test("the layer control dims topology segments outside the layer, keeps shared bundles active, and hides their ratsnest", async ({ page }) => {
+  // The Jetson's Ethernet patch cable is taken out, so its net is unrouted and draws a ratsnest line in the All layer.
+  const folder = await exampleWithoutSegment("topology-layers", "seg-22226b");
+  await openTopology(page, folder);
+  const dimmed = page.locator(".react-flow__edge.out-of-layer");
+  const lines = page.locator(".react-flow__edge.ratsnest");
+  await expect(lines).toHaveCount(1);
+  await expect(dimmed).toHaveCount(0);
+
+  await page.getByLabel("Layer").selectOption("power");
+  await expect(page.getByTestId("topology-canvas")).toHaveClass(/in-layer/);
+  // An Ethernet patch cable carries nothing from the Power layer; a motor run shared with an encoder cable stays active.
+  await expect(page.locator('.react-flow__edge[data-id="seg-22226e"]')).toHaveClass(/out-of-layer/);
+  await expect(page.locator('.react-flow__edge[data-id="seg-2222d3"]')).not.toHaveClass(/out-of-layer/);
+  expect(await dimmed.count()).toBeGreaterThan(0);
+  expect(await page.locator(".react-flow__edge:not(.out-of-layer):not(.ratsnest)").count()).toBeGreaterThan(0);
+  await expect(lines).toHaveCount(0);
+
+  // A dimmed endpoint cannot be dragged or selected.
+  const switchPort = page.locator('.react-flow__node[data-id="end-22226c"]');
+  await expect(switchPort).toHaveClass(/out-of-layer/);
+  const b = (await switchPort.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(b.x + b.width / 2 + i * 15, b.y + b.height / 2 + i * 10);
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
+  const saved = (await readJson(folder, "canvas/top-222268.json")) as { endpoints: Record<string, { x: number; y: number }> };
+  expect(saved.endpoints["end-22226c"]).toEqual({ x: 2400, y: 90 });
+
+  await page.getByLabel("Layer").selectOption("all");
+  await expect(dimmed).toHaveCount(0);
+  await expect(lines).toHaveCount(1);
 });

@@ -31,6 +31,20 @@ export function SegmentEdge({ id, sourceX, sourceY, targetX, targetY, data, sele
   const color = d.routeColor ?? (selected ? "#2b6cb0" : "#444");
   const nets = d.nets.length ? d.nets.map((n) => `${n.label} (${n.domain}, ${n.conductors} cond.)`).join("\n") : "no nets on this segment";
   const title = purchased ? nets : `${nets}\nDouble-click to set the length`;
+  if (d.outOfLayer) {
+    // Outside the active layer: a grey line and a plain label, nothing to click.
+    return (
+      <>
+        <BaseEdge path={path} className="seg-out-of-layer" style={{ strokeDasharray: purchased ? "6 4" : undefined }} interactionWidth={0} />
+        <EdgeLabelRenderer>
+          <div className="seg-label out-of-layer" style={{ transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}>
+            <span>{d.lengthMm !== undefined ? `${d.lengthMm} mm` : "?"}</span>
+            {d.segment.harness && <span className="seg-harness">{d.segment.harness.name}</span>}
+          </div>
+        </EdgeLabelRenderer>
+      </>
+    );
+  }
   return (
     <>
       {d.sheaths.map((s) => (

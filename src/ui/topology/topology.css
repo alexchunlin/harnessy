@@ -15,6 +15,13 @@
 .ep.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.45); }
 .ep.bad { border-color: var(--error) !important; box-shadow: 0 0 0 2px rgba(198,40,40,0.4); }
 .ep.on-route { box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
+/* Outside the active layer: greyed, darker, and untouchable, as on the connectivity canvas. */
+.ep.out-of-layer { border-color: var(--box-dim-border) !important; background: var(--box-dim); color: var(--muted); box-shadow: none; opacity: 0.55; }
+.ep.out-of-layer .ep-handle { pointer-events: none; }
+.tie.out-of-layer { border-color: var(--box-dim-border); opacity: 0.55; }
+.seg-out-of-layer { stroke: var(--box-dim-border); stroke-width: 1.5; opacity: 0.55; }
+.react-flow__edge.out-of-layer { pointer-events: none; }
+.seg-label.out-of-layer { opacity: 0.35; pointer-events: none; color: var(--muted); }
 
 /* The ratsnest: what is left to route, drawn thin and faint under the segments. */
 .ratsnest-line { filter: var(--edge-lift); }
@@ -25,6 +32,7 @@
 .harness-label { font-size: 12px; font-weight: 600; background: var(--panel); border: 1px solid var(--muted); border-radius: 10px; padding: 1px 8px; pointer-events: none; white-space: nowrap; }
 .harness-label.unnamed { color: var(--warning); border-color: var(--warning); font-style: italic; font-weight: 400; }
 .harness-label.doubled { color: var(--error); border-color: var(--error); }
+.harness-label.out-of-layer { opacity: 0.4; }
 
 .seg-label { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 11px; display: flex; gap: 6px; align-items: center; pointer-events: all; }
 .seg-label.missing { border-color: var(--error); color: var(--error); font-weight: 700; }

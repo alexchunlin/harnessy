@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
@@ -34,6 +34,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const edit = useDoc((s) => s.edit);
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
+  const activeLayer = useDoc((s) => s.activeLayer);
   const theme = useTheme((s) => s.theme);
   const ratsnest = usePrefs((s) => s.ratsnest);
   const flow = useReactFlow();
@@ -42,7 +43,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const lastLocal = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "topology" ? selection.ids : []), [selection]);
-  const options = useMemo(() => ({ ratsnest }), [ratsnest]);
+  const layerDomains = useMemo(() => (activeLayer === ALL_LAYER_ID ? undefined : activeDomains(project, activeLayer)), [project, activeLayer]);
+  const options = useMemo(() => ({ ratsnest, layerDomains }), [ratsnest, layerDomains]);
   const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -269,7 +271,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   return (
     <div className="view">
       <LeftPane project={project} topologyId={topologyId} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
-      <div className="canvas" ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
+      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
         <ReactFlow
           nodes={flow_.nodes}
           edges={flow_.edges}

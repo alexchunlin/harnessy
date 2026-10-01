@@ -93,6 +93,12 @@ export function visibleLayers(project: Project): Layer[] {
   return [...project.file.layers, { id: ALL_LAYER_ID, name: "All", domains: project.file.domains.map((d) => d.id) }];
 }
 
+/** The domains a layer shows. Every domain for the All layer. */
+export function activeDomains(project: Project, layerId: string): Set<string> {
+  if (layerId === ALL_LAYER_ID) return new Set(project.file.domains.map((d) => d.id));
+  return new Set(visibleLayers(project).find((l) => l.id === layerId)?.domains ?? []);
+}
+
 export function setKeepApart(project: Project, pairs: [string, string][]): Project {
   return next(project, { file: { ...project.file, keep_apart: pairs.length ? pairs : undefined } });
 }
