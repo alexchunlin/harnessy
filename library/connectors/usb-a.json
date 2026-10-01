@@ -1,6 +1,7 @@
 {
   "id": "usb-a",
   "name": "USB-A receptacle",
+  "short": "USB-A",
   "pins": 4,
   "mating": {
     "part_number": "TBD"

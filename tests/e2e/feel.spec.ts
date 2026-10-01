@@ -202,7 +202,7 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
     await page.waitForTimeout(40);
   }
   await expect(dcdc.locator(".cmp-node")).not.toHaveClass(/labels-hidden/);
-  const label = dcdc.locator(".cmp-designator", { hasText: /^OUT4$/ });
+  const label = dcdc.locator(".cmp-designator", { hasText: /\bOUT4$/ });
   const l = (await label.boundingBox())!;
   const box = (await dcdc.boundingBox())!;
   await page.mouse.move(l.x + l.width / 2, l.y + l.height / 2);
@@ -413,4 +413,21 @@ test("Tab commits a length and opens the next segment that has none", async ({ p
   // Nothing is left without a length, so Tab just closes the field.
   await expect(field).toHaveCount(0);
   await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === second)!.length_mm === 310);
+});
+
+/** A pin row reads as its connector type then its designator, and so does a connector endpoint in the topology view. */
+test("a component box and a topology endpoint both name the connector type before the designator", async ({ page }) => {
+  const folder = await freshExample("feel-connector-type");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  // The type is the first thing to go as the zoom drops, so zoom in until it shows.
+  for (let i = 0; i < 10; i++) await page.locator(".react-flow__controls-zoomin").click();
+  const type = page.locator(".cmp-type").filter({ hasText: "RJ45" }).first();
+  await expect(type).toBeVisible();
+  const row = type.locator("xpath=ancestor::*[contains(@class,'cmp-designator')]");
+  await expect(row).toHaveText(/^RJ45 \S+$/);
+
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+  await expect(page.locator(".ep-connector .ep-label").filter({ hasText: /^JST-GH-4 \S+$/ }).first()).toBeAttached();
 });

@@ -1,6 +1,7 @@
 {
   "id": "usb-c",
   "name": "USB-C receptacle",
+  "short": "USB-C",
   "pins": 24,
   "mating": {
     "part_number": "TBD"

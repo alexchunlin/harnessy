@@ -10,6 +10,9 @@
     "name": {
       "type": "string"
     },
+    "short": {
+      "type": "string"
+    },
     "pins": {
       "type": "integer",
       "exclusiveMinimum": 0,

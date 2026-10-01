@@ -87,3 +87,9 @@ export function resolveSpec(library: Library, ref: string): { kind: "wire"; spec
   }
   return undefined;
 }
+
+/** The name a canvas shows for a connector type: its short name, or its id when the entry has none or is missing. */
+export function connectorShortName(library: Library, ref: string): string {
+  const entry = resolveRef(library, ref, "connectors");
+  return entry?.short ?? ref.slice(ref.indexOf("/") + 1);
+}

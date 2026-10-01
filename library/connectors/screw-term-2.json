@@ -1,6 +1,7 @@
 {
   "id": "screw-term-2",
   "name": "Screw terminal, 2 positions",
+  "short": "Screw-2",
   "pins": 2,
   "mating": {
     "part_number": "TBD"

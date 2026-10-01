@@ -9,8 +9,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { sequentialIdSource, setIdSource } from "../src/core/ids";
-import { loadLibrary, type Files } from "../src/core/library";
-import { allNets, loadProject, pinLayout, saveProject, type Project } from "../src/core/project";
+import { connectorShortName, loadLibrary, type Files } from "../src/core/library";
+import { allNets, componentConnectors, loadProject, pinLayout, saveProject, type Project } from "../src/core/project";
 import { starterProject } from "../src/core/starter";
 import * as ops from "../src/core/ops";
 import { runChecks } from "../src/core/drc";
@@ -598,7 +598,9 @@ function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): voi
     const sides = pinLayout(p, c);
     const d: Record<string, number> = {};
     for (const list of Object.values(sides)) for (const des of list) d[des] = dots[`${c.id}/${des}`] ?? 0;
-    const g = boxGeometry(sides, fittedWidth(c.name, sides, d, c.definition === undefined));
+    const types: Record<string, string> = {};
+    for (const con of componentConnectors(p, c) ?? []) types[con.designator] = connectorShortName(p.library, con.connector);
+    const g = boxGeometry(sides, fittedWidth(c.name, sides, d, c.definition === undefined, types));
     const pos = p.connectivityCanvas.components[c.id];
     return { id: c.id, x: pos.x, y: pos.y, w: g.width, h: g.height, kept: kept.components.has(c.id) };
   });

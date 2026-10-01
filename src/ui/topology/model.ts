@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, degree, harnesses, netsOnSegments, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, resolveConnector, harnesses, netsOnSegments, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -24,7 +24,7 @@ export type TopoEdge = Edge<SegmentEdgeData>;
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
 
 export const ENDPOINT_SIZE: Record<Endpoint["kind"], { w: number; h: number }> = {
-  connector: { w: 54, h: 22 },
+  connector: { w: 88, h: 22 },
   point: { w: 12, h: 12 },
   breakout: { w: 20, h: 20 },
   splice: { w: 22, h: 22 },
@@ -64,8 +64,8 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
 
   const nodes: TopoNode[] = [];
   for (const e of topology.endpoints) {
-    // Connectors show only their designator; the component name is the hover title and in the inspector.
-    const label = e.kind === "connector" ? e.connector.split("/")[1] : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
+    // Connectors show their type and designator, as the component box does; the component name is the hover title and in the inspector.
+    const label = e.kind === "connector" ? connectorEndpointLabel(project, e.connector) : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
     const title = e.kind === "connector" ? connectorLabel(project, e.connector) : "";
     // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
     const size = ENDPOINT_SIZE[e.kind];
@@ -127,4 +127,11 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
 export function endpointName(project: Project, e: Endpoint | undefined): string {
   if (!e) return "?";
   return e.kind === "connector" ? connectorLabel(project, e.connector) : `${e.kind} ${e.id}`;
+}
+
+/** `RJ45 ETH0`: the connector type's short name then the designator, or the designator alone when the address does not resolve. */
+export function connectorEndpointLabel(project: Project, address: string): string {
+  const designator = address.split("/")[1];
+  const resolved = resolveConnector(project, address);
+  return "connector" in resolved ? `${connectorShortName(project.library, resolved.connector.connector)} ${designator}` : designator;
 }

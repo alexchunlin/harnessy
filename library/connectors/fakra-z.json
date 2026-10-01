@@ -1,6 +1,7 @@
 {
   "id": "fakra-z",
   "name": "FAKRA Z-code coax jack",
+  "short": "FAKRA",
   "pins": 1,
   "mating": {
     "part_number": "TBD"

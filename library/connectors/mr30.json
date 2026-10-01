@@ -1,6 +1,7 @@
 {
   "id": "mr30",
   "name": "Amass MR30 3-pin motor connector",
+  "short": "MR30",
   "pins": 3,
   "mating": {
     "part_number": "MR30PB-M"

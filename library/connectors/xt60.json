@@ -1,6 +1,7 @@
 {
   "id": "xt60",
   "name": "Amass XT60",
+  "short": "XT60",
   "pins": 2,
   "mating": {
     "part_number": "XT60H-M"

@@ -39,6 +39,8 @@ export const px = z.number().int();
 export const ConnectorTypeSchema = z.object({
   id: slug,
   name: z.string(),
+  /** What the canvas calls it, the name manufacturing uses: `RJ45`, `JST-GH-6`. Unset falls back to the id. */
+  short: z.string().optional(),
   pins: z.number().int().positive(),
   mating: z.object({ part_number: z.string(), contacts_part_number: z.string().optional() }),
   manufacturer: z.string().optional(),

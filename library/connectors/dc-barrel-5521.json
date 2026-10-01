@@ -1,6 +1,7 @@
 {
   "id": "dc-barrel-5521",
   "name": "DC barrel jack 5.5 x 2.1 mm",
+  "short": "Barrel 5.5",
   "pins": 2,
   "mating": {
     "part_number": "TBD"

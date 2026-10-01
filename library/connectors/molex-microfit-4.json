@@ -1,6 +1,7 @@
 {
   "id": "molex-microfit-4",
   "name": "Molex Micro-Fit 3.0 4-pin",
+  "short": "MicroFit-4",
   "pins": 4,
   "mating": {
     "part_number": "43025-0400",

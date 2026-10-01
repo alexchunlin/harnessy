@@ -67,12 +67,14 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, ta
       const g = drag.current;
       if (!g) return;
       e.stopPropagation();
+      drag.current = undefined;
+      // A click on a grip that never moved is not a drag. Committing it would snap the line to the grid and could add a jog beside an off-grid pin.
+      if (e.clientX === g.startX && e.clientY === g.startY) return setDraft(undefined);
       const zoom = flow.getZoom();
       const next =
         g.run !== undefined
           ? shiftRun(g.base, g.run, { x: (e.clientX - g.startX) / zoom, y: (e.clientY - g.startY) / zoom })
           : moveCorner(g.base, g.corner!, flow.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
-      drag.current = undefined;
       setDraft(undefined);
       commit(g.base, next);
     },

@@ -1,6 +1,7 @@
 {
   "id": "jst-gh-4",
   "name": "JST GH 4-pin",
+  "short": "JST-GH-4",
   "pins": 4,
   "mating": {
     "part_number": "GHR-04V-S",
