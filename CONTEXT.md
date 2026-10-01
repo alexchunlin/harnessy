@@ -98,6 +98,10 @@ _Avoid_: Comment, annotation, label
 The set of segments a net's conductors run through in a topology: the smallest subtree that reaches all of the net's connectors. A route is derived from the topology graph and never stored. Where a route branches there must be a splice for that net.
 _Avoid_: Path, routing, assignment
 
+**Ratsnest**:
+The thin straight lines the topology canvas draws between the placed connectors of a net that is not yet routed, one chain through them in the net's domain colour. Derived from the routes and never stored; a line goes as soon as its net's route closes.
+_Avoid_: Airwire, rubber band
+
 **Splice**:
 An endpoint where the conductors of one or more nets are joined outside a connector. A splice references the nets it joins, one BOM row per net. It never joins two different nets; that would make them one net.
 _Avoid_: Join, tap

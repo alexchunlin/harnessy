@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
-import { buildGraph, harnesses, legsOf, routeOf } from "../../src/core/derive";
+import { buildGraph, harnesses, legsOf, ratsnestPairs, routeOf } from "../../src/core/derive";
 import { runChecks } from "../../src/core/drc";
 import { findNet } from "../../src/core/project";
 import { twoNetProject } from "./fixture";
+import type { Project } from "../../src/core/project";
 
 const checks = (p: ReturnType<typeof twoNetProject>["project"], top: string, check?: string) =>
   runChecks(p, p.topologies.get(top)).filter((f) => !check || f.check === check);
@@ -85,6 +86,50 @@ describe("routes and harnesses", () => {
     p = ops.setHarnessAnchor(p, ids.top, c.id, undefined);
     expect(checks(p, ids.top, "harness-two-anchors")).toHaveLength(0);
     expect(checks(p, ids.top, "harness-unnamed")).toHaveLength(0);
+  });
+});
+
+describe("ratsnest", () => {
+  const positions = (p: Project, top: string) => new Map(Object.entries(p.topologyCanvases.get(top)!.endpoints));
+  const route = (p: Project, top: string, netId: string) => {
+    const { net, domain } = findNet(p, netId)!;
+    return routeOf(buildGraph(p.topologies.get(top)!), net, domain);
+  };
+
+  it("an unrouted net with both connectors placed is one pair, left end first", () => {
+    let { project: p, ids } = twoNetProject();
+    const sensor = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 600, y: 0 });
+    p = sensor.project;
+    const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 300, y: 80 });
+    p = mib.project;
+    expect(ratsnestPairs(route(p, ids.top, ids.sig), positions(p, ids.top))).toEqual([[mib.id, sensor.id]]);
+  });
+
+  it("a routed net has no ratsnest", () => {
+    const { project, ids } = twoNetProject();
+    expect(ratsnestPairs(route(project, ids.top, ids.power), positions(project, ids.top))).toEqual([]);
+  });
+
+  it("a net with one placed connector draws nothing", () => {
+    let { project: p, ids } = twoNetProject();
+    p = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 300, y: 80 }).project;
+    expect(ratsnestPairs(route(p, ids.top, ids.sig), positions(p, ids.top))).toEqual([]);
+  });
+
+  it("endpoints sharing an x are ordered top to bottom, as one chain", () => {
+    let { project: p, ids } = twoNetProject();
+    const net = ops.createNet(p, "24v", [`${ids.mib}/J1`, `${ids.mib}/J2`, `${ids.sensor}/J1`], "three ends");
+    p = net.project;
+    const lower = ops.placeConnector(p, ids.top, `${ids.mib}/J2`, { x: 100, y: 200 });
+    p = lower.project;
+    const right = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 300, y: 100 });
+    p = right.project;
+    const upper = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 0 });
+    p = upper.project;
+    expect(ratsnestPairs(route(p, ids.top, net.id), positions(p, ids.top))).toEqual([
+      [upper.id, lower.id],
+      [lower.id, right.id],
+    ]);
   });
 });
 

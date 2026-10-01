@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, resolveConnector, harnesses, netsOnSegments, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, harnesses, netsOnSegments, ratsnestPairs, resolveConnector, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -18,8 +18,22 @@ export interface SegmentEdgeData {
   [key: string]: unknown;
 }
 
+/** A thin line of the ratsnest: two connectors an unrouted net still has to join. */
+export interface RatsnestEdgeData {
+  netId: string;
+  color: string;
+  /** "net name: from to to", for the hover title */
+  title: string;
+  [key: string]: unknown;
+}
+
 export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<LabelNodeData, "harness">;
-export type TopoEdge = Edge<SegmentEdgeData>;
+export type TopoEdge = Edge<SegmentEdgeData, "segment"> | Edge<RatsnestEdgeData, "ratsnest">;
+
+export interface TopologyOptions {
+  /** Draw the ratsnest of unrouted nets. */
+  ratsnest: boolean;
+}
 
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
 
@@ -43,7 +57,7 @@ export interface TopologyModel {
   positions: Map<string, Position>;
 }
 
-export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drafts: Map<string, Position>): TopologyModel {
+export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
   const graph = buildGraph(topology);
   const canvas = project.topologyCanvases.get(topology.id) ?? { endpoints: {} };
   const assemblyLength = assemblyLengthOf(project);
@@ -93,6 +107,21 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
       data: { segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor, faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), sheaths: sheathIndex.get(s.id) ?? [] },
       selected: selected.has(s.id) || highlightSegments.has(s.id), zIndex: routeColor ? 4 : 1, interactionWidth: 16,
     });
+  }
+
+  // The ratsnest sits under everything: thin, dashed, faint, never selectable.
+  if (options.ratsnest) {
+    for (const r of routes) {
+      const color = domains.get(r.domain)?.color ?? "#888";
+      const label = r.net.name ?? r.net.id;
+      ratsnestPairs(r, positions).forEach(([from, to], i) => {
+        const title = `${label}: ${endpointName(project, graph.endpoints.get(from))} to ${endpointName(project, graph.endpoints.get(to))}`;
+        edges.push({
+          id: `ratsnest:${r.net.id}:${i}`, type: "ratsnest", source: from, target: to, sourceHandle: "h", targetHandle: "h", className: "ratsnest",
+          data: { netId: r.net.id, color, title }, selectable: false, focusable: false, deletable: false, interactionWidth: 8, zIndex: 0,
+        });
+      });
+    }
   }
 
   for (const t of topology.ties) {

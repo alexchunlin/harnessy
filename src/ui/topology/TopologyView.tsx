@@ -4,15 +4,16 @@ import { addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, 
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
+import { usePrefs } from "../prefs";
 import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
-import { SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
+import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
 const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode };
-const edgeTypes = { segment: SegmentEdge };
+const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
 
 export function TopologyView() {
   const activeTopology = useDoc((s) => s.activeTopology);
@@ -34,13 +35,15 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
   const theme = useTheme((s) => s.theme);
+  const ratsnest = usePrefs((s) => s.ratsnest);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
   const lastLocal = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "topology" ? selection.ids : []), [selection]);
-  const model = useMemo(() => deriveTopology(project, topology, selected, drafts), [project, topology, selected, drafts]);
+  const options = useMemo(() => ({ ratsnest }), [ratsnest]);
+  const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -58,7 +61,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
         const at = edges.findIndex((e) => e.id === from);
         for (let k = 1; k <= edges.length; k++) {
           const e = edges[(at + k) % edges.length];
-          if (e.id !== from && e.data!.lengthMm === undefined && e.data!.segment.assembly === undefined) return e.id;
+          if (e.type !== "segment" || e.id === from) continue;
+          if (e.data!.lengthMm === undefined && e.data!.segment.assembly === undefined) return e.id;
         }
         return undefined;
       },
@@ -103,7 +107,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id);
       const ids = new Set(current.view === "topology" ? current.ids.filter(native) : []);
       for (const c of selects) {
-        if (c.id.startsWith("harness:")) continue;
+        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:")) continue;
         if (c.selected) ids.add(c.id);
         else ids.delete(c.id);
       }
@@ -276,7 +280,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
           onNodeDragStop={onNodeDragStop}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
-          onEdgeDoubleClick={(_, e) => e.data?.segment.assembly === undefined && openLength(e.id)}
+          onEdgeDoubleClick={(_, e) => e.type === "segment" && e.data?.segment.assembly === undefined && openLength(e.id)}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={30}
           deleteKeyCode={null}

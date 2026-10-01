@@ -1,4 +1,4 @@
-import type { Endpoint, Net, Segment, Topology } from "./schema";
+import type { Endpoint, Net, Position, Segment, Topology } from "./schema";
 import { allNets, connectorLabel, type Project } from "./project";
 
 /**
@@ -151,6 +151,8 @@ export interface Route {
   domain: string;
   /** connector addresses whose endpoints are missing from the topology */
   unplaced: string[];
+  /** endpoint ids of the net's placed connectors, in the net's connector order */
+  placedEndpoints: string[];
   /** true when the placed connectors sit in more than one piece */
   split: boolean;
   segments: Set<string>;
@@ -221,7 +223,7 @@ export function routeOf(graph: Graph, net: Net, domain: string): Route {
     if (len === undefined) missingLength = true;
     else lengthMm += len;
   }
-  return { net, domain, unplaced, split, segments, endpoints, branchPoints, lengthMm, missingLength };
+  return { net, domain, unplaced, placedEndpoints: placed, split, segments, endpoints, branchPoints, lengthMm, missingLength };
 }
 
 export function segmentLength(graph: Graph, segment: Segment, assemblyLength?: (ref: string) => number | undefined): number | undefined {
@@ -236,6 +238,24 @@ export function isRouted(route: Route): boolean {
 
 export function allRoutes(project: Project, graph: Graph): Route[] {
   return allNets(project).map(({ net, domain }) => routeOf(graph, net, domain));
+}
+
+/**
+ * The ratsnest of an unrouted net: pairs of placed connector endpoints that
+ * still have to be joined, as one chain through all of them rather than a
+ * full mesh. The chain runs left to right, then top to bottom, so it holds
+ * still while endpoints move. A routed net, or one with fewer than two
+ * placed connectors, has no ratsnest.
+ */
+export function ratsnestPairs(route: Route, positions: Map<string, Position>): [string, string][] {
+  if (isRouted(route)) return [];
+  const placed = route.placedEndpoints.filter((e) => positions.has(e));
+  if (placed.length < 2) return [];
+  const at = (e: string) => positions.get(e)!;
+  const ordered = [...placed].sort((a, b) => at(a).x - at(b).x || at(a).y - at(b).y || (a < b ? -1 : 1));
+  const pairs: [string, string][] = [];
+  for (let i = 1; i < ordered.length; i++) pairs.push([ordered[i - 1], ordered[i]]);
+  return pairs;
 }
 
 /** Nets whose route runs through each segment. */

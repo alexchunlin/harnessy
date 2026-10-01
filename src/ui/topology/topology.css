@@ -16,6 +16,9 @@
 .ep.bad { border-color: var(--error) !important; box-shadow: 0 0 0 2px rgba(198,40,40,0.4); }
 .ep.on-route { box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
 
+/* The ratsnest: what is left to route, drawn thin and faint under the segments. */
+.ratsnest-line { filter: var(--edge-lift); }
+
 .tie { width: 12px; height: 12px; background: var(--box); border: 2px solid #1a7f37; border-radius: 2px; cursor: ew-resize; }
 .tie.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.45); }
 

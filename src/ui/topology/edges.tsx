@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { create } from "zustand";
 import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/react";
-import type { SegmentEdgeData } from "./model";
+import type { RatsnestEdgeData, SegmentEdgeData } from "./model";
 
 export interface SegmentEdgeCallbacks {
   onLength: (segmentId: string, lengthMm: number | undefined) => void;
@@ -110,5 +110,17 @@ function LengthField({ id, value }: { id: string; value: number | undefined }) {
       />
       mm
     </span>
+  );
+}
+
+/** One line of the ratsnest: 1 px, dashed, faint, in the net's domain colour. Hover for the net and its two ends. */
+export function RatsnestEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<Edge<RatsnestEdgeData>>) {
+  const d = data!;
+  const path = `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
+  return (
+    <>
+      <BaseEdge path={path} className="ratsnest-line" style={{ stroke: d.color, strokeWidth: 1, strokeDasharray: "4 3", opacity: 0.45 }} interactionWidth={8} />
+      <title>{d.title}</title>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { redo, undo, useDoc, useProject, useTemporal } from "../store";
 import { exportBom } from "./export";
 import { SettingsDialog } from "./Settings";
 import { useTheme } from "../theme";
+import { usePrefs } from "../prefs";
 
 export function Toolbar() {
   const project = useProject();
@@ -24,6 +25,8 @@ export function Toolbar() {
   const canRedo = useTemporal((t) => t.futureStates.length > 0);
   const theme = useTheme((s) => s.theme);
   const setTheme = useTheme((s) => s.setTheme);
+  const ratsnest = usePrefs((s) => s.ratsnest);
+  const setRatsnest = usePrefs((s) => s.setRatsnest);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportError, setExportError] = useState<string | undefined>();
 
@@ -107,6 +110,9 @@ export function Toolbar() {
             </select>
           </label>
           <button onClick={newTopology}>New topology</button>
+          <button className={ratsnest ? "active" : ""} onClick={() => setRatsnest(!ratsnest)} title="Draw thin lines between the connectors of nets not yet routed" aria-pressed={ratsnest}>
+            Ratsnest
+          </button>
           <button onClick={doExport} disabled={!topology} title={errors ? "Export is refused while the topology has design rule errors" : "Download cut list and summary CSV"}>
             Export BOM
           </button>
