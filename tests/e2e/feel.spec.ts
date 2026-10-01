@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
-import path from "node:path";import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
+import path from "node:path";
+import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
