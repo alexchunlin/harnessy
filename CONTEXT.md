@@ -11,7 +11,7 @@ A physical device on the machine with one or more connectors. A motor driver, a 
 _Avoid_: Node, box, part, device, instance
 
 **Component definition**:
-A library entry describing a kind of device: its name, part number, and connectors, each with a designator such as `J1` or `CAN-A`. Many components in a project can share one definition, and editing it changes all of them.
+A library entry describing a kind of device: its name, part number, and connectors, each with a designator such as `J1` or `CAN-A`. Many components in a project can share one definition, and editing it changes all of them. A definition may list bridges, groups of its connectors that the device joins inside itself.
 _Avoid_: Component type, part, template
 
 **Connector**:
@@ -33,12 +33,20 @@ _Avoid_: Terminal, contact
 ### Logical connectivity
 
 **Net**:
-A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain and takes that domain's wire or cable spec unless it overrides it. A connector can terminate several nets from different domains. A bus daisy-chained with patch cables is a chain of two-connector nets, one per cable.
+A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain and takes that domain's wire or cable spec unless it overrides it. A connector can terminate several nets from different domains. A bus daisy-chained with patch cables is a chain of two-connector nets, one per cable. Nets that a bridge joins form a bus and stay separate nets.
 _Avoid_: Signal, link, edge, connection
 
 **Domain**:
 The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethernet, analog, motor phase, encoder ABZ, SPI, PWM, digital I/O, USB, HDMI, GMSL. A sensor rail is not a domain; the signal domain's default cable carries it. A domain names a default wire or cable spec and conductor count, which a net can override. No catch-all domains; "local" is not a domain.
 _Avoid_: Type, category, class, local
+
+**Bridge**:
+A group of a component definition's connectors that the device joins inside itself: the lugs of a bus bar, the IN and OUT of an in-line switch, the CAN-A and CAN-B of a board that passes CAN through. A designator sits in at most one bridge. A bridge joins nets into a bus. It never makes them one net, because the device does the joining rather than the harness. A one-off component that declares its own connectors may declare bridges the same way.
+_Avoid_: Jumper, internal connection, common, bonded
+
+**Bus**:
+The set of nets joined through bridges, derived and never stored. A bus exists only where a bridge joins two or more nets, and it stays within one domain; a bridge that joins nets from two domains is a design rule error. One member net may carry the bus's name, and two names on one bus is an error. An unnamed bus is labelled from its domain and its largest bridging component, as in "48 V bus via Bus bar". A power bus is called a rail in conversation. A bus says nothing about routes, harnesses, or the BOM: each member net still routes and is cut on its own.
+_Avoid_: Rail (in the model), node, supernet
 
 **Layer**:
 A named set of domains shown together on the connectivity canvas. A "Power" layer might show the 48 V, 24 V, and motor phase domains; the Ethernet domain would not be shown with it. A domain may sit in several layers. The "All" layer is built in and cannot be deleted. Layers only affect what is visible; they own no data. Components and nets outside the active layer stay drawn, greyed and darker, and cannot be selected, dragged, or connected until the layer changes.
