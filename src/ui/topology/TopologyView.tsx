@@ -116,6 +116,22 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<TopoNode>[]) => {
+      // A node React Flow has measured keeps that size, or it re-observes the node on every render and the
+      // ResizeObserver loops. Endpoints and ties set `measured` up front; the harness label is sized by its text.
+      const sizes = new Map<string, { width: number; height: number }>();
+      for (const c of changes) if (c.type === "dimensions" && c.dimensions) sizes.set(c.id, c.dimensions);
+      if (sizes.size) {
+        setFlow((f) => {
+          let changed = false;
+          const nodes = f.nodes.map((n) => {
+            const d = sizes.get(n.id);
+            if (!d || (n.measured?.width === d.width && n.measured?.height === d.height)) return n;
+            changed = true;
+            return { ...n, measured: d };
+          });
+          return changed ? { ...f, nodes } : f;
+        });
+      }
       setDrafts((prev) => {
         let next: Map<string, Position> | undefined;
         for (const c of changes) {
