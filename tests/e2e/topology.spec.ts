@@ -81,6 +81,8 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await expect(lines).toHaveCount(0);
 
   // A dimmed endpoint cannot be dragged or selected.
+  type Positions = { endpoints: Record<string, { x: number; y: number }> };
+  const before = ((await readJson(folder, "canvas/top-222268.json")) as Positions).endpoints["end-22226c"];
   const switchPort = page.locator('.react-flow__node[data-id="end-22226c"]');
   await expect(switchPort).toHaveClass(/out-of-layer/);
   const b = (await switchPort.boundingBox())!;
@@ -90,8 +92,8 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await page.mouse.up();
   await page.waitForTimeout(600);
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
-  const saved = (await readJson(folder, "canvas/top-222268.json")) as { endpoints: Record<string, { x: number; y: number }> };
-  expect(saved.endpoints["end-22226c"]).toEqual({ x: 2400, y: 90 });
+  const saved = (await readJson(folder, "canvas/top-222268.json")) as Positions;
+  expect(saved.endpoints["end-22226c"]).toEqual(before);
 
   await page.getByLabel("Layer").selectOption("all");
   await expect(dimmed).toHaveCount(0);
