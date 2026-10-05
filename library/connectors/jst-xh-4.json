@@ -1,6 +1,7 @@
 {
   "id": "jst-xh-4",
   "name": "JST XH 4-pin",
+  "short": "JST-XH-4",
   "pins": 4,
   "mating": {
     "part_number": "XHP-4",

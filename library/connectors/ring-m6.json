@@ -1,6 +1,7 @@
 {
   "id": "ring-m6",
   "name": "M6 stud, single ring terminal",
+  "short": "Ring M6",
   "pins": 1,
   "mating": {
     "part_number": "TBD"

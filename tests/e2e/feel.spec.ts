@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
@@ -201,7 +203,7 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
     await page.waitForTimeout(40);
   }
   await expect(dcdc.locator(".cmp-node")).not.toHaveClass(/labels-hidden/);
-  const label = dcdc.locator(".cmp-designator", { hasText: /^OUT4$/ });
+  const label = dcdc.locator(".cmp-designator", { hasText: /\bOUT4$/ });
   const l = (await label.boundingBox())!;
   const box = (await dcdc.boundingBox())!;
   await page.mouse.move(l.x + l.width / 2, l.y + l.height / 2);
@@ -276,4 +278,157 @@ test("reloading the page reopens the last project, and Close returns to the fold
   await expect(page.getByPlaceholder("Go to path")).toBeVisible();
   await page.reload();
   await expect(page.getByPlaceholder("Go to path")).toBeVisible();
+});
+
+/**
+ * A topology endpoint carries a connect ring just outside its box. Before this,
+ * the handle covered the whole endpoint, so every drag grew a segment and no
+ * endpoint could be moved at all.
+ */
+const TOPOLOGY = "topologies/top-222268.json";
+const TOPOLOGY_CANVAS = "canvas/top-222268.json";
+type Topo = { endpoints: { id: string }[]; segments: { id: string }[] };
+type Placed = { endpoints: Record<string, { x: number; y: number }> };
+
+test("dragging a topology endpoint moves it and grows no segment", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-move");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  const before = (await readJson(folder, TOPOLOGY)) as Topo;
+  const node = page.locator(".react-flow__node-endpoint").first();
+  const id = (await node.getAttribute("data-id"))!;
+  const from = ((await readJson(folder, TOPOLOGY_CANVAS)) as Placed).endpoints[id];
+  const b = (await node.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 10, b.y + b.height / 2 + i * 8);
+  await page.mouse.up();
+
+  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => {
+    const to = (v as Placed).endpoints[id];
+    return to.x !== from.x || to.y !== from.y;
+  });
+  const after = (await readJson(folder, TOPOLOGY)) as Topo;
+  expect(after.segments).toHaveLength(before.segments.length);
+  expect(after.endpoints).toHaveLength(before.endpoints.length);
+});
+
+test("dragging from the ring around an endpoint still grows a segment", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-grow");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+  for (let i = 0; i < 6; i++) await page.locator(".react-flow__controls-zoomin").click();
+  await page.waitForTimeout(400);
+
+  const before = (await readJson(folder, TOPOLOGY)) as Topo;
+  const size = page.viewportSize()!;
+  const all = page.locator(".react-flow__node-endpoint");
+  let node = all.first();
+  for (let i = 0; i < (await all.count()); i++) {
+    const box = await all.nth(i).boundingBox();
+    if (box && box.x > 220 && box.y > 120 && box.x + box.width < size.width - 320 && box.y + box.height < size.height - 120) {
+      node = all.nth(i);
+      break;
+    }
+  }
+  const b = (await node.boundingBox())!;
+  const ring = (await node.locator(".ep-handle").boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, ring.y + 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, ring.y + 2 - i * 9);
+  await page.mouse.up();
+
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Topo).segments.length === before.segments.length + 1);
+  const after = (await readJson(folder, TOPOLOGY)) as Topo;
+  expect(after.endpoints).toHaveLength(before.endpoints.length + 1);
+});
+
+/**
+ * A segment's length is typed into a field opened by double-clicking the
+ * segment. The rest of the time the label is plain text.
+ */
+type Lengths = { segments: { id: string; length_mm?: number; assembly?: string }[] };
+
+async function stripLengths(folder: string, count: number): Promise<string[]> {
+  const file = path.join(folder, TOPOLOGY);
+  const topo = JSON.parse(await fs.readFile(file, "utf8")) as Lengths;
+  const loose = topo.segments.filter((s) => s.assembly === undefined);
+  const picked = [loose[2], loose[4], loose[6]].slice(0, count);
+  for (const s of picked) delete s.length_mm;
+  await fs.writeFile(file, JSON.stringify(topo, null, 2));
+  return picked.map((s) => s.id);
+}
+
+const lengthOf = async (folder: string, id: string) => ((await readJson(folder, TOPOLOGY)) as Lengths).segments.find((s) => s.id === id)!.length_mm;
+
+test("double-clicking a segment opens its length field: Enter writes the length, Escape leaves it alone", async ({ page }) => {
+  const folder = await freshExample("feel-length");
+  const [id] = await stripLengths(folder, 1);
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  const label = page.locator(`.seg-label[data-segment="${id}"]`);
+  const text = label.locator(".seg-length");
+  await expect(text).toHaveText("?");
+  await expect(page.getByLabel("Segment length in mm")).toHaveCount(0);
+  await label.dblclick();
+  const field = page.getByLabel("Segment length in mm");
+  await expect(field).toBeFocused();
+  await page.keyboard.type("450");
+  await page.keyboard.press("Enter");
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === id)!.length_mm === 450);
+  await expect(text).toHaveText("450 mm");
+  await expect(field).toHaveCount(0);
+
+  await label.dblclick();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("450");
+  await page.keyboard.type("999");
+  await page.keyboard.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(text).toHaveText("450 mm");
+  await page.waitForTimeout(500);
+  expect(await lengthOf(folder, id)).toBe(450);
+});
+
+test("Tab commits a length and opens the next segment that has none", async ({ page }) => {
+  const folder = await freshExample("feel-length-tab");
+  const [first, second] = await stripLengths(folder, 2);
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+
+  await page.locator(`.seg-label[data-segment="${first}"]`).dblclick();
+  const field = page.getByLabel("Segment length in mm");
+  await expect(field).toBeFocused();
+  await page.keyboard.type("300");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(`.seg-label[data-segment="${second}"] input`)).toBeFocused();
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === first)!.length_mm === 300);
+  await page.keyboard.type("310");
+  await page.keyboard.press("Tab");
+  // Nothing is left without a length, so Tab just closes the field.
+  await expect(field).toHaveCount(0);
+  await waitForFile(folder, TOPOLOGY, (v) => (v as Lengths).segments.find((s) => s.id === second)!.length_mm === 310);
+});
+
+/** A pin row reads as its connector type then its designator, and so does a connector endpoint in the topology view. */
+test("a component box and a topology endpoint both name the connector type before the designator", async ({ page }) => {
+  const folder = await freshExample("feel-connector-type");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  // The type is the first thing to go as the zoom drops, so zoom in until it shows.
+  for (let i = 0; i < 10; i++) await page.locator(".react-flow__controls-zoomin").click();
+  const type = page.locator(".cmp-type").filter({ hasText: "RJ45" }).first();
+  await expect(type).toBeVisible();
+  const row = type.locator("xpath=ancestor::*[contains(@class,'cmp-designator')]");
+  await expect(row).toHaveText(/^RJ45 \S+$/);
+
+  await page.getByRole("button", { name: "Topology" }).click();
+  await canvasSettled(page);
+  await expect(page.locator(".ep-connector .ep-label").filter({ hasText: /^JST-GH-4 \S+$/ }).first()).toBeAttached();
 });

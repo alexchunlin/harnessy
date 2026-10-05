@@ -1,11 +1,13 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, pinLayout, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
+import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
 export interface ComponentNodeData {
   component: Component;
   connectors: DefinitionConnector[];
+  /** designator to the short name of its connector type, drawn ahead of the designator */
+  types: Record<string, string>;
   geometry: BoxGeometry;
   dimmed: boolean;
   /** designator to the nets attached there, for handle tooltips */
@@ -87,9 +89,9 @@ export function textWidth(text: string, font: string): number {
   return w;
 }
 
-/** A box wide enough for its name and its widest left and right pin labels, with room for the net dots. */
-export function fittedWidth(name: string, sides: Record<Side, string[]>, dots: Record<string, number>, oneOff: boolean): number {
-  const pin = (d: string) => textWidth(d, PIN_FONT) + (dots[d] ? dots[d] * 8 + 4 : 0);
+/** A box wide enough for its name and its widest left and right pin labels, type and designator, with room for the net dots. */
+export function fittedWidth(name: string, sides: Record<Side, string[]>, dots: Record<string, number>, oneOff: boolean, types: Record<string, string> = {}): number {
+  const pin = (d: string) => textWidth(types[d] ? `${types[d]} ${d}` : d, PIN_FONT) + (dots[d] ? dots[d] * 8 + 4 : 0);
   const widest = (list: string[]) => list.reduce((m, d) => Math.max(m, pin(d)), 0);
   const pins = 10 + widest(sides.left) + 24 + widest(sides.right) + 10;
   const title = 8 + textWidth(name, TITLE_FONT) + (oneOff ? 44 : 0) + 8;
@@ -163,17 +165,19 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const dimmed = !litComponents.has(c.id) && layerId !== ALL_LAYER_ID;
     const at: ComponentNodeData["netsAt"] = {};
     const dots: Record<string, number> = {};
+    const types: Record<string, string> = {};
     for (const con of connectors) {
       at[con.designator] = netsAt.get(`${c.id}/${con.designator}`) ?? [];
       dots[con.designator] = at[con.designator].length;
+      types[con.designator] = connectorShortName(project.library, con.connector);
     }
     const sides = pinLayout(project, c);
-    const geometry = boxGeometry(sides, fittedWidth(c.name, sides, dots, c.definition === undefined));
+    const geometry = boxGeometry(sides, fittedWidth(c.name, sides, dots, c.definition === undefined, types));
     nodes.push({
       id: c.id,
       type: "component",
       position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
-      data: { component: c, connectors, geometry, dimmed, netsAt: at },
+      data: { component: c, connectors, types, geometry, dimmed, netsAt: at },
       selected: selected.has(c.id),
       selectable: !dimmed,
       connectable: !dimmed,

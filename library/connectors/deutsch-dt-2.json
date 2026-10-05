@@ -1,6 +1,7 @@
 {
   "id": "deutsch-dt-2",
   "name": "Deutsch DT 2-pin",
+  "short": "DT-2",
   "pins": 2,
   "mating": {
     "part_number": "DT06-2S",

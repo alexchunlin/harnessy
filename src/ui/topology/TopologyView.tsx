@@ -3,9 +3,10 @@ import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, Sel
 import { addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
+import { reconcile } from "../connectivity/model";
 import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
-import { SegmentEdge, setSegmentEdgeCallbacks } from "./edges";
+import { SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
@@ -40,10 +41,30 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const selected = useMemo(() => new Set(selection.view === "topology" ? selection.ids : []), [selection]);
   const model = useMemo(() => deriveTopology(project, topology, selected, drafts), [project, topology, selected, drafts]);
+  const modelRef = useRef(model);
+  modelRef.current = model;
+
+  // Anything the derivation left unchanged keeps its identity, so React Flow re-renders only what moved or changed.
+  const [flow_, setFlow] = useState({ model, nodes: model.nodes, edges: model.edges });
+  if (flow_.model !== model) setFlow({ model, nodes: reconcile(flow_.nodes, model.nodes), edges: reconcile(flow_.edges, model.edges) });
+  const openLength = useLengthEditor((s) => s.setOpen);
 
   useEffect(() => {
-    setSegmentEdgeCallbacks({ onLength: (id, mm) => edit((p) => setSegmentLength(p, topologyId, id, mm)) });
+    setSegmentEdgeCallbacks({
+      onLength: (id, mm) => edit((p) => setSegmentLength(p, topologyId, id, mm)),
+      nextWithoutLength: (from) => {
+        // Edges come out of deriveTopology in topology segment order. Wrap once and skip the one being left.
+        const edges = modelRef.current.edges;
+        const at = edges.findIndex((e) => e.id === from);
+        for (let k = 1; k <= edges.length; k++) {
+          const e = edges[(at + k) % edges.length];
+          if (e.id !== from && e.data!.lengthMm === undefined && e.data!.segment.assembly === undefined) return e.id;
+        }
+        return undefined;
+      },
+    });
   }, [edit, topologyId]);
+  useEffect(() => () => openLength(null), [openLength, topologyId]);
 
   const selectIds = useCallback(
     (ids: string[]) => {
@@ -95,6 +116,22 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<TopoNode>[]) => {
+      // A node React Flow has measured keeps that size, or it re-observes the node on every render and the
+      // ResizeObserver loops. Endpoints and ties set `measured` up front; the harness label is sized by its text.
+      const sizes = new Map<string, { width: number; height: number }>();
+      for (const c of changes) if (c.type === "dimensions" && c.dimensions) sizes.set(c.id, c.dimensions);
+      if (sizes.size) {
+        setFlow((f) => {
+          let changed = false;
+          const nodes = f.nodes.map((n) => {
+            const d = sizes.get(n.id);
+            if (!d || (n.measured?.width === d.width && n.measured?.height === d.height)) return n;
+            changed = true;
+            return { ...n, measured: d };
+          });
+          return changed ? { ...f, nodes } : f;
+        });
+      }
       setDrafts((prev) => {
         let next: Map<string, Position> | undefined;
         for (const c of changes) {
@@ -230,8 +267,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
       <LeftPane project={project} topologyId={topologyId} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
       <div className="canvas" ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
         <ReactFlow
-          nodes={model.nodes}
-          edges={model.edges}
+          nodes={flow_.nodes}
+          edges={flow_.edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
@@ -239,6 +276,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
           onNodeDragStop={onNodeDragStop}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
+          onEdgeDoubleClick={(_, e) => e.data?.segment.assembly === undefined && openLength(e.id)}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={30}
           deleteKeyCode={null}

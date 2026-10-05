@@ -1,6 +1,9 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ENDPOINT_SIZE, type EndpointNodeData, type LabelNodeData, type TieNodeData } from "./model";
 
+/** Width of the grab ring around an endpoint that starts a segment. Inside it, a drag moves the endpoint. */
+const RING = 7;
+
 export function EndpointNode({ data, selected }: NodeProps<Node<EndpointNodeData>>) {
   const { endpoint, label, title, degree, onRoute } = data;
   const size = ENDPOINT_SIZE[endpoint.kind];
@@ -8,10 +11,11 @@ export function EndpointNode({ data, selected }: NodeProps<Node<EndpointNodeData
     (endpoint.kind === "connector" && degree !== 1) || (endpoint.kind === "point" && degree !== 2) || (endpoint.kind === "breakout" && degree < 3) || (endpoint.kind === "splice" && degree < 2);
   return (
     <div className={`ep ep-${endpoint.kind}${selected ? " selected" : ""}${bad ? " bad" : ""}${onRoute ? " on-route" : ""}`} style={{ width: size.w, height: size.h }} title={`${title ? `${title}: ` : ""}${endpoint.kind}, ${degree} segment${degree === 1 ? "" : "s"}`}>
+      <Handle id="h" type="source" position={Position.Top} className="ep-handle" style={{ top: -RING, left: -RING, right: -RING, bottom: -RING, width: "auto", height: "auto", transform: "none" }} />
+      <span className="ep-body" />
       {endpoint.kind === "connector" && <span className="ep-label">{label}</span>}
       {endpoint.kind === "breakout" && label && <span className="ep-tag">{label}</span>}
       {endpoint.kind === "splice" && <span className="ep-tag">{label}</span>}
-      <Handle id="h" type="source" position={Position.Top} className="ep-handle" style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)" }} />
     </div>
   );
 }

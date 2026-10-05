@@ -1,6 +1,7 @@
 {
   "id": "pin-header-254-6",
   "name": "0.1 inch pin header, 1x6",
+  "short": "Header-6",
   "pins": 6,
   "mating": {
     "part_number": "TBD"

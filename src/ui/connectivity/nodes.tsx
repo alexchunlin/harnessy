@@ -5,7 +5,7 @@ import { useDoc } from "../store";
 import { HANDLE_ROW, NODE_HEADER, PIN_BAND, pinSlotAt, slotMarker, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
 
 export function ComponentNode({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<Node<ComponentNodeData>>) {
-  const { component, connectors, geometry, dimmed, netsAt } = data;
+  const { component, connectors, types, geometry, dimmed, netsAt } = data;
   // Render count, exposed so a browser test can prove a drag repaints only the dragged box.
   const renders = useRef(0);
   renders.current += 1;
@@ -61,12 +61,13 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
     useDoc.getState().edit((p) => movePin(p, component.id, designator, target.side, target.index));
   };
 
-  // Below this zoom the pin labels are a smear; names stay.
+  // Below this zoom the pin labels are a smear; names stay. The connector type goes first, a little before that.
   const labelsHidden = useStore((s) => s.transform[2] < 0.6);
+  const typesHidden = useStore((s) => s.transform[2] < 0.8);
   const marker = slot ? slotMarker(geometry, slot.side, slot.index) : undefined;
   const byDesignator = new Map(connectors.map((c) => [c.designator, c]));
   return (
-    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${labelsHidden ? " labels-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
+    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${labelsHidden ? " labels-hidden" : ""}${typesHidden ? " types-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
       <div className="cmp-title" style={{ top: geometry.header, height: NODE_HEADER }}>
         <span>{component.name}</span>
         {component.definition === undefined && <span className="cmp-oneoff" title="One-off component with inline connectors">one-off</span>}
@@ -91,6 +92,7 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
             onMouseLeave={() => useDoc.getState().setHover({ nets: [], component: component.id })}
           >
             <span className="cmp-designator nodrag" onPointerDown={(e) => onLabelDown(e, designator)} onPointerMove={onLabelMove} onPointerUp={onLabelUp} title={`${title}. Drag to move this pin to another side or slot.`}>
+              {!vertical && types[designator] && <span className="cmp-type">{types[designator]} </span>}
               {designator}
             </span>
             {nets.length > 0 && (

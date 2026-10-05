@@ -1,6 +1,7 @@
 {
   "id": "jst-gh-2",
   "name": "JST GH 2-pin",
+  "short": "JST-GH-2",
   "pins": 2,
   "mating": {
     "part_number": "GHR-02V-S",

@@ -1,6 +1,7 @@
 {
   "id": "jst-gh-6",
   "name": "JST GH 6-pin",
+  "short": "JST-GH-6",
   "pins": 6,
   "mating": {
     "part_number": "GHR-06V-S",
