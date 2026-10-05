@@ -22,7 +22,7 @@ import { api, fromFiles, toFiles } from "./api";
  * and sends only what changed.
  */
 
-export type View = "connectivity" | "topology";
+export type View = "connectivity" | "topology" | "3d";
 
 export interface Selection {
   view: View;

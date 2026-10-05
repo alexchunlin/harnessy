@@ -73,6 +73,9 @@ export function Toolbar() {
         <button className={view === "topology" ? "active" : ""} onClick={() => setView("topology")}>
           Topology
         </button>
+        <button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>
+          3D Harness
+        </button>
       </div>
       {view === "connectivity" ? (
         <div className="toolbar-group">
