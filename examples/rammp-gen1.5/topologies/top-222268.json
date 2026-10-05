@@ -888,6 +888,16 @@
       "id": "end-2222gx",
       "kind": "connector",
       "connector": "cmp-22222f/PWR"
+    },
+    {
+      "id": "end-gb6gjd",
+      "kind": "connector",
+      "connector": "cmp-22222j/CAN-B"
+    },
+    {
+      "id": "end-s733sc",
+      "kind": "connector",
+      "connector": "cmp-222236/CAN-B"
     }
   ],
   "segments": [
@@ -2076,6 +2086,14 @@
         "end-2222gx"
       ],
       "length_mm": 900
+    },
+    {
+      "id": "seg-qtepnt",
+      "ends": [
+        "end-s733sc",
+        "end-gb6gjd"
+      ],
+      "length_mm": 100
     }
   ],
   "sheaths": [
