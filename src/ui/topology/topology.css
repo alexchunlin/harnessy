@@ -56,3 +56,11 @@
 .insp-list li { display: flex; justify-content: space-between; gap: 6px; }
 /* Labels are click targets. A selected edge rises above 1000, so the label layer sits above that or the second click of a double-click lands on the edge. */
 [data-testid="topology-canvas"] .react-flow__edgelabel-renderer { z-index: 1010; }
+
+/* The fan at a bundle's end: one strand per conductor, each a hit target. The outline keeps a white or black strand visible on either theme. */
+.strand-outline { stroke: var(--text); stroke-opacity: 0.35; }
+.strand-line { stroke-linecap: butt; }
+.strand-hit { pointer-events: stroke; cursor: pointer; }
+.strand.dim .strand-line, .strand.dim .strand-outline { opacity: 0.25; }
+.strand.lit .strand-outline { stroke-opacity: 0.8; }
+.seg-badge { color: var(--muted); font-size: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 0 4px; }
