@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { addSegment, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
+import { usePrefs } from "../prefs";
 import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
-import { SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
+import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
 const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode };
-const edgeTypes = { segment: SegmentEdge };
+const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
 
 export function TopologyView() {
   const activeTopology = useDoc((s) => s.activeTopology);
@@ -33,14 +34,30 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const edit = useDoc((s) => s.edit);
   const selection = useDoc((s) => s.selection);
   const select = useDoc((s) => s.select);
+  const activeLayer = useDoc((s) => s.activeLayer);
   const theme = useTheme((s) => s.theme);
+  const ratsnest = usePrefs((s) => s.ratsnest);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
   const lastLocal = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "topology" ? selection.ids : []), [selection]);
-  const model = useMemo(() => deriveTopology(project, topology, selected, drafts), [project, topology, selected, drafts]);
+  const layerDomains = useMemo(() => (activeLayer === ALL_LAYER_ID ? undefined : activeDomains(project, activeLayer)), [project, activeLayer]);
+  // What the connectivity canvas has selected lights up here too, read-only: nets by route, components by their connectors.
+  const highlight = useMemo(() => {
+    const nets = new Set<string>();
+    const components = new Set<string>();
+    if (selection.view === "connectivity") {
+      for (const id of selection.ids) {
+        if (project.components.has(id)) components.add(id);
+        else if (findNet(project, id)) nets.add(id);
+      }
+    }
+    return { nets, components };
+  }, [selection, project]);
+  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components }), [ratsnest, layerDomains, highlight]);
+  const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -58,7 +75,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
         const at = edges.findIndex((e) => e.id === from);
         for (let k = 1; k <= edges.length; k++) {
           const e = edges[(at + k) % edges.length];
-          if (e.id !== from && e.data!.lengthMm === undefined && e.data!.segment.assembly === undefined) return e.id;
+          if (e.type !== "segment" || e.id === from) continue;
+          if (e.data!.lengthMm === undefined && e.data!.segment.assembly === undefined) return e.id;
         }
         return undefined;
       },
@@ -103,7 +121,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id);
       const ids = new Set(current.view === "topology" ? current.ids.filter(native) : []);
       for (const c of selects) {
-        if (c.id.startsWith("harness:")) continue;
+        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:")) continue;
         if (c.selected) ids.add(c.id);
         else ids.delete(c.id);
       }
@@ -265,7 +283,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   return (
     <div className="view">
       <LeftPane project={project} topologyId={topologyId} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
-      <div className="canvas" ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
+      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
         <ReactFlow
           nodes={flow_.nodes}
           edges={flow_.edges}
@@ -276,7 +294,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
           onNodeDragStop={onNodeDragStop}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
-          onEdgeDoubleClick={(_, e) => e.data?.segment.assembly === undefined && openLength(e.id)}
+          onEdgeDoubleClick={(_, e) => e.type === "segment" && e.data?.segment.assembly === undefined && openLength(e.id)}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={30}
           deleteKeyCode={null}

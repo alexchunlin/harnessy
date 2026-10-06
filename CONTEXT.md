@@ -94,9 +94,17 @@ _Avoid_: Waypoint, route (a route is a topology term)
 A text annotation on the canvas, optionally attached to one component or one net. Visual only; it changes nothing about connectivity or the BOM.
 _Avoid_: Comment, annotation, label
 
+**Side by side**:
+The view that shows the connectivity canvas on the left and the topology view on the right, each with its own viewport and one shared selection: a net or component picked on one side lights its counterpart on the other. A draggable divider sets the share of the width, and the browser remembers it.
+_Avoid_: Split, split view, dual pane
+
 **Route**:
 The set of segments a net's conductors run through in a topology: the smallest subtree that reaches all of the net's connectors. A route is derived from the topology graph and never stored. Where a route branches there must be a splice for that net.
 _Avoid_: Path, routing, assignment
+
+**Ratsnest**:
+The thin straight lines the topology canvas draws between the placed connectors of a net that is not yet routed, one chain through them in the net's domain colour. Derived from the routes and never stored; a line goes as soon as its net's route closes.
+_Avoid_: Airwire, rubber band
 
 **Splice**:
 An endpoint where the conductors of one or more nets are joined outside a connector. A splice references the nets it joins, one BOM row per net. It never joins two different nets; that would make them one net.

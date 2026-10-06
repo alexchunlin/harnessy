@@ -4,6 +4,7 @@ import { redo, undo, useDoc, useProject, useTemporal } from "../store";
 import { exportBom } from "./export";
 import { SettingsDialog } from "./Settings";
 import { useTheme } from "../theme";
+import { usePrefs } from "../prefs";
 
 export function Toolbar() {
   const project = useProject();
@@ -24,6 +25,8 @@ export function Toolbar() {
   const canRedo = useTemporal((t) => t.futureStates.length > 0);
   const theme = useTheme((s) => s.theme);
   const setTheme = useTheme((s) => s.setTheme);
+  const ratsnest = usePrefs((s) => s.ratsnest);
+  const setRatsnest = usePrefs((s) => s.setRatsnest);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportError, setExportError] = useState<string | undefined>();
 
@@ -42,7 +45,7 @@ export function Toolbar() {
       return r.project;
     });
     setActiveTopology(id);
-    setView("topology");
+    if (view === "connectivity") setView("topology");
   }
 
   function doExport() {
@@ -73,25 +76,27 @@ export function Toolbar() {
         <button className={view === "topology" ? "active" : ""} onClick={() => setView("topology")}>
           Topology
         </button>
+        <button className={view === "side-by-side" ? "active" : ""} onClick={() => setView("side-by-side")} title="Connectivity on the left, topology on the right">
+          Side by side
+        </button>
         <button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>
           3D Harness
         </button>
       </div>
-      {view === "connectivity" ? (
-        <div className="toolbar-group">
-          <label>
-            Layer{" "}
-            <select value={activeLayer} onChange={(e) => setActiveLayer(e.target.value)}>
-              {visibleLayers(project).map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {activeLayer !== ALL_LAYER_ID && <span className="muted">{visibleLayers(project).find((l) => l.id === activeLayer)?.domains.length} domains</span>}
-        </div>
-      ) : (
+      <div className="toolbar-group">
+        <label>
+          Layer{" "}
+          <select value={activeLayer} onChange={(e) => setActiveLayer(e.target.value)}>
+            {visibleLayers(project).map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {activeLayer !== ALL_LAYER_ID && <span className="muted">{visibleLayers(project).find((l) => l.id === activeLayer)?.domains.length} domains</span>}
+      </div>
+      {view !== "connectivity" && (
         <div className="toolbar-group">
           <label>
             Topology{" "}
@@ -107,6 +112,9 @@ export function Toolbar() {
             </select>
           </label>
           <button onClick={newTopology}>New topology</button>
+          <button className={ratsnest ? "active" : ""} onClick={() => setRatsnest(!ratsnest)} title="Draw thin lines between the connectors of nets not yet routed" aria-pressed={ratsnest}>
+            Ratsnest
+          </button>
           <button onClick={doExport} disabled={!topology} title={errors ? "Export is refused while the topology has design rule errors" : "Download cut list and summary CSV"}>
             Export BOM
           </button>

@@ -66,8 +66,6 @@ input.short { width: 5em; }
 .net-halo { fill: none; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: 0.35; pointer-events: none; filter: var(--edge-lift); }
 .net-edge.inactive { filter: none; stroke: var(--box-dim-border); stroke-width: 1.5; opacity: 0.55; }
 .react-flow__edge.inactive { pointer-events: none; }
-/* In a layer the canvas darkens a step so the lit domains stand out. */
-.canvas.in-layer .react-flow { background: var(--canvas-layer); }
 
 .pin-list { display: flex; flex-direction: column; gap: 4px; }
 .pin-side-name { font-size: 11px; color: var(--muted); text-transform: capitalize; }

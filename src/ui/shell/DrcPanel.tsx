@@ -8,6 +8,7 @@ export function DrcPanel() {
   const activeTopology = useDoc((s) => s.activeTopology);
   const edit = useDoc((s) => s.edit);
   const select = useDoc((s) => s.select);
+  const view = useDoc((s) => s.view);
   const setView = useDoc((s) => s.setView);
   const toggleDrc = useDoc((s) => s.toggleDrc);
   const topology = activeTopology ? project.topologies.get(activeTopology) : undefined;
@@ -16,7 +17,7 @@ export function DrcPanel() {
   const warnings = findings.filter((f) => f.severity === "warning");
 
   function jump(f: Finding) {
-    setView(f.view);
+    if (view !== "side-by-side") setView(f.view);
     // Connector addresses select their component on the connectivity canvas.
     const id = f.view === "connectivity" && f.target.includes("/") ? parseAddress(f.target).component : f.target;
     select(f.view, [id]);

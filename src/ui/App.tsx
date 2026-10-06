@@ -6,6 +6,7 @@ import { DrcPanel } from "./shell/DrcPanel";
 import { ConnectivityView } from "./connectivity/ConnectivityView";
 import { TopologyView } from "./topology/TopologyView";
 import { Harness3DView } from "./harness3d/Harness3DView";
+import { SideBySide } from "./shell/SideBySide";
 
 export function App() {
   const project = useDoc((s) => s.project);
@@ -50,7 +51,9 @@ export function App() {
     <div className="app">
       <Toolbar />
       <div className="app-body">
-        <div className="app-view">{view === "connectivity" ? <ConnectivityView /> : view === "3d" ? <Harness3DView /> : <TopologyView />}</div>
+        <div className="app-view">
+          {view === "connectivity" ? <ConnectivityView /> : view === "topology" ? <TopologyView /> : view === "3d" ? <Harness3DView /> : <SideBySide />}
+        </div>
         {drcOpen && <DrcPanel />}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, visibleLayers, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
+import { ALL_LAYER_ID, activeDomains, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
@@ -12,9 +12,11 @@ export interface ComponentNodeData {
   dimmed: boolean;
   /** designator to the nets attached there, for handle tooltips */
   netsAt: Record<string, { net: Net; domain: Domain }[]>;
+  /** designator to domain colour, for pins on a net lit from the topology canvas */
+  litPins: Record<string, string>;
   [key: string]: unknown;
 }
-export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; [key: string]: unknown }
+export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; /** lit from the topology canvas */ lit: boolean; [key: string]: unknown }
 export interface GroupNodeData { group: Group; [key: string]: unknown }
 export interface NoteNodeData { note: Note; [key: string]: unknown }
 export interface NetEdgeData {
@@ -24,6 +26,8 @@ export interface NetEdgeData {
   siblingCount: number;
   label: string;
   inactive: boolean;
+  /** Glows like a hovered net: selected on the topology canvas, by net or by segment. */
+  lit: boolean;
   /** Key under the canvas file's bends. */
   key: string;
   /** Hand-placed bends, if any. */
@@ -135,12 +139,8 @@ export function hubDefaultPosition(project: Project, net: Net): Position {
   return { x: Math.round(pts.reduce((s, p) => s + p.x, 0) / pts.length + NODE_WIDTH / 2), y: Math.round(pts.reduce((s, p) => s + p.y, 0) / pts.length + 60) };
 }
 
-export function activeDomains(project: Project, layerId: string): Set<string> {
-  if (layerId === ALL_LAYER_ID) return new Set(project.file.domains.map((d) => d.id));
-  return new Set(visibleLayers(project).find((l) => l.id === layerId)?.domains ?? []);
-}
-
-export function deriveFlow(project: Project, layerId: string, selected: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
+/** Derive the canvas. `lit` holds nets selected on the topology canvas, which glow here without being selected. */
+export function deriveFlow(project: Project, layerId: string, selected: Set<string>, lit: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const visible = activeDomains(project, layerId);
   const nets = allNets(project);
@@ -166,10 +166,13 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const at: ComponentNodeData["netsAt"] = {};
     const dots: Record<string, number> = {};
     const types: Record<string, string> = {};
+    const litPins: Record<string, string> = {};
     for (const con of connectors) {
       at[con.designator] = netsAt.get(`${c.id}/${con.designator}`) ?? [];
       dots[con.designator] = at[con.designator].length;
       types[con.designator] = connectorShortName(project.library, con.connector);
+      const litNet = at[con.designator].find((n) => lit.has(n.net.id) && visible.has(n.domain.id));
+      if (litNet) litPins[con.designator] = litNet.domain.color;
     }
     const sides = pinLayout(project, c);
     const geometry = boxGeometry(sides, fittedWidth(c.name, sides, dots, c.definition === undefined, types));
@@ -177,7 +180,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       id: c.id,
       type: "component",
       position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
-      data: { component: c, connectors, types, geometry, dimmed, netsAt: at },
+      data: { component: c, connectors, types, geometry, dimmed, netsAt: at, litPins },
       selected: selected.has(c.id),
       selectable: !dimmed,
       connectable: !dimmed,
@@ -194,13 +197,14 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const label = net.name ?? net.id;
     const ends = net.connectors.filter((a) => project.components.has(a.split("/")[0]));
     const isSelected = !inactive && selected.has(net.id);
+    const isLit = !inactive && lit.has(net.id);
     // Edges sit under boxes; a selected edge is lifted above them.
     const edgeProps = { selected: isSelected, zIndex: isSelected ? 5 : 0, selectable: !inactive, focusable: !inactive, className: inactive ? "inactive" : undefined };
     if (ends.length === 2) {
       const [a, b] = ends;
       const edge: Edge<NetEdgeData> = {
         id: net.id, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: b.split("/")[0], targetHandle: b.split("/")[1],
-        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, key: bendsKey(net.id), bends: project.connectivityCanvas.bends[bendsKey(net.id)], hub: false }, ...edgeProps,
+        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id), bends: project.connectivityCanvas.bends[bendsKey(net.id)], hub: false }, ...edgeProps,
       };
       edges.push(edge);
       const key = [a, b].sort().join("|");
@@ -209,13 +213,13 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     } else if (ends.length >= 3) {
       const hubId = `hub:${net.id}`;
       nodes.push({
-        id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label, inactive },
+        id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label, inactive, lit: isLit },
         selected: isSelected, zIndex: inactive ? 0 : 2, selectable: !inactive, draggable: !inactive, connectable: !inactive, className: inactive ? "inactive" : undefined,
       });
       for (const a of ends) {
         edges.push({
           id: `${net.id}:${a}`, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: hubId, targetHandle: "hub",
-          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, key: bendsKey(net.id, a), bends: project.connectivityCanvas.bends[bendsKey(net.id, a)], hub: true }, ...edgeProps,
+          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id, a), bends: project.connectivityCanvas.bends[bendsKey(net.id, a)], hub: true }, ...edgeProps,
         });
       }
     }
@@ -232,7 +236,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const netSize = n.net ? (nets.find((x) => x.net.id === n.net)?.net.connectors.length ?? 0) : 0;
     const target = n.component ?? (netSize >= 3 ? `hub:${n.net}` : undefined);
     if (target && nodes.some((x) => x.id === target)) {
-      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false, key: "", hub: false } });
+      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false, lit: false, key: "", hub: false } });
     }
   }
   return { nodes, edges };
