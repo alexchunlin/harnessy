@@ -96,5 +96,11 @@
       "side": "right"
     }
   ],
+  "bridges": [
+    [
+      "CAN-A",
+      "CAN-B"
+    ]
+  ],
   "part_number": "TBD"
 }

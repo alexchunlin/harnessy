@@ -124,31 +124,32 @@ const clusters = clusterSpecs.map((c, i) => ({
 
 const at = (component: string, designator: string) => `${component}/${designator}`;
 
-function net(domain: string, connectors: string[], name: string, override?: { spec?: string; conductors?: number }): string {
+function net(domain: string, connectors: string[], name: string | undefined, override?: { spec?: string; conductors?: number }): string {
   const r = ops.createNet(p, domain, connectors, name);
   p = r.project;
   if (override) p = ops.setNetSpec(p, r.id, override.spec, override.conductors);
   return r.id;
 }
 
-// 48 V: battery feed, charge, and one two-connector net per load off the bus bar
+// 48 V: battery feed, charge, and one two-connector net per load off the bus bar.
+// The rail's nets carry no name: the switch and the bus bar bridge them into one bus, which labels each from its ends.
 const heavy = { spec: "wires/awg8-red", conductors: 2 };
-net("48v", [at(battery, "MAIN"), at(inlineSwitch, "IN")], "Battery to switch", heavy);
-net("48v", [at(inlineSwitch, "OUT"), at(busBar, "BAT")], "Switch to bus bar", heavy);
+net("48v", [at(battery, "MAIN"), at(inlineSwitch, "IN")], undefined, heavy);
+net("48v", [at(inlineSwitch, "OUT"), at(busBar, "BAT")], undefined, heavy);
 net("48v", [at(battery, "CHG"), at(chargePort, "J1")], "Charge");
-const loads48: [string, string, string][] = [
-  [at(drive[0].racer, "PWR"), "L1", "48 V PACE RACER FL"],
-  [at(drive[1].racer, "PWR"), "L2", "48 V PACE RACER FR"],
-  [at(eth, "PWR"), "L3", "48 V Ethernet switch"],
-  [at(dcdc, "IN"), "L4", "48 V DC/DC"],
-  [at(mib, "PWR"), "L5", "48 V MIB"],
-  [at(drive[2].racer, "PWR"), "L6", "48 V PACE RACER RL"],
-  [at(drive[3].racer, "PWR"), "L7", "48 V PACE RACER RR"],
-  [at(rcL, "PWR"), "L8", "48 V RoboClaw L"],
-  [at(rcR, "PWR"), "L9", "48 V RoboClaw R"],
-  [at(rcRear, "PWR"), "L10", "48 V RoboClaw rear"],
+const loads48: [string, string][] = [
+  [at(drive[0].racer, "PWR"), "L1"],
+  [at(drive[1].racer, "PWR"), "L2"],
+  [at(eth, "PWR"), "L3"],
+  [at(dcdc, "IN"), "L4"],
+  [at(mib, "PWR"), "L5"],
+  [at(drive[2].racer, "PWR"), "L6"],
+  [at(drive[3].racer, "PWR"), "L7"],
+  [at(rcL, "PWR"), "L8"],
+  [at(rcR, "PWR"), "L9"],
+  [at(rcRear, "PWR"), "L10"],
 ];
-for (const [load, pos, name] of loads48) net("48v", [at(busBar, pos), load], name);
+for (const [load, pos] of loads48) net("48v", [at(busBar, pos), load], undefined);
 
 // 24 V from the DC/DC
 net("24v", [at(dcdc, "OUT1"), at(kinova, "PWR")], "24 V Kinova");
@@ -156,12 +157,13 @@ net("24v", [at(dcdc, "OUT2"), at(hub, "PWR")], "24 V USB hub");
 net("24v", [at(dcdc, "OUT3"), at(jetson, "PWR")], "24 V Jetson");
 
 // CAN daisy chain: battery BMS, MIB, RoboClaw L, R, rear. One net per hop.
-const canHops: [string, string, string, string][] = [
-  [at(mib, "CAN-A"), at(rcL, "CAN-A"), "CAN MIB to RoboClaw L", "can-patch-gh4-500mm"],
-  [at(rcL, "CAN-B"), at(rcR, "CAN-A"), "CAN RoboClaw L to R", "can-patch-gh4-500mm"],
-  [at(rcR, "CAN-B"), at(rcRear, "CAN-A"), "CAN RoboClaw R to rear", "can-patch-gh4-300mm"],
+const canHops: [string, string, string][] = [
+  [at(mib, "CAN-A"), at(rcL, "CAN-A"), "can-patch-gh4-500mm"],
+  [at(rcL, "CAN-B"), at(rcR, "CAN-A"), "can-patch-gh4-500mm"],
+  [at(rcR, "CAN-B"), at(rcRear, "CAN-A"), "can-patch-gh4-300mm"],
 ];
-const canNets = canHops.map(([a, b, name, assembly]) => ({ a, b, assembly, net: net("can", [a, b], name) }));
+// The CAN hops carry no name either: the MIB and the RoboClaws bridge CAN-A to CAN-B, so the chain is one bus.
+const canNets = canHops.map(([a, b, assembly]) => ({ a, b, assembly, net: net("can", [a, b], undefined) }));
 
 // Ethernet: every run is a patch cable from the switch
 const ethRuns: [string, string, string, string][] = [
@@ -419,6 +421,10 @@ drive.forEach((d, i) => {
   tie(p1.segment, "zip-tie-100mm", 150);
 }
 
+// Drawn in the app, after everything else so the earlier ids stay put:
+// a 100 mm run from the MIB's spare CAN-B to the rear RoboClaw's CAN-B, with no net on it yet.
+join2(connector(at(mib, "CAN-B"), { x: 538, y: 104 }), connector(at(rcRear, "CAN-B"), { x: 556, y: 324 }), 100);
+
 // Keep the layout already on disk ----------------------------------------------------
 
 /**
@@ -445,29 +451,29 @@ function netKey(project: Project, net: Net): string {
 }
 
 /**
- * A stable key per endpoint: its address for a connector, the connectors
- * one segment away for a breakout or point. Endpoints with no key, and
- * keys two endpoints share, are left out.
+ * A stable key per endpoint: its address for a connector, else the keys of
+ * its neighbours, worked outward from the connectors so a point deep in a
+ * harness still has one. Keys two endpoints share are left out.
  */
 function endpointKeys(project: Project, t: Topology): [string, Endpoint][] {
   const byId = new Map(t.endpoints.map((e) => [e.id, e]));
-  const out: [string, Endpoint][] = [];
-  for (const e of t.endpoints) {
-    if (e.kind === "connector") {
-      out.push([addressKey(project, e.connector), e]);
-      continue;
+  const neighbours = (id: string) => t.segments.filter((s) => s.ends.includes(id)).map((s) => byId.get(s.ends[0] === id ? s.ends[1] : s.ends[0])).filter((n): n is Endpoint => n !== undefined);
+  let keys = new Map<string, string>();
+  for (const e of t.endpoints) if (e.kind === "connector") keys.set(e.id, addressKey(project, e.connector));
+  for (let pass = 0; pass < t.endpoints.length; pass++) {
+    // Each pass reads the previous one, so the result does not depend on endpoint order.
+    const next = new Map(keys);
+    for (const e of t.endpoints) {
+      if (keys.has(e.id)) continue;
+      const near = neighbours(e.id).filter((n) => keys.has(n.id)).map((n) => keys.get(n.id)!).sort();
+      if (near.length) next.set(e.id, `via ${near.join("|")}`);
     }
-    const near = t.segments
-      .filter((s) => s.ends.includes(e.id))
-      .map((s) => byId.get(s.ends[0] === e.id ? s.ends[1] : s.ends[0]))
-      .filter((n) => n?.kind === "connector")
-      .map((n) => addressKey(project, (n as Extract<Endpoint, { kind: "connector" }>).connector))
-      .sort();
-    if (near.length) out.push([`via ${near.join("|")}`, e]);
+    if (next.size === keys.size) break;
+    keys = next;
   }
   const seen = new Map<string, number>();
-  for (const [key] of out) seen.set(key, (seen.get(key) ?? 0) + 1);
-  return out.filter(([key]) => seen.get(key) === 1);
+  for (const key of keys.values()) seen.set(key, (seen.get(key) ?? 0) + 1);
+  return t.endpoints.filter((e) => keys.has(e.id) && seen.get(keys.get(e.id)!) === 1).map((e) => [keys.get(e.id)!, e]);
 }
 
 const kept = { components: new Set<string>(), endpoints: new Set<string>() };

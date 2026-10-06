@@ -1,8 +1,8 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
-import { buildGraph, degree, otherEnd } from "./derive";
-import type { Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
+import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -142,6 +142,16 @@ export function setInlineConnectors(project: Project, id: string, connectors: De
   if (c.definition) throw new Error(`component ${id} takes its connectors from ${c.definition}`);
   const components = new Map(project.components);
   components.set(id, { ...c, connectors });
+  return next(project, { components });
+}
+
+/** Replace a blank component's bridges. Definition-backed components take theirs from the library. */
+export function setInlineBridges(project: Project, id: string, bridges: Bridges): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  if (c.definition) throw new Error(`component ${id} takes its bridges from ${c.definition}`);
+  const components = new Map(project.components);
+  components.set(id, { ...c, bridges: bridges.length ? bridges : undefined });
   return next(project, { components });
 }
 
@@ -360,6 +370,14 @@ export function renameNet(project: Project, id: string, name: string | undefined
 
 export function setNetSpec(project: Project, id: string, spec: string | undefined, conductors: number | undefined): Project {
   return updateNet(project, id, (n) => ({ ...n, spec, conductors }));
+}
+
+/** Name the bus a net is on. The name sits on this net and leaves every other member, so a bus has one anchor. */
+export function setBusName(project: Project, id: string, name: string | undefined): Project {
+  const bus = busOf(buses(project), id);
+  let p = project;
+  for (const n of bus?.nets ?? []) if (n.id !== id && n.bus !== undefined) p = updateNet(p, n.id, (x) => ({ ...x, bus: undefined }));
+  return updateNet(p, id, (n) => ({ ...n, bus: name || undefined }));
 }
 
 /** Moving a net between domains is a move between files. Splice references and hub positions follow the id. */
