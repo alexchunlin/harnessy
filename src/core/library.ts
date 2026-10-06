@@ -88,6 +88,17 @@ export function resolveSpec(library: Library, ref: string): { kind: "wire"; spec
   return undefined;
 }
 
+/**
+ * The colour a conductor draws with: a wire's colour, or the colour a cable
+ * lists for the conductor at `index`, else `fallback` (the domain colour).
+ */
+export function conductorColor(library: Library, ref: string | undefined, index: number, fallback: string): string {
+  const resolved = ref ? resolveSpec(library, ref) : undefined;
+  if (resolved?.kind === "wire") return resolved.spec.color || fallback;
+  if (resolved?.kind === "cable") return resolved.spec.conductor_colors?.[index] ?? fallback;
+  return fallback;
+}
+
 /** The name a canvas shows for a connector type: its short name, or its id when the entry has none or is missing. */
 export function connectorShortName(library: Library, ref: string): string {
   const entry = resolveRef(library, ref, "connectors");

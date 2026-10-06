@@ -57,15 +57,21 @@ export const WireSpecSchema = z.object({
   part_number: z.string().optional(),
 });
 
-export const CableSpecSchema = z.object({
-  id: slug,
-  name: z.string(),
-  conductors: z.number().int().positive(),
-  awg: z.number(),
-  od_mm: z.number().nonnegative(),
-  shielded: z.boolean(),
-  part_number: z.string().optional(),
-});
+export const CableSpecSchema = z
+  .object({
+    id: slug,
+    name: z.string(),
+    conductors: z.number().int().positive(),
+    awg: z.number(),
+    od_mm: z.number().nonnegative(),
+    shielded: z.boolean(),
+    part_number: z.string().optional(),
+    /** One colour per conductor inside the jacket, in order. Unset draws every conductor in the domain colour. */
+    conductor_colors: z.array(z.string()).optional(),
+  })
+  .refine((c) => c.conductor_colors === undefined || c.conductor_colors.length === c.conductors, {
+    message: "conductor_colors lists one colour per conductor",
+  });
 
 export const SheathSpecSchema = z.object({
   id: slug,
@@ -168,12 +174,18 @@ export type LibraryEntry = {
 
 // Project --------------------------------------------------------------------
 
+/**
+ * What a net carries by default: one spec for every conductor plus a count,
+ * or a list with one spec per conductor. With `conductor_specs` set the
+ * count is the list's length and `conductors` is left out.
+ */
 export const DomainSchema = z.object({
   id: slug,
   name: z.string(),
   color: z.string(),
   spec: specRef.optional(),
-  conductors: z.number().int().positive(),
+  conductors: z.number().int().positive().optional(),
+  conductor_specs: z.array(specRef).optional(),
 });
 
 export const LayerSchema = z.object({
@@ -210,8 +222,10 @@ export const NetSchema = z.object({
   id: projectId("net"),
   name: z.string().optional(),
   connectors: z.array(connectorAddress),
+  /** Overrides of the domain default: one spec for every conductor and a count, or one spec per conductor. */
   spec: specRef.optional(),
   conductors: z.number().int().positive().optional(),
+  conductor_specs: z.array(specRef).optional(),
   /** The name of the bus this net is on, anchored here. At most one member net of a bus carries it. */
   bus: z.string().optional(),
 });

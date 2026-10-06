@@ -50,9 +50,13 @@ const connectors: LibraryEntry["connectors"][] = [
 
 const wires: LibraryEntry["wires"][] = [
   { id: "awg8-red", name: "8 AWG silicone, red", awg: 8, od_mm: 6.5, ampacity_a: 40, color: "red" },
+  { id: "awg8-black", name: "8 AWG silicone, black", awg: 8, od_mm: 6.5, ampacity_a: 40, color: "black" },
   { id: "awg12-red", name: "12 AWG silicone, red", awg: 12, od_mm: 3.7, ampacity_a: 20, color: "red" },
   { id: "awg12-black", name: "12 AWG silicone, black", awg: 12, od_mm: 3.7, ampacity_a: 20, color: "black" },
+  { id: "awg14-red", name: "14 AWG silicone, red", awg: 14, od_mm: 3.3, ampacity_a: 15, color: "red" },
   { id: "awg14-black", name: "14 AWG silicone, black", awg: 14, od_mm: 3.3, ampacity_a: 15, color: "black" },
+  { id: "awg14-yellow", name: "14 AWG silicone, yellow", awg: 14, od_mm: 3.3, ampacity_a: 15, color: "yellow" },
+  { id: "awg14-blue", name: "14 AWG silicone, blue", awg: 14, od_mm: 3.3, ampacity_a: 15, color: "blue" },
   { id: "awg18-red", name: "18 AWG PVC, red", awg: 18, od_mm: 2.1, ampacity_a: 7, color: "red" },
   { id: "awg18-black", name: "18 AWG PVC, black", awg: 18, od_mm: 2.1, ampacity_a: 7, color: "black" },
   { id: "awg22-white", name: "22 AWG PVC, white", awg: 22, od_mm: 1.6, ampacity_a: 3, color: "white" },
@@ -62,10 +66,11 @@ const wires: LibraryEntry["wires"][] = [
 ];
 
 const cables: LibraryEntry["cables"][] = [
-  { id: "can-twisted-pair-22awg", name: "CAN twisted pair, 22 AWG, shielded", conductors: 2, awg: 22, od_mm: 4.5, shielded: true },
-  { id: "cat6-utp-24awg", name: "Cat6 UTP, 24 AWG", conductors: 8, awg: 24, od_mm: 6, shielded: false },
-  { id: "shielded-4c-24awg", name: "4-core shielded, 24 AWG", conductors: 4, awg: 24, od_mm: 4.8, shielded: true },
-  { id: "shielded-6c-24awg", name: "6-core shielded, 24 AWG", conductors: 6, awg: 24, od_mm: 5.5, shielded: true },
+  { id: "can-twisted-pair-22awg", name: "CAN twisted pair, 22 AWG, shielded", conductors: 2, awg: 22, od_mm: 4.5, shielded: true, conductor_colors: ["yellow", "green"] },
+  // T568B order. The striped pairs are named by their base colour, which is what the canvas can draw.
+  { id: "cat6-utp-24awg", name: "Cat6 UTP, 24 AWG", conductors: 8, awg: 24, od_mm: 6, shielded: false, conductor_colors: ["orange", "orange", "green", "blue", "blue", "green", "brown", "brown"] },
+  { id: "shielded-4c-24awg", name: "4-core shielded, 24 AWG", conductors: 4, awg: 24, od_mm: 4.8, shielded: true, conductor_colors: ["red", "black", "white", "green"] },
+  { id: "shielded-6c-24awg", name: "6-core shielded, 24 AWG", conductors: 6, awg: 24, od_mm: 5.5, shielded: true, conductor_colors: ["red", "black", "white", "green", "blue", "yellow"] },
   { id: "usb-a-c-2m", name: "USB 3.0 A to C cable core", conductors: 9, awg: 28, od_mm: 4.5, shielded: true },
   { id: "hdmi-2m", name: "HDMI 2.0 cable core", conductors: 19, awg: 30, od_mm: 7, shielded: true },
   { id: "fakra-coax", name: "GMSL2 coax, RG174 class", conductors: 1, awg: 26, od_mm: 2.8, shielded: true },

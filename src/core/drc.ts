@@ -1,5 +1,5 @@
 import type { Topology } from "./schema";
-import { allNets, componentConnectors, netSpec, resolveConnector, type Project } from "./project";
+import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
 import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
 
@@ -30,6 +30,7 @@ export type CheckId =
   | "harness-two-anchors"
   | "bridge-joins-domains"
   | "bus-two-names"
+  | "conductor-count"
   | "dangling-reference"
   | "connector-idle"
   | "component-idle"
@@ -52,6 +53,7 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "harness-two-anchors": "error",
   "bridge-joins-domains": "error",
   "bus-two-names": "error",
+  "conductor-count": "error",
   "dangling-reference": "error",
   "connector-idle": "warning",
   "component-idle": "warning",
@@ -106,7 +108,12 @@ function checkProject(project: Project, add: Add): void {
   const domainIds = new Set(project.file.domains.map((d) => d.id));
 
   for (const d of project.file.domains) {
-    if (d.spec && !resolveRef(project.library, d.spec)) add("dangling-reference", d.id, "connectivity", `domain ${d.name} references ${d.spec}, which has no library file`);
+    for (const ref of new Set([d.spec, ...(d.conductor_specs ?? [])])) {
+      if (ref && !resolveRef(project.library, ref)) add("dangling-reference", d.id, "connectivity", `domain ${d.name} references ${ref}, which has no library file`);
+    }
+    if (d.conductor_specs && d.conductors !== undefined && d.conductors !== d.conductor_specs.length) {
+      add("conductor-count", d.id, "connectivity", `domain ${d.name} says ${d.conductors} conductors but lists ${d.conductor_specs.length} specs`);
+    }
   }
   for (const l of project.file.layers) {
     for (const d of l.domains) {
@@ -141,9 +148,14 @@ function checkProject(project: Project, add: Add): void {
         add("dangling-reference", net.id, "connectivity", `net ${label(net)} attaches to ${address}: ${why}`);
       }
     }
-    const spec = netSpec(project, net, domain);
-    if (!spec.ref) add("net-no-spec", net.id, "connectivity", `net ${label(net)} has no spec: domain ${domain} names none and the net does not override`);
-    else if (!resolveRef(project.library, spec.ref)) add("dangling-reference", net.id, "connectivity", `net ${label(net)} references ${spec.ref}, which has no library file`);
+    const conductors = netConductors(project, net, domain);
+    if (conductors.every((c) => c === undefined)) add("net-no-spec", net.id, "connectivity", `net ${label(net)} has no spec: domain ${domain} names none and the net does not override`);
+    for (const ref of new Set(conductors)) {
+      if (ref && !resolveRef(project.library, ref)) add("dangling-reference", net.id, "connectivity", `net ${label(net)} references ${ref}, which has no library file`);
+    }
+    if (net.conductor_specs && net.conductors !== undefined && net.conductors !== net.conductor_specs.length) {
+      add("conductor-count", net.id, "connectivity", `net ${label(net)} says ${net.conductors} conductors but lists ${net.conductor_specs.length} specs`);
+    }
   }
 
   // A bus stays within one domain and carries at most one name.

@@ -124,16 +124,17 @@ const clusters = clusterSpecs.map((c, i) => ({
 
 const at = (component: string, designator: string) => `${component}/${designator}`;
 
-function net(domain: string, connectors: string[], name: string | undefined, override?: { spec?: string; conductors?: number }): string {
+function net(domain: string, connectors: string[], name: string | undefined, override?: { spec?: string; conductors?: number; specs?: string[] }): string {
   const r = ops.createNet(p, domain, connectors, name);
   p = r.project;
-  if (override) p = ops.setNetSpec(p, r.id, override.spec, override.conductors);
+  if (override?.specs) p = ops.setNetConductors(p, r.id, override.specs);
+  else if (override) p = ops.setNetSpec(p, r.id, override.spec, override.conductors);
   return r.id;
 }
 
 // 48 V: battery feed, charge, and one two-connector net per load off the bus bar.
 // The rail's nets carry no name: the switch and the bus bar bridge them into one bus, which labels each from its ends.
-const heavy = { spec: "wires/awg8-red", conductors: 2 };
+const heavy = { specs: ["wires/awg8-red", "wires/awg8-black"] };
 net("48v", [at(battery, "MAIN"), at(inlineSwitch, "IN")], undefined, heavy);
 net("48v", [at(inlineSwitch, "OUT"), at(busBar, "BAT")], undefined, heavy);
 net("48v", [at(battery, "CHG"), at(chargePort, "J1")], "Charge");
@@ -199,8 +200,8 @@ for (const d of drive) {
   net("spi", [at(d.racer, "ENC"), at(d.enc, "J1")], `SPI encoder ${d.tag}`);
 }
 
-// Lift and slide axes: brushed motors take two conductors, encoders are ABZ
-const brushed = { conductors: 2 };
+// Lift and slide axes: a brushed motor takes a red and black pair rather than three phases, encoders are ABZ
+const brushed = { specs: ["wires/awg14-red", "wires/awg14-black"] };
 type Axis = { rc: string; channel: "1" | "2"; motor: string; enc: string; name: string };
 const axes: Axis[] = [
   { rc: rcL, channel: "1", motor: liftL, enc: abzLLift, name: "L lift" },

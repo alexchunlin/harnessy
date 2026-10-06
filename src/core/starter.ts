@@ -2,14 +2,18 @@ import type { Domain, Layer } from "./schema";
 import { emptyProject, type Project } from "./project";
 import type { Library } from "./library";
 
-/** The RAMMP starter domains. Colours follow the Gen 1.5 diagram legend where it has one. */
+/**
+ * The RAMMP starter domains. Colours follow the Gen 1.5 diagram legend where
+ * it has one. A power pair is red and black and the motor phases are three
+ * colours, so a net on those domains is buildable with no override.
+ */
 export const STARTER_DOMAINS: Domain[] = [
-  { id: "48v", name: "48 V", color: "#d62728", spec: "wires/awg12-red", conductors: 2 },
-  { id: "24v", name: "24 V", color: "#ff7f0e", spec: "wires/awg18-red", conductors: 2 },
+  { id: "48v", name: "48 V", color: "#d62728", conductor_specs: ["wires/awg12-red", "wires/awg12-black"] },
+  { id: "24v", name: "24 V", color: "#ff7f0e", conductor_specs: ["wires/awg18-red", "wires/awg18-black"] },
   { id: "can", name: "CAN", color: "#2ca02c", spec: "cables/can-twisted-pair-22awg", conductors: 1 },
   { id: "ethernet", name: "Ethernet", color: "#1f77b4", spec: "cables/cat6-utp-24awg", conductors: 1 },
   { id: "analog", name: "Analog", color: "#9467bd", spec: "wires/awg22-white", conductors: 2 },
-  { id: "motor-phase", name: "Motor phase", color: "#8c564b", spec: "wires/awg14-black", conductors: 3 },
+  { id: "motor-phase", name: "Motor phase", color: "#8c564b", conductor_specs: ["wires/awg14-black", "wires/awg14-yellow", "wires/awg14-blue"] },
   { id: "encoder-abz", name: "Encoder ABZ", color: "#e377c2", spec: "cables/shielded-6c-24awg", conductors: 1 },
   { id: "spi", name: "SPI", color: "#7f7f7f", spec: "wires/awg26-yellow", conductors: 4 },
   { id: "pwm", name: "PWM", color: "#bcbd22", spec: "wires/awg24-blue", conductors: 3 },

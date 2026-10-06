@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
 import { BomBlocked, buildBom, cutListCsv, summaryCsv } from "../../src/core/bom";
+import { runChecks } from "../../src/core/drc";
 import { twoNetProject } from "./fixture";
 
 /** Route the sensor net too so the topology has no errors. */
@@ -26,8 +27,13 @@ describe("BOM", () => {
     const bom = buildBom(p, p.topologies.get(ids.top)!);
     const power = bom.cutList.filter((r) => r.harness === "Power harness");
     expect(power.map((r) => r.row)).toEqual(["housing", "housing", "contacts", "contacts", "wire", "wire"]);
+    // The 48 V domain names a red and black pair, so the two rows differ in spec and colour.
     const wires = power.filter((r) => r.row === "wire");
-    expect(wires.every((r) => r.length_mm === 300 && r.color === "red" && r.ref === "wires/awg12-red")).toBe(true);
+    expect(wires.every((r) => r.length_mm === 300)).toBe(true);
+    expect(wires.map((r) => [r.ref, r.color, r.part_number])).toEqual([
+      ["wires/awg12-red", "red", "W12R"],
+      ["wires/awg12-black", "black", "W12B"],
+    ]);
     expect(wires.map((r) => r.notes)).toEqual(["conductor 1 of 2", "conductor 2 of 2"]);
     expect(wires[0].from).toBe("Battery OUT");
     expect(wires[0].to).toBe("MIB P1");
@@ -76,9 +82,51 @@ describe("BOM", () => {
     expect(sensor.find((r) => r.row === "tie")?.notes).toBe("75 mm from Sensor J1");
     const ties = bom.summary.find((r) => r.harness === "Sensor harness" && r.row === "tie");
     expect(ties?.qty).toBe(2);
-    const wire = bom.summary.find((r) => r.harness === "Power harness" && r.row === "wire");
-    expect(wire?.qty).toBe(2);
-    expect(wire?.length_mm).toBe(600);
+    // The summary groups by reference, so the red and black conductors of the power pair are two rows.
+    const wire = bom.summary.filter((r) => r.harness === "Power harness" && r.row === "wire");
+    expect(wire.map((r) => [r.ref, r.qty, r.length_mm])).toEqual([
+      ["wires/awg12-black", 1, 300],
+      ["wires/awg12-red", 1, 300],
+    ]);
+  });
+
+  it("a net with one spec and a count emits that spec on every row, as before", () => {
+    let { p, ids } = complete();
+    p = ops.setNetSpec(p, ids.power, "wires/awg12-red", 2);
+    const bom = buildBom(p, p.topologies.get(ids.top)!);
+    const wires = bom.cutList.filter((r) => r.row === "wire" && r.harness === "Power harness");
+    expect(wires.map((r) => [r.ref, r.color, r.notes])).toEqual([
+      ["wires/awg12-red", "red", "conductor 1 of 2"],
+      ["wires/awg12-red", "red", "conductor 2 of 2"],
+    ]);
+    const summary = bom.summary.filter((r) => r.harness === "Power harness" && r.row === "wire");
+    expect(summary.map((r) => [r.ref, r.qty, r.length_mm])).toEqual([["wires/awg12-red", 2, 600]]);
+  });
+
+  it("a net with its own conductor list emits one row per entry, each from its own spec", () => {
+    let { p, ids } = complete();
+    p = ops.setNetConductors(p, ids.power, ["wires/awg14-black", "wires/awg12-red", "wires/awg14-black"]);
+    const bom = buildBom(p, p.topologies.get(ids.top)!);
+    const wires = bom.cutList.filter((r) => r.row === "wire" && r.harness === "Power harness");
+    expect(wires.map((r) => [r.ref, r.color, r.description, r.notes])).toEqual([
+      ["wires/awg14-black", "black", "14 AWG black", "conductor 1 of 3"],
+      ["wires/awg12-red", "red", "12 AWG red", "conductor 2 of 3"],
+      ["wires/awg14-black", "black", "14 AWG black", "conductor 3 of 3"],
+    ]);
+  });
+
+  it("a conductor list whose length disagrees with the count is a design rule error, not a crash", () => {
+    let { p, ids } = complete();
+    p = ops.setNetConductors(p, ids.power, ["wires/awg12-red", "wires/awg12-black"]);
+    // Typed into the file by hand: the operation above never writes both.
+    const nets = new Map(p.nets);
+    nets.set("48v", nets.get("48v")!.map((n) => (n.id === ids.power ? { ...n, conductors: 3 } : n)));
+    p = { ...p, nets };
+    expect(() => buildBom(p, p.topologies.get(ids.top)!)).toThrow(BomBlocked);
+    const f = runChecks(p, p.topologies.get(ids.top)).filter((x) => x.check === "conductor-count");
+    expect(f).toHaveLength(1);
+    expect(f[0].target).toBe(ids.power);
+    expect(f[0].message).toBe("net battery power says 3 conductors but lists 2 specs");
   });
 
   it("emits splice rows per net joined with the conductor count", () => {

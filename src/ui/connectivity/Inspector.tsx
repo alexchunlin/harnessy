@@ -1,7 +1,8 @@
-import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setBusName, setInlineConnectors, setNetSpec, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setInlineConnectors, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
 import { allNets, netLabeller } from "../../core";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges } from "../../core";
+import { ConductorList } from "../shell/ConductorList";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
 const unhover = () => hover(NO_HOVER);
@@ -258,7 +259,8 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
   const { net, domain } = findNet(project, id)!;
   const d = project.file.domains.find((x) => x.id === domain);
   const bus = busOf(buses(project), id);
-  const specs = [...project.library.wires.keys()].map((k) => `wires/${k}`).concat([...project.library.cables.keys()].map((k) => `cables/${k}`));
+  const conductors = netConductors(project, net, domain);
+  const overridden = net.conductor_specs !== undefined || net.spec !== undefined || net.conductors !== undefined;
   const free = allConnectorAddresses(project).filter((a) => !net.connectors.includes(a));
   const hasBends = Object.keys(project.connectivityCanvas.bends).some((k) => k === id || k.startsWith(`${id}:`));
   return (
@@ -280,21 +282,13 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
         </select>
       </div>
       <div className="field">
-        <label>Spec override</label>
-        <div className="row">
-          <select value={net.spec ?? ""} onChange={(e) => edit((p) => setNetSpec(p, id, e.target.value || undefined, net.conductors))}>
-            <option value="">domain default{d?.spec ? ` (${d.spec})` : " (none)"}</option>
-            {specs.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="row">
-          <label>Conductors</label>
-          <input type="number" min={1} value={net.conductors ?? ""} placeholder={String(d?.conductors ?? 1)} onChange={(e) => edit((p) => setNetSpec(p, id, net.spec, e.target.value ? Math.max(1, Number(e.target.value)) : undefined))} />
-        </div>
+        <label>Conductors {overridden ? <span className="muted">(overrides the domain)</span> : <span className="muted">(domain default)</span>}</label>
+        <ConductorList project={project} specs={conductors} domainColor={d?.color ?? "#888"} label="Net" onChange={(list) => edit((p) => setNetConductors(p, id, list))} />
+        {overridden && (
+          <button onClick={() => edit((p) => setNetConductors(p, id, undefined))} title="Forget the override; the net takes what its domain names">
+            Use domain default
+          </button>
+        )}
       </div>
       <h3>Connectors</h3>
       <ul className="list">
