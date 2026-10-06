@@ -1,6 +1,7 @@
-import { addConnectorToNet, allConnectorAddresses, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setInlineConnectors, setNetSpec, SIDES, updateGroup, updateNote, type Project, type Side } from "../../core";
-import { allNets } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, renameNet, resetBends, setBusName, setInlineConnectors, setNetSpec, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
+import { allNets, netLabeller } from "../../core";
 import { NO_HOVER, useDoc, type Hover } from "../store";
+import { componentBridges } from "../../core";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
 const unhover = () => hover(NO_HOVER);
@@ -19,6 +20,9 @@ export function Inspector({ project, selected, edit }: { project: Project; selec
     );
   }
   if (selected.length > 1) {
+    // Every member of one bus selected at once: that is the bus, picked from an inspector.
+    const bus = busOf(buses(project), selected[0]);
+    if (bus && bus.nets.length === selected.length && selected.every((id) => bus.nets.some((n) => n.id === id))) return <BusInspector project={project} bus={bus} edit={edit} />;
     return (
       <div className="pane pane-right">
         <h3>Inspector</h3>
@@ -56,6 +60,7 @@ export function Inspector({ project, selected, edit }: { project: Project; selec
   const note = project.connectivityCanvas.notes.find((n) => n.id === id);
   if (note) {
     const nets = allNets(project);
+    const label = netLabeller(project);
     return (
       <div className="pane pane-right">
         <h3>Note</h3>
@@ -83,7 +88,7 @@ export function Inspector({ project, selected, edit }: { project: Project; selec
             <optgroup label="Nets">
               {nets.map(({ net }) => (
                 <option key={net.id} value={`n:${net.id}`}>
-                  {net.name ?? net.id}
+                  {label(net)}
                 </option>
               ))}
             </optgroup>
@@ -106,6 +111,10 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
   const nets = allNets(project);
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const connectorTypes = [...project.library.connectors.keys()].sort();
+  const allBuses = buses(project);
+  const label = (net: { id: string } & Parameters<typeof netLabel>[1]) => netLabel(project, net, busOf(allBuses, net.id)?.label);
+  const through = busesThrough(allBuses, id);
+  const bridges = componentBridges(project, c);
   return (
     <div className="pane pane-right">
       <h3>Component</h3>
@@ -162,7 +171,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
                 {attached.length === 0 && <span className="muted">no nets</span>}
                 {attached.map(({ net, domain }) => (
                   <span key={net.id} className="chip on" style={{ borderColor: domains.get(domain)?.color }} onMouseEnter={() => hover({ nets: [net.id] })} onMouseLeave={() => hover({ nets: attached.map((n) => n.net.id) })}>
-                    {net.name ?? net.id}
+                    {label(net)}
                   </span>
                 ))}
               </div>
@@ -170,6 +179,21 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
           );
         })}
       </ul>
+      {bridges.length > 0 && (
+        <>
+          <h3>Bridges</h3>
+          <p className="muted">Connectors the device joins inside itself. Edit them in the definition.</p>
+          <ul className="list">
+            {bridges.map((b, i) => (
+              <li key={i} style={{ cursor: "default" }}>
+                <code>{b.join(", ")}</code>
+              </li>
+            ))}
+          </ul>
+          <h3>Buses through here</h3>
+          <BusList project={project} buses={through} />
+        </>
+      )}
       {c.connectors && (
         <button
           onClick={() => {
@@ -233,6 +257,7 @@ function PinList({ project, id, edit }: { project: Project; id: string; edit: Ed
 function NetInspector({ project, id, edit }: { project: Project; id: string; edit: Edit }) {
   const { net, domain } = findNet(project, id)!;
   const d = project.file.domains.find((x) => x.id === domain);
+  const bus = busOf(buses(project), id);
   const specs = [...project.library.wires.keys()].map((k) => `wires/${k}`).concat([...project.library.cables.keys()].map((k) => `cables/${k}`));
   const free = allConnectorAddresses(project).filter((a) => !net.connectors.includes(a));
   const hasBends = Object.keys(project.connectivityCanvas.bends).some((k) => k === id || k.startsWith(`${id}:`));
@@ -241,8 +266,9 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
       <h3>Net</h3>
       <div className="field">
         <label>Name</label>
-        <input value={net.name ?? ""} placeholder={net.id} onChange={(e) => edit((p) => renameNet(p, id, e.target.value))} />
+        <input value={net.name ?? ""} placeholder={netLabel(project, net, bus?.label)} onChange={(e) => edit((p) => renameNet(p, id, e.target.value))} />
       </div>
+      {bus && <BusFields project={project} bus={bus} netId={id} edit={edit} />}
       <div className="field">
         <label>Domain</label>
         <select value={domain} onChange={(e) => edit((p) => moveNetToDomain(p, id, e.target.value))}>
@@ -296,5 +322,61 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
         <button onClick={() => edit((p) => removeNet(p, id))}>Delete net</button>
       </div>
     </div>
+  );
+}
+
+/** The bus a net is on: its label, its name (typed once, kept on one member), and its member nets. */
+function BusFields({ project, bus, netId, edit }: { project: Project; bus: Bus; netId: string; edit: Edit }) {
+  const select = useDoc((s) => s.select);
+  const members = bus.nets.map((n) => n.id);
+  return (
+    <div className="field bus-field">
+      <label>Bus</label>
+      <button className="bus-label" title="Select every net on this bus; the topology view lights all their routes" onClick={() => select("connectivity", members)} onMouseEnter={() => hover({ nets: members })} onMouseLeave={unhover}>
+        {bus.label}
+      </button>
+      <input value={bus.name ?? ""} placeholder={bus.label} aria-label="Bus name" onChange={(e) => edit((p) => setBusName(p, netId, e.target.value))} />
+      <ul className="list bus-members">
+        {bus.nets.map((n) => (
+          <li key={n.id} className={n.id === netId ? "selected" : ""} onClick={() => select("connectivity", [n.id])} onMouseEnter={() => hover({ nets: [n.id] })} onMouseLeave={unhover}>
+            {netLabel(project, n)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BusInspector({ project, bus, edit }: { project: Project; bus: Bus; edit: Edit }) {
+  const anchor = bus.nets.find((n) => n.bus !== undefined) ?? bus.nets[0];
+  return (
+    <div className="pane pane-right">
+      <h3>Bus</h3>
+      <p className="muted">
+        {bus.nets.length} nets joined through {bus.bridges.map((b) => project.components.get(b.component)?.name ?? b.component).filter((v, i, a) => a.indexOf(v) === i).join(", ")}. Each net still routes and is cut on its own.
+      </p>
+      <BusFields project={project} bus={bus} netId={anchor.id} edit={edit} />
+    </div>
+  );
+}
+
+/** Buses passing through a component, each a link that selects its nets. */
+function BusList({ project, buses: list }: { project: Project; buses: Bus[] }) {
+  const select = useDoc((s) => s.select);
+  const domains = new Map(project.file.domains.map((d) => [d.id, d]));
+  if (list.length === 0) return <p className="muted">None: no bridge here joins two nets.</p>;
+  return (
+    <ul className="list bus-list">
+      {list.map((b) => {
+        const members = b.nets.map((n) => n.id);
+        return (
+          <li key={b.id} className="row" onClick={() => select("connectivity", members)} onMouseEnter={() => hover({ nets: members })} onMouseLeave={unhover} title="Select every net on this bus">
+            <span className="dot" style={{ background: domains.get(b.domain)?.color, width: 8, height: 8, borderRadius: 4, display: "inline-block", flex: "none" }} />
+            <span style={{ flex: 1 }}>{b.label}</span>
+            <span className="muted">{b.nets.length} nets</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

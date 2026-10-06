@@ -1,4 +1,7 @@
-import { emptyLibrary, type Library } from "../../src/core/library";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { emptyLibrary, loadLibrary, type Files, type Library } from "../../src/core/library";
+import { loadProject } from "../../src/core/project";
 import { sequentialIdSource, setIdSource } from "../../src/core/ids";
 import { starterProject } from "../../src/core/starter";
 import * as ops from "../../src/core/ops";
@@ -71,4 +74,23 @@ export function twoNetProject() {
 
 export function findings(project: Project, topologyId: string) {
   return import("../../src/core/drc").then((m) => m.runChecks(project, project.topologies.get(topologyId)));
+}
+
+function walk(dir: string, base: string, into: Files): void {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, base, into);
+    else if (name.endsWith(".json")) into.set(relative(base, full), readFileSync(full, "utf8"));
+  }
+}
+
+/** The RAMMP example as checked in, against the repo library. */
+export function loadExample(): Project {
+  const libraryFiles: Files = new Map();
+  walk("library", ".", libraryFiles);
+  const files: Files = new Map();
+  walk("examples/rammp-gen1.5", "examples/rammp-gen1.5", files);
+  const { project, problems } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  if (problems.length) throw new Error(problems.map((p) => `${p.path}: ${p.message}`).join("\n"));
+  return project;
 }

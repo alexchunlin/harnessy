@@ -6,6 +6,7 @@ import {
   connectorLabel,
   degree,
   findNet,
+  netLabeller,
   netsThrough,
   removeEndpoint,
   removeSegment,
@@ -86,6 +87,7 @@ function Overview({ project, topology, onSelect }: Props) {
 }
 
 function EndpointInspector({ project, topology, routes, id, edit }: Props & { id: string }) {
+  const label = netLabeller(project);
   const e = topology.endpoints.find((x) => x.id === id)!;
   const graph = buildGraph(topology);
   const d = degree(graph, id);
@@ -136,13 +138,13 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
                   checked={e.nets.includes(r.net.id)}
                   onChange={(ev) => edit((p) => setSpliceNets(p, topology.id, id, ev.target.checked ? [...e.nets, r.net.id] : e.nets.filter((n) => n !== r.net.id)))}
                 />
-                {r.net.name ?? r.net.id} <span className="muted">{r.domain}</span>
+                {label(r.net)} <span className="muted">{r.domain}</span>
               </label>
             ))}
             {e.nets.filter((n) => !through.some((r) => r.net.id === n)).map((n) => (
               <label key={n} className="row error">
                 <input type="checkbox" checked onChange={() => edit((p) => setSpliceNets(p, topology.id, id, e.nets.filter((x) => x !== n)))} />
-                {findNet(project, n)?.net.name ?? n} <span>(not routed through here)</span>
+                {(() => { const f = findNet(project, n); return f ? label(f.net) : n; })()} <span>(not routed through here)</span>
               </label>
             ))}
           </div>
@@ -165,6 +167,7 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
 }
 
 function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Props & { id: string }) {
+  const label = netLabeller(project);
   const s = topology.segments.find((x) => x.id === id)!;
   const graph = buildGraph(topology);
   const ends = s.ends.map((e) => graph.endpoints.get(e));
@@ -232,7 +235,7 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
           <li key={r.net.id} onClick={() => onSelect([r.net.id])}>
             <span>
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 4, background: domains.get(r.domain)?.color, marginRight: 4 }} />
-              {r.net.name ?? r.net.id}
+              {label(r.net)}
             </span>
             <span className="muted">{r.net.conductors ?? domains.get(r.domain)?.conductors ?? 1} cond.</span>
           </li>
@@ -403,7 +406,7 @@ function NetInspector({ project, routes, id, onSelect }: Props & { id: string })
       <h3>Net</h3>
       <div className="field">
         <label>Name</label>
-        <span>{found.net.name ?? id}</span>
+        <span>{netLabeller(project)(found.net)}</span>
       </div>
       <div className="field">
         <label>Domain</label>

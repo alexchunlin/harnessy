@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, harnesses, netsOnSegments, ratsnestPairs, resolveConnector, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, harnesses, netLabeller, netsOnSegments, ratsnestPairs, resolveConnector, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -73,6 +73,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const onSegments = netsOnSegments(routes);
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const hs = harnesses(project, graph);
+  const label = netLabeller(project);
 
   const selectedRoutes = routes.filter((r) => selected.has(r.net.id) || options.highlightNets.has(r.net.id));
   const routeSegments = new Map<string, string>();
@@ -137,7 +138,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const edges: TopoEdge[] = [];
   for (const s of topology.segments) {
     if (!graph.endpoints.has(s.ends[0]) || !graph.endpoints.has(s.ends[1])) continue;
-    const nets = (onSegments.get(s.id) ?? []).map((r) => ({ id: r.net.id, label: r.net.name ?? r.net.id, domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: r.net.conductors ?? domains.get(r.domain)?.conductors ?? 1 }));
+    const nets = (onSegments.get(s.id) ?? []).map((r) => ({ id: r.net.id, label: label(r.net), domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: r.net.conductors ?? domains.get(r.domain)?.conductors ?? 1 }));
     const assembly = s.assembly ? resolveRef(project.library, s.assembly, "assemblies") : undefined;
     const routeColor = routeSegments.get(s.id);
     const outOfLayer = segmentOut.has(s.id);
@@ -156,9 +157,9 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     for (const r of routes) {
       if (!inLayer(r)) continue;
       const color = domains.get(r.domain)?.color ?? "#888";
-      const label = r.net.name ?? r.net.id;
       ratsnestPairs(r, positions).forEach(([from, to], i) => {
-        const title = `${label}: ${endpointName(project, graph.endpoints.get(from))} to ${endpointName(project, graph.endpoints.get(to))}`;
+        // An unnamed net's label already names its ends.
+        const title = r.net.name ? `${r.net.name}: ${endpointName(project, graph.endpoints.get(from))} to ${endpointName(project, graph.endpoints.get(to))}` : label(r.net);
         edges.push({
           id: `ratsnest:${r.net.id}:${i}`, type: "ratsnest", source: from, target: to, sourceHandle: "h", targetHandle: "h", className: "ratsnest",
           data: { netId: r.net.id, color, title }, selectable: false, focusable: false, deletable: false, interactionWidth: 8, zIndex: 0,

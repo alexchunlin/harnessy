@@ -2,17 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { Handle, NodeResizer, Position, useReactFlow, useStore, useUpdateNodeInternals, type NodeProps, type Node } from "@xyflow/react";
 import { movePin, type Side } from "../../core";
 import { useDoc } from "../store";
-import { HANDLE_ROW, NODE_HEADER, PIN_BAND, pinSlotAt, slotMarker, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
+import { bridgePath, HANDLE_ROW, NODE_HEADER, PIN_BAND, pinSlotAt, slotMarker, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
 
 export function ComponentNode({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<Node<ComponentNodeData>>) {
-  const { component, connectors, types, geometry, dimmed, netsAt, litPins } = data;
+  const { component, connectors, types, geometry, dimmed, netsAt, litPins, busNets, bridges } = data;
   // Render count, exposed so a browser test can prove a drag repaints only the dragged box.
   const renders = useRef(0);
   renders.current += 1;
   const hovered = useDoc((s) => s.hover.component === component.id);
-  // Pins lit by the hovered nets, as "designator=colour" pairs so the selector only changes when the lit set does.
-  const hoverPins = useDoc((s) => (s.hover.nets.length === 0 ? "" : connectors.flatMap((c) => (netsAt[c.designator] ?? []).filter((n) => s.hover.nets.includes(n.net.id)).map((n) => `${c.designator}=${n.domain.color}`)).join(",")));
+  // Pins lit by the hovered nets, or by a net on the same bus, as "designator=colour" pairs so the selector only changes when the lit set does.
+  const touched = (hovered: string[], netId: string) => hovered.includes(netId) || (busNets[netId]?.some((m) => hovered.includes(m)) ?? false);
+  const hoverPins = useDoc((s) => (s.hover.nets.length === 0 ? "" : connectors.flatMap((c) => (netsAt[c.designator] ?? []).filter((n) => touched(s.hover.nets, n.net.id)).map((n) => `${c.designator}=${n.domain.color}`)).join(",")));
   const lit = new Map([...Object.entries(litPins), ...(hoverPins ? hoverPins.split(",").map((pair) => pair.split("=") as [string, string]) : [])]);
+  // Bridges whose bus the hover touches, by index.
+  const litBridges = useDoc((s) => (s.hover.nets.length === 0 ? "" : bridges.map((b, i) => (b.busNets.some((m) => s.hover.nets.includes(m)) ? i : -1)).filter((i) => i >= 0).join(",")));
+  const litBridgeSet = new Set(litBridges ? litBridges.split(",").map(Number) : []);
 
   // Handles move when pins are re-seated; React Flow must re-measure them for the edges to follow.
   const updateNodeInternals = useUpdateNodeInternals();
@@ -68,6 +72,15 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
   const byDesignator = new Map(connectors.map((c) => [c.designator, c]));
   return (
     <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${labelsHidden ? " labels-hidden" : ""}${typesHidden ? " types-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
+      {bridges.length > 0 && (
+        <svg className="cmp-bridges" width={geometry.width} height={geometry.height} aria-hidden>
+          {bridges.map((b, i) => (
+            <path key={i} className={`cmp-bridge${litBridgeSet.has(i) && !dimmed ? " lit" : ""}`} d={bridgePath(geometry, b.designators)} style={b.color ? ({ "--glow": b.color } as React.CSSProperties) : undefined}>
+              <title>{`${component.name} joins ${b.designators.join(", ")} inside itself`}</title>
+            </path>
+          ))}
+        </svg>
+      )}
       <div className="cmp-title" style={{ top: geometry.header, height: NODE_HEADER }}>
         <span>{component.name}</span>
         {component.definition === undefined && <span className="cmp-oneoff" title="One-off component with inline connectors">one-off</span>}
@@ -76,7 +89,7 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
         const c = byDesignator.get(designator);
         if (!c) return null;
         const nets = netsAt[designator] ?? [];
-        const title = nets.length ? `${designator}: ${nets.map((n) => `${n.net.name ?? n.net.id} (${n.domain.name})`).join(", ")}` : `${designator}: no nets`;
+        const title = nets.length ? `${designator}: ${nets.map((n) => `${n.label} (${n.domain.name})`).join(", ")}` : `${designator}: no nets`;
         const glow = lit.get(designator);
         const vertical = spot.side === "top" || spot.side === "bottom";
         const style: React.CSSProperties = vertical
@@ -114,7 +127,7 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
 const POSITION: Record<Side, Position> = { left: Position.Left, right: Position.Right, top: Position.Top, bottom: Position.Bottom };
 
 export function HubNode({ data, selected }: NodeProps<Node<HubNodeData>>) {
-  const hovered = useDoc((s) => s.hover.nets.includes(data.net.id));
+  const hovered = useDoc((s) => s.hover.nets.includes(data.net.id) || data.busNets.some((m) => s.hover.nets.includes(m)));
   return (
     <div
       className={`hub-node${selected ? " selected" : ""}${(hovered || data.lit) && !data.inactive ? " hovered" : ""}${data.inactive ? " inactive" : ""}`}

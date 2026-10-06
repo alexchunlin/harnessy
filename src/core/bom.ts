@@ -3,7 +3,7 @@ import { allNets, componentConnectors, connectorLabel, netSpec, type Project } f
 import { resolveRef, resolveSpec } from "./library";
 import { parseAddress } from "./refs";
 import { assemblyLengthOf, hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
-import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, routeOf, PURCHASED, segmentLength, type Graph } from "./derive";
+import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, netLabeller, routeOf, PURCHASED, segmentLength, type Graph } from "./derive";
 
 export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "from", "to", "net", "domain", "notes"] as const;
 export type CutListColumn = (typeof CUT_LIST_COLUMNS)[number];
@@ -49,6 +49,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
   const allHarnesses = harnesses(project, graph);
   const harnessOf = (id: string) => harnessLabelOf(allHarnesses, id);
   const name = (id: string) => endpointName(project, graph, id);
+  const label = netLabeller(project);
   const rows: CutListRow[] = [];
   const row = (r: Partial<CutListRow> & { row: RowKind; harness: string }) => rows.push({ ...emptyRow(), ...r });
 
@@ -58,7 +59,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
     const route = routeOf(graph, net, domain);
     const spec = netSpec(project, net, domain);
     const resolved = spec.ref ? resolveSpec(lib, spec.ref) : undefined;
-    const netLabel = net.name ?? net.id;
+    const netLabel = label(net);
     for (const c of net.connectors) {
       const e = graph.connectorEndpoint.get(c);
       if (e) contactsAt.set(e, (contactsAt.get(e) ?? 0) + spec.conductors);
@@ -127,7 +128,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
         const found = allNets(project).find((n) => n.net.id === netId);
         if (!found) continue;
         const s = netSpec(project, found.net, found.domain);
-        row({ harness: harnessOf(e.id), row: "splice", ref: e.spec, part_number: spec?.part_number, description: spec?.name ?? "splice", qty: s.conductors, from: name(e.id), to: name(e.id), net: found.net.name ?? netId, domain: found.domain });
+        row({ harness: harnessOf(e.id), row: "splice", ref: e.spec, part_number: spec?.part_number, description: spec?.name ?? "splice", qty: s.conductors, from: name(e.id), to: name(e.id), net: label(found.net), domain: found.domain });
       }
     }
   }

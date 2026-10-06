@@ -1,4 +1,4 @@
-import { allNets, connectorLabel, isRouted, unplacedConnectors, type Project, type Route } from "../../core";
+import { allNets, connectorLabel, isRouted, netLabeller, unplacedConnectors, type Project, type Route } from "../../core";
 
 export const TRAY_DRAG_TYPE = "application/x-harnessy-connector";
 
@@ -13,6 +13,7 @@ export function LeftPane({ project, topologyId, routes, selectedNet, onSelectNet
   }
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const nets = allNets(project);
+  const label = netLabeller(project);
   const routed = new Map(routes.map((r) => [r.net.id, isRouted(r)]));
   const routedCount = [...routed.values()].filter(Boolean).length;
   return (
@@ -54,7 +55,7 @@ export function LeftPane({ project, topologyId, routes, selectedNet, onSelectNet
             <li key={net.id} className={selectedNet === net.id ? "selected" : ""} onClick={() => onSelectNet(net.id)} title={`${domain}: ${net.connectors.map((a) => connectorLabel(project, a)).join(", ")}`}>
               <span className="dot" style={{ background: domains.get(domain)?.color }} />
               <span className={`mark${ok ? "" : " unrouted"}`}>{ok ? "ok" : "--"}</span>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{net.name ?? net.id}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label(net)}</span>
             </li>
           );
         })}

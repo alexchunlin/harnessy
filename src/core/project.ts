@@ -9,6 +9,7 @@ import {
   TopologySchema,
   LIBRARY_SCHEMAS,
   LIBRARY_FOLDERS,
+  type Bridges,
   type Component,
   type ConnectivityCanvas,
   type DefinitionConnector,
@@ -187,6 +188,13 @@ export function componentConnectors(project: Project, component: Component): Def
   return def?.connectors;
 }
 
+/** The bridges a component has, from its definition or inline. Empty when the definition is missing. */
+export function componentBridges(project: Project, component: Component): Bridges {
+  if (component.connectors) return component.bridges ?? [];
+  if (!component.definition) return [];
+  return resolveRef(project.library, component.definition, "components")?.bridges ?? [];
+}
+
 /** Resolve a connector address to its component and definition connector, or explain why not. */
 export function resolveConnector(
   project: Project,
@@ -207,6 +215,18 @@ export function connectorLabel(project: Project, address: string): string {
   const { component, designator } = parseAddress(address);
   const name = project.components.get(component)?.name ?? component;
   return `${name} ${designator}`;
+}
+
+/**
+ * What a net is called: its name, or its two ends ("MIB PWR to Bus bar L5"),
+ * or for three or more connectors its first end and a count. A net on a bus
+ * is prefixed with the bus label, which `netLabeller` in derive supplies.
+ */
+export function netLabel(project: Project, net: Net, busLabel?: string): string {
+  if (net.name) return net.name;
+  const ends = net.connectors.map((a) => connectorLabel(project, a));
+  const own = ends.length === 0 ? net.id : ends.length === 1 ? ends[0] : ends.length === 2 ? `${ends[0]} to ${ends[1]}` : `${ends[0]}, +${ends.length - 1}`;
+  return busLabel ? `${busLabel}: ${own}` : own;
 }
 
 /** All connector addresses in the project, id-sorted. */

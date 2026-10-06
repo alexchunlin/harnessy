@@ -1,6 +1,5 @@
-import type { Endpoint, Net, Position, Segment, Topology } from "./schema";
-import { allNets, connectorLabel, type Project } from "./project";
-
+import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
+import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
  * recomputed from the graph on demand.
@@ -142,6 +141,123 @@ export function fallbackLabel(project: Project, graph: Graph, piece: Piece): str
 export function harnessLabelOf(all: Harness[], id: string): string {
   const h = all.find((h) => h.piece.segments.has(id) || h.piece.endpoints.has(id));
   return h ? h.label : PURCHASED;
+}
+
+// Buses ------------------------------------------------------------------------
+
+/** One bridge of one component, with the connectors of it that carry a member net. */
+export interface BusBridge {
+  component: string;
+  designators: string[];
+}
+
+/**
+ * The nets a device joins inside itself, found by walking nets and bridges.
+ * Derived and never stored; a group of one net is not a bus.
+ */
+export interface Bus {
+  /** Stable id: the smallest member net id. */
+  id: string;
+  /** The first member's domain. A bus across two domains is a design rule error. */
+  domain: string;
+  nets: Net[];
+  bridges: BusBridge[];
+  /** The name carried by a member net's `bus`, if any. */
+  name?: string;
+  /** The name, or "<domain> bus via <component>" from the bridging component with the most connectors on the bus. */
+  label: string;
+}
+
+export function buses(project: Project): Bus[] {
+  const nets = allNets(project);
+  const netAt = new Map<string, { net: Net; domain: string }[]>();
+  for (const n of nets) for (const a of n.net.connectors) {
+    if (!netAt.has(a)) netAt.set(a, []);
+    netAt.get(a)!.push(n);
+  }
+  const parent = new Map<string, string>();
+  const find = (id: string): string => {
+    let root = id;
+    while (parent.get(root) !== undefined && parent.get(root) !== root) root = parent.get(root)!;
+    parent.set(id, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra < rb ? rb : ra, ra < rb ? ra : rb);
+  };
+  for (const n of nets) parent.set(n.net.id, n.net.id);
+  // Each bridge that touches at least two nets joins them; remember which of its connectors carry one.
+  const joins: { bridge: BusBridge; netIds: string[] }[] = [];
+  for (const c of project.components.values()) {
+    for (const bridge of componentBridges(project, c)) {
+      const designators: string[] = [];
+      const netIds: string[] = [];
+      for (const d of bridge) {
+        const here = netAt.get(`${c.id}/${d}`) ?? [];
+        if (here.length === 0) continue;
+        designators.push(d);
+        for (const n of here) netIds.push(n.net.id);
+      }
+      const distinct = [...new Set(netIds)];
+      if (distinct.length < 2) continue;
+      for (const id of distinct.slice(1)) union(distinct[0], id);
+      joins.push({ bridge: { component: c.id, designators }, netIds: distinct });
+    }
+  }
+  const groups = new Map<string, Bus>();
+  const domainOfNet = new Map(nets.map((n) => [n.net.id, n.domain]));
+  for (const { net } of nets) {
+    const root = find(net.id);
+    if (!groups.has(root)) groups.set(root, { id: root, domain: "", nets: [], bridges: [], label: "" });
+    groups.get(root)!.nets.push(net);
+  }
+  for (const j of joins) groups.get(find(j.netIds[0]))!.bridges.push(j.bridge);
+  const domainName = (id: string) => project.file.domains.find((d) => d.id === id)?.name ?? id;
+  const out: Bus[] = [];
+  for (const b of groups.values()) {
+    if (b.nets.length < 2) continue;
+    b.nets.sort((x, y) => (x.id < y.id ? -1 : 1));
+    b.domain = domainOfNet.get(b.nets[0].id)!;
+    b.name = b.nets.find((n) => n.bus)?.bus;
+    const via = b.bridges
+      .map((br) => ({ name: project.components.get(br.component)?.name ?? br.component, count: br.designators.length }))
+      .sort((x, y) => y.count - x.count || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0))[0];
+    b.label = b.name ?? `${domainName(b.domain)} bus via ${via.name}`;
+    out.push(b);
+  }
+  return out.sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+export function busOf(all: Bus[], netId: string): Bus | undefined {
+  return all.find((b) => b.nets.some((n) => n.id === netId));
+}
+
+/** Buses that pass through a component's bridges. */
+export function busesThrough(all: Bus[], componentId: string): Bus[] {
+  return all.filter((b) => b.bridges.some((br) => br.component === componentId));
+}
+
+/** A net's display label with its bus prefix, for callers that label many nets at once. */
+export function netLabeller(project: Project): (net: Net) => string {
+  const all = buses(project);
+  return (net) => netLabel(project, net, busOf(all, net.id)?.label);
+}
+
+/** The designators of a component's bridges that `designators` does not list, or lists twice. */
+export function bridgeProblems(project: Project, component: Component): { designator: string; why: "unknown" | "twice" }[] {
+  const known = new Set((componentConnectors(project, component) ?? []).map((c) => c.designator));
+  const seen = new Set<string>();
+  const out: { designator: string; why: "unknown" | "twice" }[] = [];
+  for (const bridge of componentBridges(project, component)) {
+    for (const d of bridge) {
+      if (!known.has(d)) out.push({ designator: d, why: "unknown" });
+      else if (seen.has(d)) out.push({ designator: d, why: "twice" });
+      seen.add(d);
+    }
+  }
+  return out;
 }
 
 // Routes ----------------------------------------------------------------------

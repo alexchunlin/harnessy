@@ -117,10 +117,14 @@ export const DefinitionConnectorSchema = z.object({
   side: SideSchema.optional(),
 });
 
+/** Groups of a definition's connectors that the device joins inside itself: the lugs of a bus bar, IN and OUT of a switch. */
+export const BridgesSchema = z.array(z.array(designator));
+
 export const ComponentDefinitionSchema = z.object({
   id: slug,
   name: z.string(),
   connectors: z.array(DefinitionConnectorSchema),
+  bridges: BridgesSchema.optional(),
   part_number: z.string().optional(),
   manufacturer: z.string().optional(),
 });
@@ -147,6 +151,7 @@ export type TieSpec = z.infer<typeof TieSpecSchema>;
 export type Assembly = z.infer<typeof AssemblySchema>;
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 export type DefinitionConnector = z.infer<typeof DefinitionConnectorSchema>;
+export type Bridges = z.infer<typeof BridgesSchema>;
 export type Side = z.infer<typeof SideSchema>;
 export const SIDES: Side[] = ["left", "right", "top", "bottom"];
 export type LibraryEntry = {
@@ -191,9 +196,14 @@ export const ComponentSchema = z
     name: z.string(),
     definition: definitionRef.optional(),
     connectors: z.array(DefinitionConnectorSchema).optional(),
+    /** Only beside inline connectors; a definition-backed component takes its bridges from the definition. */
+    bridges: BridgesSchema.optional(),
   })
   .refine((c) => (c.definition === undefined) !== (c.connectors === undefined), {
     message: "a component references a definition or declares connectors, not both",
+  })
+  .refine((c) => c.bridges === undefined || c.connectors !== undefined, {
+    message: "bridges go with inline connectors; a definition-backed component takes them from its definition",
   });
 
 export const NetSchema = z.object({
@@ -202,6 +212,8 @@ export const NetSchema = z.object({
   connectors: z.array(connectorAddress),
   spec: specRef.optional(),
   conductors: z.number().int().positive().optional(),
+  /** The name of the bus this net is on, anchored here. At most one member net of a bus carries it. */
+  bus: z.string().optional(),
 });
 
 export const NetsFileSchema = z.array(NetSchema);

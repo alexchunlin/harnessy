@@ -163,6 +163,8 @@ const components: LibraryEntry["components"][] = [
       ...numbered("ENC", 4, "jst-gh-4", () => "PWM encoder", "right"),
       ...numbered("DIO", 4, "jst-xh-4", () => "limit switch pair", "right"),
     ],
+    // CAN passes through the board, so the chain continues out of CAN-B.
+    bridges: [["CAN-A", "CAN-B"]],
   },
   { id: "joystick-haptics-screen", name: "Joystick with haptics and screen", part_number: TBD, connectors: [con("ETH", "rj45"), con("PWR", "xt30", "24 V in")] },
   { id: "kinova-gen3", name: "Kinova Gen3 arm", manufacturer: "Kinova", part_number: TBD, connectors: [con("ETH", "rj45"), con("PWR", "xt30", "24 V in")] },
@@ -170,8 +172,9 @@ const components: LibraryEntry["components"][] = [
   // Power
   { id: "battery-48v-bms", name: "48 V Li-ion battery with BMS", part_number: TBD, connectors: [con("MAIN", "xt90", "main output"), con("CHG", "xt60", "charge"), con("CAN", "jst-gh-4", "BMS CAN")] },
   { id: "charge-port-xt60", name: "Charge port, panel mount", part_number: TBD, connectors: [con("J1", "xt60")] },
-  { id: "inline-switch-fuse", name: "In-line switch and fuse", part_number: TBD, connectors: [con("IN", "xt90", undefined, "left"), con("OUT", "xt90", undefined, "right")] },
-  { id: "bus-bar-48v", name: "48 V bus bar", part_number: TBD, connectors: [con("BAT", "busbar-m6-pair", "battery feed", "left"), ...numbered("L", 10, "busbar-m6-pair", () => "load", "right")] },
+  // An open switch is a fault state, not a design state, so IN and OUT are bridged and the bus runs from the battery to the last load.
+  { id: "inline-switch-fuse", name: "In-line switch and fuse", part_number: TBD, connectors: [con("IN", "xt90", undefined, "left"), con("OUT", "xt90", undefined, "right")], bridges: [["IN", "OUT"]] },
+  { id: "bus-bar-48v", name: "48 V bus bar", part_number: TBD, connectors: [con("BAT", "busbar-m6-pair", "battery feed", "left"), ...numbered("L", 10, "busbar-m6-pair", () => "load", "right")], bridges: [["BAT", ...Array.from({ length: 10 }, (_, i) => `L${i + 1}`)]] },
 
   // Drive corners
   { id: "pace-racer", name: "PACE RACER motor controller", part_number: TBD, connectors: [con("PWR", "xt60", "48 V in", "left"), con("MOT", "mr30", "three phase out", "right"), con("ENC", "jst-gh-6", "SPI encoder", "right"), con("ETH", "rj45", undefined, "left")] },
@@ -185,6 +188,7 @@ const components: LibraryEntry["components"][] = [
     manufacturer: "Basicmicro",
     part_number: TBD,
     connectors: [con("PWR", "screw-term-2", "48 V in", "left"), con("M1", "screw-term-2", undefined, "right"), con("M2", "screw-term-2", undefined, "right"), con("ENC1", "pin-header-254-6", undefined, "right"), con("ENC2", "pin-header-254-6", undefined, "right"), con("CAN-A", "jst-gh-4", undefined, "left"), con("CAN-B", "jst-gh-4", undefined, "left")],
+    bridges: [["CAN-A", "CAN-B"]],
   },
   { id: "lift-motor-brushed", name: "Lift or slide motor, brushed DC", part_number: TBD, connectors: [con("MOT", "xt30")] },
   { id: "abz-encoder", name: "Incremental encoder, ABZ", part_number: TBD, connectors: [con("J1", "jst-xh-6")] },

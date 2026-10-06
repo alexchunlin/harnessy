@@ -1,7 +1,7 @@
 import type { Topology } from "./schema";
 import { allNets, componentConnectors, netSpec, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
-import { allRoutes, buildGraph, degree, harnesses, hasCycle, isContiguous, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
 
 export type Severity = "error" | "warning";
 
@@ -28,6 +28,8 @@ export type CheckId =
   | "sheath-not-contiguous"
   | "sheath-spans-harnesses"
   | "harness-two-anchors"
+  | "bridge-joins-domains"
+  | "bus-two-names"
   | "dangling-reference"
   | "connector-idle"
   | "component-idle"
@@ -48,6 +50,8 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "sheath-not-contiguous": "error",
   "sheath-spans-harnesses": "error",
   "harness-two-anchors": "error",
+  "bridge-joins-domains": "error",
+  "bus-two-names": "error",
   "dangling-reference": "error",
   "connector-idle": "warning",
   "component-idle": "warning",
@@ -97,6 +101,7 @@ type Add = (check: CheckId, target: string, view: Finding["view"], message: stri
 
 function checkProject(project: Project, add: Add): void {
   const nets = allNets(project);
+  const label = netLabeller(project);
   const usedConnectors = new Set<string>();
   const domainIds = new Set(project.file.domains.map((d) => d.id));
 
@@ -118,24 +123,38 @@ function checkProject(project: Project, add: Add): void {
         add("dangling-reference", `${c.id}/${con.designator}`, "connectivity", `${c.name} ${con.designator} references ${con.connector}, which has no library file`);
       }
     }
+    for (const b of bridgeProblems(project, c)) {
+      const why = b.why === "unknown" ? "which it has no connector for" : "twice; a designator sits in at most one bridge";
+      add("dangling-reference", c.id, "connectivity", `${c.name} bridges ${b.designator}, ${why}`);
+    }
   }
 
   for (const { net, domain } of nets) {
-    const label = net.name ?? net.id;
     if (net.connectors.length < 2) {
-      add("net-too-few-connectors", net.id, "connectivity", `net ${label} has ${net.connectors.length} connector${net.connectors.length === 1 ? "" : "s"}`);
+      add("net-too-few-connectors", net.id, "connectivity", `net ${label(net)} has ${net.connectors.length} connector${net.connectors.length === 1 ? "" : "s"}`);
     }
     for (const address of net.connectors) {
       usedConnectors.add(address);
       const r = resolveConnector(project, address);
       if ("error" in r) {
         const why = r.error === "no-component" ? "no such component" : r.error === "no-definition" ? "its component's definition is missing" : "its component has no such designator";
-        add("dangling-reference", net.id, "connectivity", `net ${label} attaches to ${address}: ${why}`);
+        add("dangling-reference", net.id, "connectivity", `net ${label(net)} attaches to ${address}: ${why}`);
       }
     }
     const spec = netSpec(project, net, domain);
-    if (!spec.ref) add("net-no-spec", net.id, "connectivity", `net ${label} has no spec: domain ${domain} names none and the net does not override`);
-    else if (!resolveRef(project.library, spec.ref)) add("dangling-reference", net.id, "connectivity", `net ${label} references ${spec.ref}, which has no library file`);
+    if (!spec.ref) add("net-no-spec", net.id, "connectivity", `net ${label(net)} has no spec: domain ${domain} names none and the net does not override`);
+    else if (!resolveRef(project.library, spec.ref)) add("dangling-reference", net.id, "connectivity", `net ${label(net)} references ${spec.ref}, which has no library file`);
+  }
+
+  // A bus stays within one domain and carries at most one name.
+  for (const bus of buses(project)) {
+    for (const br of bus.bridges) {
+      const c = project.components.get(br.component)!;
+      const joined = new Set(br.designators.flatMap((d) => nets.filter((n) => n.net.connectors.includes(`${c.id}/${d}`)).map((n) => n.domain)));
+      if (joined.size > 1) add("bridge-joins-domains", c.id, "connectivity", `${c.name} bridges ${br.designators.join(", ")}, which join nets from ${[...joined].sort().join(" and ")}`);
+    }
+    const names = [...new Set(bus.nets.map((n) => n.bus).filter((n): n is string => n !== undefined))];
+    if (names.length > 1) add("bus-two-names", bus.id, "connectivity", `one bus carries ${names.length} names: ${names.join(", ")}`);
   }
 
   for (const c of project.components.values()) {
@@ -163,6 +182,7 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
   const routes = allRoutes(project, graph);
   const allPieces = pieces(graph);
   const allHarnesses = harnesses(project, graph);
+  const label = netLabeller(project);
 
   for (const e of topology.endpoints) {
     const d = degree(graph, e.id);
@@ -181,7 +201,7 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       for (const netId of e.nets) {
         const r = routes.find((r) => r.net.id === netId);
         if (!r) add("dangling-reference", e.id, "topology", `splice ${e.id} lists net ${netId}, which the project does not have`);
-        else if (!r.endpoints.has(e.id)) add("splice-net-not-through", e.id, "topology", `splice ${e.id} lists net ${r.net.name ?? netId}, whose route does not pass through it`);
+        else if (!r.endpoints.has(e.id)) add("splice-net-not-through", e.id, "topology", `splice ${e.id} lists net ${label(r.net)}, whose route does not pass through it`);
       }
     }
   }
@@ -200,13 +220,12 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
   }
 
   for (const r of routes) {
-    const label = r.net.name ?? r.net.id;
     if (r.net.connectors.length < 2) continue;
-    if (r.unplaced.length > 0) add("net-unrouted", r.net.id, "topology", `net ${label}: ${r.unplaced.join(", ")} not placed in this topology`);
-    else if (r.split) add("net-unrouted", r.net.id, "topology", `net ${label}: its connectors sit in different pieces of the topology`);
+    if (r.unplaced.length > 0) add("net-unrouted", r.net.id, "topology", `net ${label(r.net)}: ${r.unplaced.join(", ")} not placed in this topology`);
+    else if (r.split) add("net-unrouted", r.net.id, "topology", `net ${label(r.net)}: its connectors sit in different pieces of the topology`);
     for (const b of r.branchPoints) {
       const e = graph.endpoints.get(b);
-      if (!(e?.kind === "splice" && e.nets.includes(r.net.id))) add("route-branch-without-splice", b, "topology", `net ${label} branches at ${b}, which is not a splice listing it`);
+      if (!(e?.kind === "splice" && e.nets.includes(r.net.id))) add("route-branch-without-splice", b, "topology", `net ${label(r.net)} branches at ${b}, which is not a splice listing it`);
     }
   }
 

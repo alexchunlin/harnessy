@@ -39,6 +39,12 @@
       "side": "left"
     }
   ],
+  "bridges": [
+    [
+      "CAN-A",
+      "CAN-B"
+    ]
+  ],
   "part_number": "TBD",
   "manufacturer": "Basicmicro"
 }

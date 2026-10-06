@@ -890,12 +890,12 @@
       "connector": "cmp-22222f/PWR"
     },
     {
-      "id": "end-gb6gjd",
+      "id": "end-2222h3",
       "kind": "connector",
       "connector": "cmp-22222j/CAN-B"
     },
     {
-      "id": "end-s733sc",
+      "id": "end-2222h4",
       "kind": "connector",
       "connector": "cmp-222236/CAN-B"
     }
@@ -2088,10 +2088,10 @@
       "length_mm": 900
     },
     {
-      "id": "seg-qtepnt",
+      "id": "seg-2222h5",
       "ends": [
-        "end-s733sc",
-        "end-gb6gjd"
+        "end-2222h3",
+        "end-2222h4"
       ],
       "length_mm": 100
     }

@@ -42,6 +42,16 @@
         ]
       }
     },
+    "bridges": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
     "part_number": {
       "type": "string"
     },
