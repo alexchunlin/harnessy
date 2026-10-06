@@ -14,7 +14,9 @@ import { GRID, insertCorner, labelPoint, moveCorner, pathFrom, polyline, shiftRu
  */
 export function NetEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }: EdgeProps<Edge<NetEdgeData>>) {
   const d = data!;
-  const hovered = useDoc((s) => s.hover.nets.includes(d.netId));
+  // 2: this net is hovered. 1: a net on its bus is, so it glows at a lower weight. 0: neither.
+  const hoverLevel = useDoc((s) => (s.hover.nets.includes(d.netId) ? 2 : d.busNets.some((m) => s.hover.nets.includes(m)) ? 1 : 0));
+  const hovered = hoverLevel === 2;
   const flow = useReactFlow();
   // Grips keep a constant screen size; only a selected edge follows the zoom.
   const zoom = useStore((s) => (selected ? s.transform[2] : 1));
@@ -97,11 +99,12 @@ export function NetEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, ta
 
   if (d.inactive) return <BaseEdge path={path} className="net-edge inactive" interactionWidth={0} />;
   const glow = hovered || selected || d.lit;
+  const onBus = !glow && hoverLevel === 1;
   const label = labelPoint(pts);
   return (
     <g onDoubleClick={onDoubleClick}>
-      {glow && <path d={path} className="net-halo" style={{ stroke: d.color }} />}
-      <BaseEdge path={path} className="net-edge" style={{ stroke: d.color, strokeWidth: glow ? 3 : 2, opacity: glow ? 1 : 0.85 }} interactionWidth={14} />
+      {(glow || onBus) && <path d={path} className={`net-halo${onBus ? " bus" : ""}`} style={{ stroke: d.color }} />}
+      <BaseEdge path={path} className="net-edge" style={{ stroke: d.color, strokeWidth: glow ? 3 : onBus ? 2.5 : 2, opacity: glow || onBus ? 1 : 0.85 }} interactionWidth={14} />
       {selected && (
         <EdgeLabelRenderer>
           <div className="edge-label" style={{ transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y - 14}px)`, borderColor: d.color }}>

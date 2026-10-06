@@ -3,7 +3,7 @@
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -67,6 +67,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
   const routes = allRoutes(project, graph);
   const onSeg = netsOnSegments(routes);
   const domainColor = new Map(project.file.domains.map((d) => [d.id, d.color]));
+  const label = netLabeller(project);
 
   const nodes: Node3[] = [...harness.piece.endpoints].sort().map((id) => {
     const e = graph.endpoints.get(id)!;
@@ -91,7 +92,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
       lengthMm: s.length_mm ?? 200,
       odMm: bundleOd(project, rs),
       color: (top && domainColor.get(top)) || "#888888",
-      nets: rs.map((r) => r.net.name ?? r.net.id),
+      nets: rs.map((r) => label(r.net)),
     };
   });
 

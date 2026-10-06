@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, allNets, bendsKey, componentConnectors, connectorShortName, pinLayout, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
+import { ALL_LAYER_ID, activeDomains, allNets, bendsKey, buses, busOf, componentBridges, componentConnectors, connectorShortName, netLabel, pinLayout, type Component, type DefinitionConnector, type Domain, type Group, type Net, type Note, type Position, type Project, type Side } from "../../core";
 
 /** Derive React Flow nodes and edges from the project, the active layer, and the selection. */
 
@@ -10,13 +10,23 @@ export interface ComponentNodeData {
   types: Record<string, string>;
   geometry: BoxGeometry;
   dimmed: boolean;
-  /** designator to the nets attached there, for handle tooltips */
-  netsAt: Record<string, { net: Net; domain: Domain }[]>;
+  /** designator to the nets attached there, with their display labels, for handle tooltips */
+  netsAt: Record<string, { net: Net; domain: Domain; label: string }[]>;
   /** designator to domain colour, for pins on a net lit from the topology canvas */
   litPins: Record<string, string>;
+  /** net id to the ids of every net on its bus, for the nets attached here that are on one */
+  busNets: Record<string, string[]>;
+  /** The component's bridges, drawn as faint lines joining their pins. */
+  bridges: BridgeLine[];
   [key: string]: unknown;
 }
-export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; /** lit from the topology canvas */ lit: boolean; [key: string]: unknown }
+/** One bridge of a component: the pins it joins, the nets of the bus through it, and that bus's domain colour. */
+export interface BridgeLine {
+  designators: string[];
+  busNets: string[];
+  color: string | undefined;
+}
+export interface HubNodeData { net: Net; color: string; label: string; inactive: boolean; /** lit from the topology canvas */ lit: boolean; busNets: string[]; [key: string]: unknown }
 export interface GroupNodeData { group: Group; [key: string]: unknown }
 export interface NoteNodeData { note: Note; [key: string]: unknown }
 export interface NetEdgeData {
@@ -34,6 +44,8 @@ export interface NetEdgeData {
   bends?: Position[];
   /** The target is a net hub, which has no side and no stub. */
   hub: boolean;
+  /** Every net on this net's bus, itself included; empty when it is on none. Hovering any of them glows this edge. */
+  busNets: string[];
   [key: string]: unknown;
 }
 
@@ -117,6 +129,45 @@ export function boxGeometry(sides: Record<Side, string[]>, width = NODE_WIDTH): 
   return { width: w, height, header: topBand, sides, pins };
 }
 
+/**
+ * The line that draws a bridge inside a box: a stub from each bridged pin to
+ * a spine. The spine runs down the middle when the pins sit on both sides
+ * and just inside the edge when they share one; a top or bottom pin reaches
+ * the spine's nearest end with one bend.
+ */
+export function bridgePath(g: BoxGeometry, designators: string[]): string {
+  const spots = designators.map((d) => g.pins[d]).filter((p): p is PinSpot => p !== undefined);
+  if (spots.length < 2) return "";
+  const inset = 14;
+  const sides = new Set(spots.map((p) => p.side));
+  const lateral = spots.filter((p) => p.side === "left" || p.side === "right");
+  const ends = spots.filter((p) => p.side === "top" || p.side === "bottom");
+  const parts: string[] = [];
+  if (lateral.length === 0) {
+    // Pins along the top or bottom only: a horizontal spine just inside that edge.
+    const sy = sides.has("top") && !sides.has("bottom") ? inset : sides.has("bottom") && !sides.has("top") ? g.height - inset : g.header + NODE_HEADER + (g.height - g.header - NODE_HEADER) / 2;
+    for (const p of ends) parts.push(`M${p.x} ${p.y}L${p.x} ${sy}`);
+    const xs = ends.map((p) => p.x);
+    parts.push(`M${Math.min(...xs)} ${sy}L${Math.max(...xs)} ${sy}`);
+    return parts.join("");
+  }
+  const lateralSides = new Set(lateral.map((p) => p.side));
+  const sx = lateralSides.size === 1 && lateralSides.has("left") ? inset : lateralSides.size === 1 && lateralSides.has("right") ? g.width - inset : g.width / 2;
+  const ys = lateral.map((p) => p.y);
+  let lo = Math.min(...ys);
+  let hi = Math.max(...ys);
+  for (const p of lateral) parts.push(`M${p.x} ${p.y}L${sx} ${p.y}`);
+  for (const p of ends) {
+    // Up or down to the spine's end, then across to it.
+    const y = p.side === "top" ? lo : hi;
+    parts.push(`M${p.x} ${p.y}L${p.x} ${y}L${sx} ${y}`);
+  }
+  // A lone lateral pin still gets a spine the top or bottom stubs can meet.
+  if (lo === hi && ends.length === 0) return parts.join("");
+  parts.push(`M${sx} ${lo}L${sx} ${hi}`);
+  return parts.join("");
+}
+
 /** Where a pointer over a box would drop a pin: the nearest side and the slot index among the other pins there. */
 export function pinSlotAt(g: BoxGeometry, rel: Position, moving: string): { side: Side; index: number } {
   const d: Record<Side, number> = { left: rel.x, right: g.width - rel.x, top: rel.y, bottom: g.height - rel.y };
@@ -144,13 +195,19 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const visible = activeDomains(project, layerId);
   const nets = allNets(project);
-  const netsAt = new Map<string, { net: Net; domain: Domain }[]>();
+  // A bus glows as one: each edge and pin knows the other nets on its bus.
+  const allBuses = buses(project);
+  const busNetsOf = new Map<string, string[]>();
+  for (const b of allBuses) for (const n of b.nets) busNetsOf.set(n.id, b.nets.map((x) => x.id));
+  const labelOf = (net: Net) => netLabel(project, net, busOf(allBuses, net.id)?.label);
+
+  const netsAt = new Map<string, { net: Net; domain: Domain; label: string }[]>();
   const litComponents = new Set<string>();
   for (const { net, domain } of nets) {
     const d = domains.get(domain);
     for (const a of net.connectors) {
       if (!netsAt.has(a)) netsAt.set(a, []);
-      if (d) netsAt.get(a)!.push({ net, domain: d });
+      if (d) netsAt.get(a)!.push({ net, domain: d, label: labelOf(net) });
       if (visible.has(domain)) litComponents.add(a.split("/")[0]);
     }
   }
@@ -174,13 +231,23 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       const litNet = at[con.designator].find((n) => lit.has(n.net.id) && visible.has(n.domain.id));
       if (litNet) litPins[con.designator] = litNet.domain.color;
     }
+    const busNets: Record<string, string[]> = {};
+    for (const list of Object.values(at)) for (const n of list) {
+      const members = busNetsOf.get(n.net.id);
+      if (members) busNets[n.net.id] = members;
+    }
+    const bridges: BridgeLine[] = componentBridges(project, c).map((designators) => {
+      const here = designators.flatMap((d) => at[d] ?? []);
+      const onBus = here.find((n) => busNetsOf.has(n.net.id));
+      return { designators, busNets: onBus ? busNetsOf.get(onBus.net.id)! : [], color: (onBus ?? here[0])?.domain.color };
+    });
     const sides = pinLayout(project, c);
     const geometry = boxGeometry(sides, fittedWidth(c.name, sides, dots, c.definition === undefined, types));
     nodes.push({
       id: c.id,
       type: "component",
       position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
-      data: { component: c, connectors, types, geometry, dimmed, netsAt: at, litPins },
+      data: { component: c, connectors, types, geometry, dimmed, netsAt: at, litPins, busNets, bridges },
       selected: selected.has(c.id),
       selectable: !dimmed,
       connectable: !dimmed,
@@ -194,7 +261,8 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     // Nets outside the layer stay drawn, greyed and untouchable, like an inactive KiCad layer.
     const inactive = !visible.has(domain);
     const color = domains.get(domain)?.color ?? "#888";
-    const label = net.name ?? net.id;
+    const label = labelOf(net);
+    const busNets = busNetsOf.get(net.id) ?? [];
     const ends = net.connectors.filter((a) => project.components.has(a.split("/")[0]));
     const isSelected = !inactive && selected.has(net.id);
     const isLit = !inactive && lit.has(net.id);
@@ -204,7 +272,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       const [a, b] = ends;
       const edge: Edge<NetEdgeData> = {
         id: net.id, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: b.split("/")[0], targetHandle: b.split("/")[1],
-        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id), bends: project.connectivityCanvas.bends[bendsKey(net.id)], hub: false }, ...edgeProps,
+        data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id), bends: project.connectivityCanvas.bends[bendsKey(net.id)], hub: false, busNets }, ...edgeProps,
       };
       edges.push(edge);
       const key = [a, b].sort().join("|");
@@ -213,13 +281,13 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     } else if (ends.length >= 3) {
       const hubId = `hub:${net.id}`;
       nodes.push({
-        id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label, inactive, lit: isLit },
+        id: hubId, type: "hub", position: project.connectivityCanvas.hubs[net.id] ?? hubDefaultPosition(project, net), data: { net, color, label, inactive, lit: isLit, busNets },
         selected: isSelected, zIndex: inactive ? 0 : 2, selectable: !inactive, draggable: !inactive, connectable: !inactive, className: inactive ? "inactive" : undefined,
       });
       for (const a of ends) {
         edges.push({
           id: `${net.id}:${a}`, type: "net", source: a.split("/")[0], sourceHandle: a.split("/")[1], target: hubId, targetHandle: "hub",
-          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id, a), bends: project.connectivityCanvas.bends[bendsKey(net.id, a)], hub: true }, ...edgeProps,
+          data: { color, netId: net.id, siblingIndex: 0, siblingCount: 1, label, inactive, lit: isLit, key: bendsKey(net.id, a), bends: project.connectivityCanvas.bends[bendsKey(net.id, a)], hub: true, busNets }, ...edgeProps,
         });
       }
     }
@@ -236,7 +304,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
     const netSize = n.net ? (nets.find((x) => x.net.id === n.net)?.net.connectors.length ?? 0) : 0;
     const target = n.component ?? (netSize >= 3 ? `hub:${n.net}` : undefined);
     if (target && nodes.some((x) => x.id === target)) {
-      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false, lit: false, key: "", hub: false } });
+      edges.push({ id: `note:${n.id}`, type: "notelink", source: n.id, target, selectable: false, zIndex: 0, data: { color: "#999", netId: "", siblingIndex: 0, siblingCount: 1, label: "", inactive: false, lit: false, key: "", hub: false, busNets: [] } });
     }
   }
   return { nodes, edges };

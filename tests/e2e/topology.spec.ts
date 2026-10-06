@@ -32,7 +32,8 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   await openTopology(page, folder);
   const lines = page.locator(".react-flow__edge.ratsnest");
   await expect(lines).toHaveCount(1);
-  expect(await lines.first().locator("title").textContent()).toBe("Battery to switch: 48 V battery + BMS MAIN to In-line switch / fuse IN");
+  // The net has no name of its own: it reads as its bus, then its ends.
+  expect(await lines.first().locator("title").textContent()).toBe("48 V bus via Bus bar: 48 V battery + BMS MAIN to In-line switch / fuse IN");
 
   // The toggle hides the ratsnest and is remembered in the browser.
   const toggle = page.getByRole("button", { name: "Ratsnest" });
@@ -46,7 +47,7 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   await expect(lines).toHaveCount(1);
 
   // Selecting the net in the list brings its two connectors into view; joining them routes the net.
-  await page.locator(".netlist li", { hasText: "Battery to switch" }).click();
+  await page.locator(".netlist li", { hasText: "48 V battery + BMS MAIN to In-line switch / fuse IN" }).click();
   await page.waitForTimeout(500);
   // A segment starts on the ring just outside an endpoint; the endpoint itself drags to move it.
   const from = page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[0]}"]`);
@@ -117,7 +118,7 @@ test("side by side shows both canvases, a net picked on either side lights it on
   expect(await onRoute.count()).toBeGreaterThan(0);
 
   // A net picked in the topology's net list glows on the left, and the net clicked before stops glowing as the selection moves.
-  await page.locator(".netlist li", { hasText: "Battery to switch" }).click();
+  await page.locator(".netlist li", { hasText: "48 V battery + BMS MAIN to In-line switch / fuse IN" }).click();
   await expect(page.locator('.react-flow__edge[data-id="net-22223y"] .net-halo')).toHaveCount(1);
   await expect(page.locator(".net-halo")).toHaveCount(1);
   await expect(onRoute).toHaveCount(1);

@@ -28,6 +28,11 @@
 .cmp-handle:hover { background: var(--accent); }
 .cmp-connector.lit .cmp-handle { background: var(--glow); border-color: var(--glow); box-shadow: 0 0 0 2px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 10px var(--glow); }
 .cmp-connector.lit .cmp-designator { color: var(--glow); font-weight: 600; }
+/* A bridge: the device joins these pins inside itself. Faint until its bus is hovered. */
+.cmp-bridges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.cmp-bridge { fill: none; stroke: var(--glow, var(--muted)); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.4; pointer-events: stroke; }
+.cmp-bridge.lit { opacity: 1; stroke-width: 2.5; filter: drop-shadow(0 0 4px var(--glow, var(--muted))); }
+.cmp-node.dimmed .cmp-bridge { opacity: 0.15; }
 
 .hub-node { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--canvas); box-shadow: 0 0 0 1px var(--box-border); }
 .hub-node.selected, .hub-node.hovered { box-shadow: 0 0 0 3px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 12px var(--glow); }
@@ -64,6 +69,8 @@ input.short { width: 5em; }
 /* Net strokes keep the stored domain colour; on dark they render a step brighter. */
 .net-edge { filter: var(--edge-lift); }
 .net-halo { fill: none; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: 0.35; pointer-events: none; filter: var(--edge-lift); }
+/* A net on the hovered net's bus: the same halo, lighter, so the hovered one stays brightest. */
+.net-halo.bus { opacity: 0.18; stroke-width: 7; }
 .net-edge.inactive { filter: none; stroke: var(--box-dim-border); stroke-width: 1.5; opacity: 0.55; }
 .react-flow__edge.inactive { pointer-events: none; }
 
@@ -71,3 +78,7 @@ input.short { width: 5em; }
 .pin-side-name { font-size: 11px; color: var(--muted); text-transform: capitalize; }
 .pin-row { padding: 1px 0; }
 .pin-row button { padding: 0 5px; }
+
+/* The bus row in a net's inspector: the label is a button that selects the whole bus. */
+.bus-label { text-align: left; font-weight: 600; }
+.bus-members { max-height: 30vh; overflow: auto; font-size: 12px; }
