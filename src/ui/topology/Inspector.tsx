@@ -3,11 +3,14 @@ import {
   addTiePoint,
   applySheath,
   buildGraph,
+  conductorRoute,
   connectorLabel,
   degree,
   findNet,
+  netConductors,
   netLabeller,
   netsThrough,
+  parseConductor,
   removeEndpoint,
   removeSegment,
   removeSheath,
@@ -25,7 +28,7 @@ import {
   type Route,
   type Topology,
 } from "../../core";
-import { endpointName, SHEATH_PALETTE } from "./model";
+import { endpointName, netStrands, SHEATH_PALETTE } from "./model";
 
 type Edit = (fn: (p: Project) => Project) => void;
 
@@ -56,6 +59,8 @@ export function Inspector(props: Props) {
   if (topology.segments.some((s) => s.id === id)) return <SegmentInspector {...props} id={id} />;
   if (topology.sheaths.some((s) => s.id === id)) return <SheathInspector {...props} id={id} />;
   if (topology.ties.some((t) => t.id === id)) return <TieInspector {...props} id={id} />;
+  const conductor = parseConductor(id);
+  if (conductor && findNet(project, conductor.net)) return <ConductorInspector {...props} id={id} />;
   const net = findNet(project, id);
   if (net) return <NetInspector {...props} id={id} />;
   return <Overview {...props} />;
@@ -237,7 +242,7 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 4, background: domains.get(r.domain)?.color, marginRight: 4 }} />
               {label(r.net)}
             </span>
-            <span className="muted">{r.net.conductors ?? domains.get(r.domain)?.conductors ?? 1} cond.</span>
+            <span className="muted">{netConductors(project, r.net, r.domain).length} cond.</span>
           </li>
         ))}
         {nets.length === 0 && <li className="muted">none</li>}
@@ -429,6 +434,55 @@ function NetInspector({ project, routes, id, onSelect }: Props & { id: string })
         </div>
       )}
       <button onClick={() => onSelect([])}>Clear highlight</button>
+    </div>
+  );
+}
+
+/** One conductor: its net, its number and colour, and the connector ends its route reaches. */
+function ConductorInspector({ project, topology, routes, id, onSelect }: Props & { id: string }) {
+  const { net: netId, index } = parseConductor(id)!;
+  const found = findNet(project, netId)!;
+  const graph = buildGraph(topology);
+  const strands = netStrands(project, found.net, found.domain);
+  const strand = strands[index];
+  const route = conductorRoute(routes, id);
+  return (
+    <div className="pane pane-right" data-testid="conductor-inspector">
+      <h3>Conductor</h3>
+      <div className="field">
+        <label>Net</label>
+        <span>{netLabeller(project)(found.net)}</span>
+      </div>
+      <div className="field">
+        <label>Conductor</label>
+        <span>
+          {index + 1} of {strands.length}
+        </span>
+      </div>
+      <div className="field">
+        <label>Colour</label>
+        <span className="row">
+          <span className="swatch" style={{ background: strand?.color }} />
+          {strand ? `${strand.color}, ${strand.label}` : "no such conductor"}
+        </span>
+      </div>
+      <div className="field">
+        <label>Ends</label>
+        <ul className="list">
+          {route?.ends.map((e) => (
+            <li key={e}>{endpointName(project, graph.endpoints.get(e))}</li>
+          ))}
+          {route?.route.unplaced.map((a) => (
+            <li key={a} className="muted">
+              {connectorLabel(project, a)} (not placed)
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="row">
+        <button onClick={() => onSelect([netId])}>Select the net</button>
+        <button onClick={() => onSelect([])}>Clear highlight</button>
+      </div>
     </div>
   );
 }

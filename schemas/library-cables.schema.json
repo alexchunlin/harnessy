@@ -27,6 +27,12 @@
     },
     "part_number": {
       "type": "string"
+    },
+    "conductor_colors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

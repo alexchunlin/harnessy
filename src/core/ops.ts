@@ -58,6 +58,11 @@ export function updateDomain(project: Project, id: string, patch: Partial<Omit<D
   return next(project, { file: { ...project.file, domains: project.file.domains.map((d) => (d.id === id ? { ...d, ...patch } : d)) } });
 }
 
+/** One spec per conductor on a domain. Clears the single spec and count; an empty or undefined list leaves the domain with no spec and one conductor. */
+export function setDomainConductors(project: Project, id: string, specs: string[] | undefined): Project {
+  return updateDomain(project, id, { spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined });
+}
+
 /** Removes the domain, its nets, and its entry in every layer. */
 export function removeDomain(project: Project, id: string): Project {
   const nets = new Map(project.nets);
@@ -368,8 +373,14 @@ export function renameNet(project: Project, id: string, name: string | undefined
   return updateNet(project, id, (n) => ({ ...n, name: name || undefined }));
 }
 
+/** One spec for every conductor and a count. Clears a per-conductor list; both undefined returns the net to its domain default. */
 export function setNetSpec(project: Project, id: string, spec: string | undefined, conductors: number | undefined): Project {
-  return updateNet(project, id, (n) => ({ ...n, spec, conductors }));
+  return updateNet(project, id, (n) => ({ ...n, spec, conductors, conductor_specs: undefined }));
+}
+
+/** One spec per conductor. Clears the single spec and count; an empty or undefined list returns the net to its domain default. */
+export function setNetConductors(project: Project, id: string, specs: string[] | undefined): Project {
+  return updateNet(project, id, (n) => ({ ...n, spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined }));
 }
 
 /** Name the bus a net is on. The name sits on this net and leaves every other member, so a bus has one anchor. */

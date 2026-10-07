@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
 import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
-import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useLengthEditor } from "./edges";
+import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
@@ -37,6 +37,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const activeLayer = useDoc((s) => s.activeLayer);
   const theme = useTheme((s) => s.theme);
   const ratsnest = usePrefs((s) => s.ratsnest);
+  const hoverConductor = useConductorHover((s) => s.address);
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [drafts, setDrafts] = useState<Map<string, Position>>(new Map());
@@ -56,7 +57,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
     }
     return { nets, components };
   }, [selection, project]);
-  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components }), [ratsnest, layerDomains, highlight]);
+  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components, hoverConductor: hoverConductor ?? undefined }), [ratsnest, layerDomains, highlight, hoverConductor]);
   const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -65,9 +66,19 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const [flow_, setFlow] = useState({ model, nodes: model.nodes, edges: model.edges });
   if (flow_.model !== model) setFlow({ model, nodes: reconcile(flow_.nodes, model.nodes), edges: reconcile(flow_.edges, model.edges) });
   const openLength = useLengthEditor((s) => s.setOpen);
+  const setHover = useConductorHover((s) => s.set);
+
+  const selectIds = useCallback(
+    (ids: string[]) => {
+      lastLocal.current = ids;
+      select("topology", ids);
+    },
+    [select],
+  );
 
   useEffect(() => {
     setSegmentEdgeCallbacks({
+      onConductor: (address) => selectIds([address]),
       onLength: (id, mm) => edit((p) => setSegmentLength(p, topologyId, id, mm)),
       nextWithoutLength: (from) => {
         // Edges come out of deriveTopology in topology segment order. Wrap once and skip the one being left.
@@ -81,16 +92,9 @@ function Canvas({ topologyId }: { topologyId: string }) {
         return undefined;
       },
     });
-  }, [edit, topologyId]);
+  }, [edit, topologyId, selectIds]);
   useEffect(() => () => openLength(null), [openLength, topologyId]);
-
-  const selectIds = useCallback(
-    (ids: string[]) => {
-      lastLocal.current = ids;
-      select("topology", ids);
-    },
-    [select],
-  );
+  useEffect(() => () => setHover(null), [setHover, topologyId]);
 
   // Reveal selection coming from outside (design rule panel, net list).
   useEffect(() => {
@@ -103,7 +107,9 @@ function Canvas({ topologyId }: { topologyId: string }) {
     for (const n of model.nodes) if (ids.has(n.id)) nodeIds.add(n.id);
     for (const s of topology.segments) if (ids.has(s.id)) s.ends.forEach((e) => nodeIds.add(e));
     for (const sh of topology.sheaths) if (ids.has(sh.id)) for (const seg of sh.segments) topology.segments.find((s) => s.id === seg)?.ends.forEach((e) => nodeIds.add(e));
-    for (const r of model.routes) if (ids.has(r.net.id)) r.endpoints.forEach((e) => nodeIds.add(e));
+    // A conductor reveals its net's whole route, far end included.
+    const nets = new Set([...ids].map((id) => parseConductor(id)?.net ?? id));
+    for (const r of model.routes) if (nets.has(r.net.id)) r.endpoints.forEach((e) => nodeIds.add(e));
     for (const t of topology.ties) if (ids.has(t.id)) nodeIds.add(t.id);
     if (nodeIds.size) void flow.fitView({ nodes: [...nodeIds].map((id) => ({ id })), duration: 300, maxZoom: 1.2, padding: 0.4 });
   }, [selection, model, topology, flow]);
@@ -278,7 +284,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [edit, topologyId, selectIds]);
 
-  const selectedNet = selection.view === "topology" ? selection.ids.find((id) => model.routes.some((r) => r.net.id === id)) : undefined;
+  const selectedNet = selection.view === "topology" ? selection.ids.map((id) => parseConductor(id)?.net ?? id).find((id) => model.routes.some((r) => r.net.id === id)) : undefined;
 
   return (
     <div className="view">

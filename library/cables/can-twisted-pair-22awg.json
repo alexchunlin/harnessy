@@ -4,5 +4,9 @@
   "conductors": 2,
   "awg": 22,
   "od_mm": 4.5,
-  "shielded": true
+  "shielded": true,
+  "conductor_colors": [
+    "yellow",
+    "green"
+  ]
 }

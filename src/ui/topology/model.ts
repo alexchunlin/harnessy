@@ -1,11 +1,29 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, connectorLabel, connectorShortName, degree, harnesses, netLabeller, netsOnSegments, ratsnestPairs, resolveConnector, resolveRef, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { allRoutes, assemblyLengthOf, buildGraph, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
 export interface EndpointNodeData { endpoint: Endpoint; label: string; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** the connector's component is selected on the connectivity canvas */ lit: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface TieNodeData { tie: TiePoint; label: string; outOfLayer: boolean; [key: string]: unknown }
 export interface LabelNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+/** One conductor's strand in the fan at a segment's ends. */
+export interface Strand {
+  /** `<net id>#<index>` */
+  address: string;
+  netId: string;
+  index: number;
+  color: string;
+  /** What the strand falls back to when its colour is not one the browser can paint. */
+  domainColor: string;
+  /** "48 V bus via Bus bar: ... conductor 2 of 2, black" for the hover title */
+  title: string;
+  /** the selected or hovered conductor: drawn full width while the rest dim */
+  lit: boolean;
+}
+
+/** Fans draw at most this many strands; past it the segment shows a count badge instead. */
+export const MAX_FAN = 12;
+
 export interface SegmentEdgeData {
   segment: Segment;
   lengthMm: number | undefined;
@@ -17,6 +35,16 @@ export interface SegmentEdgeData {
   /** carries nets, none of them in the active layer: drawn greyed and untouchable */
   outOfLayer: boolean;
   sheaths: { id: string; color: string; index: number; count: number }[];
+  /** One strand per conductor on a built segment, net by net in conductor order. Empty when the fan would exceed MAX_FAN or the segment is purchased. */
+  strands: Strand[];
+  /** Conductor count shown as a badge when there are too many to fan. */
+  badge: number | undefined;
+  /** Whether a fan draws at each end: not at a point, where the bundle only turns a corner. */
+  fanAt: [boolean, boolean];
+  /** The box each end sits in, so the fan starts past its edge. */
+  endSizes: [{ w: number; h: number }, { w: number; h: number }];
+  /** true when some conductor is selected or hovered: strands not lit dim */
+  anyLit: boolean;
   [key: string]: unknown;
 }
 
@@ -41,6 +69,8 @@ export interface TopologyOptions {
   highlightNets: Set<string>;
   /** Components selected on the connectivity canvas: their connector endpoints light up. */
   highlightComponents: Set<string>;
+  /** A strand under the pointer: previews the conductor's highlight without changing the selection. */
+  hoverConductor?: string;
 }
 
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
@@ -75,7 +105,12 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const hs = harnesses(project, graph);
   const label = netLabeller(project);
 
-  const selectedRoutes = routes.filter((r) => selected.has(r.net.id) || options.highlightNets.has(r.net.id));
+  // A selected or hovered conductor lights its net's route the way a selected net does, plus its own strand at every end.
+  const litConductors = new Set<string>();
+  for (const id of selected) if (parseConductor(id)) litConductors.add(id);
+  if (options.hoverConductor) litConductors.add(options.hoverConductor);
+  const litNets = new Set([...litConductors].map((c) => parseConductor(c)!.net));
+  const selectedRoutes = routes.filter((r) => selected.has(r.net.id) || options.highlightNets.has(r.net.id) || litNets.has(r.net.id));
   const routeSegments = new Map<string, string>();
   for (const r of selectedRoutes) for (const s of r.segments) routeSegments.set(s, domains.get(r.domain)?.color ?? "#888");
   const routeEndpoints = new Set(selectedRoutes.flatMap((r) => [...r.endpoints]));
@@ -138,14 +173,21 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const edges: TopoEdge[] = [];
   for (const s of topology.segments) {
     if (!graph.endpoints.has(s.ends[0]) || !graph.endpoints.has(s.ends[1])) continue;
-    const nets = (onSegments.get(s.id) ?? []).map((r) => ({ id: r.net.id, label: label(r.net), domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: r.net.conductors ?? domains.get(r.domain)?.conductors ?? 1 }));
+    const onHere = onSegments.get(s.id) ?? [];
+    const nets = onHere.map((r) => ({ id: r.net.id, label: label(r.net), domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: netConductors(project, r.net, r.domain).length }));
     const assembly = s.assembly ? resolveRef(project.library, s.assembly, "assemblies") : undefined;
     const routeColor = routeSegments.get(s.id);
     const outOfLayer = segmentOut.has(s.id);
     const classes = [routeColor ? "on-route" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ");
+    const { strands, badge } = s.assembly ? { strands: [], badge: undefined } : strandsOf(project, onHere, domains, label, litConductors);
+    const kinds = s.ends.map((e) => graph.endpoints.get(e)!.kind);
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
-      data: { segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor, faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [] },
+      data: {
+        segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor,
+        faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [],
+        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], anyLit: litConductors.size > 0,
+      },
       selected: (selected.has(s.id) || highlightSegments.has(s.id)) && !outOfLayer, selectable: !outOfLayer, focusable: !outOfLayer, className: classes || undefined,
       zIndex: routeColor ? 4 : 1, interactionWidth: outOfLayer ? 0 : 16,
     });
@@ -200,6 +242,46 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   }
 
   return { nodes, edges, routes, harnesses: hs, positions };
+}
+
+/**
+ * The strands of the nets on one built segment: one per conductor, in net
+ * then conductor order. Past MAX_FAN strands the segment gets a count badge
+ * instead, since the strands would be thinner than a pixel.
+ */
+function strandsOf(project: Project, routes: Route[], domains: Map<string, { color: string }>, label: (net: Route["net"]) => string, lit: Set<string>): { strands: Strand[]; badge: number | undefined } {
+  const strands: Strand[] = [];
+  for (const r of routes) {
+    const domainColor = domains.get(r.domain)?.color ?? "#888";
+    const own = netStrands(project, r.net, r.domain);
+    const netLabel = label(r.net);
+    for (const c of own) {
+      const address = conductorAddress(r.net.id, c.index);
+      strands.push({ address, netId: r.net.id, index: c.index, color: c.color, domainColor, title: `${netLabel}: conductor ${c.index + 1}${own.length > 1 ? ` of ${own.length}` : ""}, ${c.color}`, lit: lit.has(address) });
+    }
+  }
+  return strands.length > MAX_FAN ? { strands: [], badge: strands.length } : { strands, badge: undefined };
+}
+
+/**
+ * The conductors of a net as the strands draw them. A wire conductor takes
+ * its spec's colour, a cable net fans into the cable's cores with the
+ * colours the cable lists, and anything unspecified takes the domain
+ * colour. Index `i` of this list is conductor `<net>#i`.
+ */
+export function netStrands(project: Project, net: Route["net"], domain: string): { index: number; color: string; ref: string | undefined; label: string }[] {
+  const domainColor = project.file.domains.find((d) => d.id === domain)?.color ?? "#888";
+  const out: { index: number; color: string; ref: string | undefined; label: string }[] = [];
+  for (const ref of netConductors(project, net, domain)) {
+    const resolved = ref ? resolveSpec(project.library, ref) : undefined;
+    const cores = resolved?.kind === "cable" ? resolved.spec.conductors : 1;
+    for (let core = 0; core < cores; core++) {
+      const color = conductorColor(project.library, ref, core, domainColor);
+      const label = !resolved ? ref ?? "no spec" : cores > 1 ? `${resolved.spec.name}, core ${core + 1}` : resolved.spec.name;
+      out.push({ index: out.length, color, ref, label });
+    }
+  }
+  return out;
 }
 
 export function endpointName(project: Project, e: Endpoint | undefined): string {

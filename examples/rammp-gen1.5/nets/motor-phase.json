@@ -38,7 +38,10 @@
       "cmp-222234/M1",
       "cmp-222237/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   },
   {
     "id": "net-22225h",
@@ -47,7 +50,10 @@
       "cmp-222234/M2",
       "cmp-222238/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   },
   {
     "id": "net-22225k",
@@ -56,7 +62,10 @@
       "cmp-222235/M1",
       "cmp-222239/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   },
   {
     "id": "net-22225n",
@@ -65,7 +74,10 @@
       "cmp-222235/M2",
       "cmp-22223a/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   },
   {
     "id": "net-22225q",
@@ -74,7 +86,10 @@
       "cmp-222236/M1",
       "cmp-22223b/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   },
   {
     "id": "net-22225s",
@@ -83,6 +98,9 @@
       "cmp-222236/M2",
       "cmp-22223c/MOT"
     ],
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg14-red",
+      "wires/awg14-black"
+    ]
   }
 ]

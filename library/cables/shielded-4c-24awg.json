@@ -4,5 +4,11 @@
   "conductors": 4,
   "awg": 24,
   "od_mm": 4.8,
-  "shielded": true
+  "shielded": true,
+  "conductor_colors": [
+    "red",
+    "black",
+    "white",
+    "green"
+  ]
 }

@@ -13,6 +13,7 @@ import {
   type Component,
   type ConnectivityCanvas,
   type DefinitionConnector,
+  type Domain,
   type DrcFile,
   type Net,
   type ProjectFile,
@@ -264,7 +265,30 @@ export function pinLayout(project: Project, component: Component): Record<Side, 
   return out;
 }
 
-export function netSpec(project: Project, net: Net, domain: string): { ref: string | undefined; conductors: number } {
+/**
+ * The spec of each conductor a net carries, in order. The net's own list
+ * wins, then its single spec and count, then the domain's list, then the
+ * domain's single spec and count. A net that overrides only the count takes
+ * the domain's list up to that count, and a net that overrides only the
+ * spec takes the domain's count. An entry is undefined where nothing names
+ * a spec; a net with nothing at all carries one conductor.
+ */
+export function netConductors(project: Project, net: Net, domain: string): (string | undefined)[] {
+  if (net.conductor_specs) return net.conductor_specs;
   const d = project.file.domains.find((x) => x.id === domain);
-  return { ref: net.spec ?? d?.spec, conductors: net.conductors ?? d?.conductors ?? 1 };
+  const count = net.conductors ?? d?.conductor_specs?.length ?? d?.conductors ?? 1;
+  const out: (string | undefined)[] = [];
+  for (let i = 0; i < count; i++) out.push(net.spec ?? d?.conductor_specs?.[i] ?? d?.spec);
+  return out;
+}
+
+/** The conductor count a domain hands a net that does not override it. */
+export function domainConductorCount(d: Pick<Domain, "conductors" | "conductor_specs">): number {
+  return d.conductor_specs?.length ?? d.conductors ?? 1;
+}
+
+/** The net's spec as one reference, for callers that treat the net as one thing: the first conductor's spec, and the conductor count. */
+export function netSpec(project: Project, net: Net, domain: string): { ref: string | undefined; conductors: number } {
+  const specs = netConductors(project, net, domain);
+  return { ref: specs.find((s) => s !== undefined), conductors: specs.length };
 }

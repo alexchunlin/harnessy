@@ -6,15 +6,19 @@
       "id": "24v",
       "name": "24 V",
       "color": "#ff7f0e",
-      "spec": "wires/awg18-red",
-      "conductors": 2
+      "conductor_specs": [
+        "wires/awg18-red",
+        "wires/awg18-black"
+      ]
     },
     {
       "id": "48v",
       "name": "48 V",
       "color": "#d62728",
-      "spec": "wires/awg12-red",
-      "conductors": 2
+      "conductor_specs": [
+        "wires/awg12-red",
+        "wires/awg12-black"
+      ]
     },
     {
       "id": "analog",
@@ -69,8 +73,11 @@
       "id": "motor-phase",
       "name": "Motor phase",
       "color": "#8c564b",
-      "spec": "wires/awg14-black",
-      "conductors": 3
+      "conductor_specs": [
+        "wires/awg14-black",
+        "wires/awg14-yellow",
+        "wires/awg14-blue"
+      ]
     },
     {
       "id": "pwm",

@@ -33,11 +33,15 @@ _Avoid_: Terminal, contact
 ### Logical connectivity
 
 **Net**:
-A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain and takes that domain's wire or cable spec unless it overrides it. A connector can terminate several nets from different domains. A bus daisy-chained with patch cables is a chain of two-connector nets, one per cable. Nets that a bridge joins form a bus and stay separate nets.
+A logical electrical connection between two or more connectors, independent of how it is wired. Belongs to exactly one domain and takes that domain's conductors unless it overrides them, either as one spec with a count or as one spec per conductor. A connector can terminate several nets from different domains. A bus daisy-chained with patch cables is a chain of two-connector nets, one per cable. Nets that a bridge joins form a bus and stay separate nets.
 _Avoid_: Signal, link, edge, connection
 
+**Conductor**:
+One wire of a net, or one core of a net's cable, counted from one. A net's conductors are the list of specs it resolves to, so each has its own colour and part number. A conductor is addressed as its net's id and its number, derived and never stored. On the topology view the conductors of a bundle fan out as coloured strands near each end of a segment.
+_Avoid_: Core (for a loose wire), strand (a strand is the drawing of a conductor, not the thing), lead
+
 **Domain**:
-The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethernet, analog, motor phase, encoder ABZ, SPI, PWM, digital I/O, USB, HDMI, GMSL. A sensor rail is not a domain; the signal domain's default cable carries it. A domain names a default wire or cable spec and conductor count, which a net can override. No catch-all domains; "local" is not a domain.
+The signal family a net belongs to. The RAMMP starter set: 48 V, 24 V, CAN, Ethernet, analog, motor phase, encoder ABZ, SPI, PWM, digital I/O, USB, HDMI, GMSL. A sensor rail is not a domain; the signal domain's default cable carries it. A domain names its default conductors, either one wire or cable spec with a count or one spec per conductor, which a net can override. No catch-all domains; "local" is not a domain.
 _Avoid_: Type, category, class, local
 
 **Bridge**:
@@ -146,7 +150,7 @@ _Avoid_: Catalogue, parts database
 A reusable description of a single conductor: gauge, insulation outer diameter, color, ampacity.
 
 **Cable spec**:
-A reusable description of a jacketed multi-conductor cable such as Cat6 or a 4-core shielded cable, with its jacket outer diameter and conductor count.
+A reusable description of a jacketed multi-conductor cable such as Cat6 or a 4-core shielded cable, with its jacket outer diameter and conductor count. May list one colour per conductor inside the jacket.
 _Avoid_: Wire type, cable type
 
 **Sheath spec**:

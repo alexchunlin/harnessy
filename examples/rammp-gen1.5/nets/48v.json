@@ -5,8 +5,10 @@
       "cmp-22222k/MAIN",
       "cmp-22222n/IN"
     ],
-    "spec": "wires/awg8-red",
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg8-red",
+      "wires/awg8-black"
+    ]
   },
   {
     "id": "net-22223z",
@@ -14,8 +16,10 @@
       "cmp-22222n/OUT",
       "cmp-22222p/BAT"
     ],
-    "spec": "wires/awg8-red",
-    "conductors": 2
+    "conductor_specs": [
+      "wires/awg8-red",
+      "wires/awg8-black"
+    ]
   },
   {
     "id": "net-222242",

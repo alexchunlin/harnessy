@@ -1,5 +1,5 @@
 import type { Topology } from "./schema";
-import { allNets, componentConnectors, connectorLabel, netSpec, type Project } from "./project";
+import { allNets, componentConnectors, connectorLabel, netConductors, netSpec, type Project } from "./project";
 import { resolveRef, resolveSpec } from "./library";
 import { parseAddress } from "./refs";
 import { assemblyLengthOf, hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
@@ -10,7 +10,12 @@ export type CutListColumn = (typeof CUT_LIST_COLUMNS)[number];
 export type RowKind = "housing" | "contacts" | "wire" | "cable" | "sheath" | "tie" | "splice" | "breakout" | "assembly";
 
 export type Cell = string | number | undefined;
-export type CutListRow = Record<CutListColumn, Cell> & { row: RowKind; harness: string };
+export type CutListRow = Record<CutListColumn, Cell> & {
+  row: RowKind;
+  harness: string;
+  /** Sorts a wire row with the rest of its net: the net's first conductor's spec. Not a column. */
+  group?: string;
+};
 
 export const SUMMARY_COLUMNS = ["harness", "row", "ref", "part_number", "description", "qty", "length_mm"] as const;
 export type SummaryRow = Record<(typeof SUMMARY_COLUMNS)[number], Cell> & { row: RowKind; harness: string };
@@ -58,6 +63,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
   for (const { net, domain } of allNets(project)) {
     const route = routeOf(graph, net, domain);
     const spec = netSpec(project, net, domain);
+    const conductors = netConductors(project, net, domain);
     const resolved = spec.ref ? resolveSpec(lib, spec.ref) : undefined;
     const netLabel = label(net);
     for (const c of net.connectors) {
@@ -84,21 +90,24 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
       });
     } else {
       for (const leg of legsOf(graph, route, assemblyLength)) {
-        for (let i = 0; i < spec.conductors; i++) {
+        // Each conductor is cut from its own spec, so a red and black pair lists as a red row and a black row.
+        for (let i = 0; i < conductors.length; i++) {
+          const own = conductors[i] ? resolveSpec(lib, conductors[i]!) : undefined;
           row({
             harness: harnessOf(leg.segments[0].id),
             row: "wire",
-            ref: spec.ref,
-            part_number: resolved?.spec.part_number,
-            description: resolved?.spec.name,
-            color: resolved?.kind === "wire" ? resolved.spec.color : undefined,
+            group: spec.ref,
+            ref: conductors[i],
+            part_number: own?.spec.part_number,
+            description: own?.spec.name,
+            color: own?.kind === "wire" ? own.spec.color : undefined,
             qty: 1,
             length_mm: leg.lengthMm,
             from: name(leg.from),
             to: name(leg.to),
             net: netLabel,
             domain,
-            notes: spec.conductors > 1 ? `conductor ${i + 1} of ${spec.conductors}` : undefined,
+            notes: conductors.length > 1 ? `conductor ${i + 1} of ${conductors.length}` : undefined,
           });
         }
       }
@@ -178,7 +187,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
 
 const ROW_ORDER: RowKind[] = ["housing", "contacts", "wire", "cable", "sheath", "tie", "splice", "breakout", "assembly"];
 
-function compareRows(a: { harness: string; row: RowKind; net?: Cell; from?: Cell; to?: Cell; notes?: Cell; ref?: Cell }, b: typeof a): number {
+function compareRows(a: { harness: string; row: RowKind; net?: Cell; from?: Cell; to?: Cell; notes?: Cell; ref?: Cell; group?: string }, b: typeof a): number {
   const ha = a.harness === PURCHASED ? 1 : 0;
   const hb = b.harness === PURCHASED ? 1 : 0;
   if (ha !== hb) return ha - hb;
@@ -187,8 +196,9 @@ function compareRows(a: { harness: string; row: RowKind; net?: Cell; from?: Cell
   const rb = ROW_ORDER.indexOf(b.row);
   if (ra !== rb) return ra - rb;
   // Emission order settles ties in the key: conductor numbers and tie point distances stay in place.
-  const ka = `${a.ref ?? ""}|${a.net ?? ""}|${a.from ?? ""}|${a.to ?? ""}`;
-  const kb = `${b.ref ?? ""}|${b.net ?? ""}|${b.from ?? ""}|${b.to ?? ""}`;
+  // A wire row keys on its net's first spec rather than its own, so a red and black pair stays together.
+  const ka = `${a.group ?? a.ref ?? ""}|${a.net ?? ""}|${a.from ?? ""}|${a.to ?? ""}`;
+  const kb = `${b.group ?? b.ref ?? ""}|${b.net ?? ""}|${b.from ?? ""}|${b.to ?? ""}`;
   return ka < kb ? -1 : ka > kb ? 1 : 0;
 }
 

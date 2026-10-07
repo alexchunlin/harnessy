@@ -389,6 +389,39 @@ export function netsThrough(routes: Route[], endpoint: string): Route[] {
   return routes.filter((r) => r.endpoints.has(endpoint));
 }
 
+// Conductors --------------------------------------------------------------------
+
+/**
+ * A conductor is addressed as `<net id>#<index>`, derived and never stored,
+ * so a selection can name one wire of a net the way it names anything else.
+ */
+export function conductorAddress(netId: string, index: number): string {
+  return `${netId}#${index}`;
+}
+
+export function parseConductor(address: string): { net: string; index: number } | undefined {
+  const m = /^(net-[^#]+)#(\d+)$/.exec(address);
+  return m ? { net: m[1], index: Number(m[2]) } : undefined;
+}
+
+export interface ConductorRoute {
+  route: Route;
+  index: number;
+  /** The segments the conductor runs through: its net's route. */
+  segments: Set<string>;
+  /** The connector endpoints it reaches, in the net's connector order, placed ones only. */
+  ends: string[];
+}
+
+/** Where one conductor goes: its net's route and the connector ends it reaches. Undefined when the address names no routed net. */
+export function conductorRoute(routes: Route[], address: string): ConductorRoute | undefined {
+  const c = parseConductor(address);
+  if (!c) return undefined;
+  const route = routes.find((r) => r.net.id === c.net);
+  if (!route) return undefined;
+  return { route, index: c.index, segments: route.segments, ends: route.placedEndpoints };
+}
+
 // Legs --------------------------------------------------------------------------
 
 export interface Leg {
