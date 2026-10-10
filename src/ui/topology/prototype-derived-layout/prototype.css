@@ -1,0 +1,13 @@
+/* PROTOTYPE for issue #31. The bar is deliberately loud so nobody mistakes it for the design. */
+.p31 .canvas { position: relative; }
+.p31-bar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 1100; display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: #111; color: #fff; border-radius: 999px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); font-size: 12px; white-space: nowrap; }
+.p31-bar button { background: #333; color: #fff; border: 1px solid #555; border-radius: 6px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
+.p31-bar button:disabled { opacity: 0.4; cursor: default; }
+.p31-bar button:hover:not(:disabled) { background: #444; }
+.p31-bar label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.p31-bar .muted { color: #bbb; }
+.p31-name { font-weight: 700; font-family: ui-monospace, Menlo, monospace; }
+.p31-sep { width: 1px; height: 16px; background: #555; }
+.p31-log { position: absolute; left: 12px; top: 12px; pointer-events: none; z-index: 1100; font-size: 11px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; max-width: 320px; }
+.p31-log .muted { opacity: 0.6; }
+.p31 .ep { cursor: crosshair; }
