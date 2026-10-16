@@ -160,6 +160,10 @@ _Avoid_: Document, workspace, file
 The shared catalogue of component definitions, connector types, wire, cable, sheath, breakout, splice, and tie specs, and purchased assemblies that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
 _Avoid_: Catalogue, parts database
 
+**Connector drawer**:
+The table of every connector in the project whose type can change: one row per connector of each component definition the project uses, and one per inline connector of each one-off component, grouped by owner, filterable by type, with the whole library's types listed by count. The one thing a row edits is which connector type the connector carries. An edit to a definition row reaches every component that shares the definition. The name is a joke about a real drawer of a thousand connectors.
+_Avoid_: Assigner, footprint assigner, type table
+
 ### Specs
 
 **Wire spec**:
