@@ -164,6 +164,14 @@ _Avoid_: Catalogue, parts database
 The table of every connector in the project whose type can change: one row per connector of each component definition the project uses, and one per inline connector of each one-off component, grouped by owner, filterable by type, with the whole library's types listed by count. The one thing a row edits is which connector type the connector carries. An edit to a definition row reaches every component that shares the definition. The name is a joke about a real drawer of a thousand connectors.
 _Avoid_: Assigner, footprint assigner, type table
 
+**Reference board**:
+The pane beside the topology view that shows the project's reference photos one at a time, with a thumbnail strip, zoom and pan, and one dimness slider. The photos live in the project's `reference/` folder and `canvas/reference.json` lists them in strip order with an optional caption each. Dimness is a viewing preference kept in the browser.
+_Avoid_: Photo panel, underlay, gallery
+
+**Reference photo**:
+A JPEG, PNG or WebP picture of the CAD or the real machine, copied into the project's `reference/` folder and shown on the reference board. It informs branching decisions and is never drawn under a canvas.
+_Avoid_: Image, attachment, background
+
 ### Specs
 
 **Wire spec**:
