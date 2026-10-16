@@ -15,11 +15,11 @@ A library entry describing a kind of device: its name, part number, and connecto
 _Avoid_: Component type, part, template
 
 **Connector**:
-A pluggable interface on a component, known by its designator (`J1`, `CAN-A`) and its connector type. Holds pins.
+A pluggable interface on a component, known by its designator (`J1`, `CAN-A`) and its connector type. Holds pins, as many as the type counts.
 _Avoid_: Port, plug, socket
 
 **Connector type**:
-A library entry for a kind of connector (JST-GH-6, M12 D-coded, ring terminal): pin count and the mating part, which is the half the harness carries and the BOM lists.
+A library entry for a kind of connector (JST-GH-6, M12 D-coded, ring terminal): pin count and the mating part, which is the half the harness carries and the BOM lists, and the strain relief the harness must give it.
 _Avoid_: Connector spec, housing
 
 **Designator**:
@@ -27,8 +27,8 @@ The name a component definition gives one of its connectors, as printed on the b
 _Avoid_: Slot, port name
 
 **Pin**:
-One electrical contact within a connector. Nets attach to connectors, not pins; pin assignment is a later refinement.
-_Avoid_: Terminal, contact
+One cavity of a connector, numbered from one to its connector type's pin count. A conductor lands on one pin at each connector of its net, and a pin holds at most one conductor across every net that connector terminates. A splice and a bridge have no pins. The connectivity canvas draws connectors, not pins; pins are read and set in the net inspector.
+_Avoid_: Terminal, contact, cavity (as a term of its own), end (reserved for the topology)
 
 ### Logical connectivity
 
@@ -123,15 +123,31 @@ A covering (braided sleeve, spiral wrap, heat shrink) applied over an ordered, c
 _Avoid_: Sleeving, wrap, jacket (jacket is the cable spec's own outer layer)
 
 **Tie point**:
-A location along a segment where the harness is fastened to the machine. Its position is a distance in millimetres from one named endpoint of the segment, and it references a tie spec. Each tie point is a BOM item.
+A location along a segment where the harness is fastened to the machine. Its position is a distance in millimetres from one named endpoint of the segment, and it references a tie spec. Each tie point is a BOM item. A tie point bounds a stretch, and it carries the slack of the stretch on its first-end side.
 _Avoid_: Tie-down, anchor, mount
+
+**Stretch**:
+A run of one segment between consecutive bounds, where a bound is an endpoint of the segment or a tie point on it. A segment with no tie points is one stretch. Derived from the tie points in order and never stored. Each stretch has a slack.
+_Avoid_: Span, section, interval
+
+**Slack**:
+Extra conductor length added to a stretch beyond its routed length, in millimetres, so the harness can be fitted and dressed. A stretch without its own slack takes its harness's default, else the project's, which starts at zero. A purchased assembly has no slack. Slack is never negative.
+_Avoid_: Buffer, allowance, margin, service loop (a service loop is one reason for slack, not the thing)
+
+**Minimum bend radius**:
+The tightest curve a conductor may be bent to without damage, in millimetres, declared on a wire spec, a cable spec, and optionally a sheath spec. A bundle's minimum bend radius is the largest of its conductors' and its sheaths', since a bundle bends no tighter than its stiffest member. The design rule check measures the curve the 3D view draws for a bundle, through its tie points and straight through any point endpoints, and warns where that curve bends tighter than the bundle allows. A breakout or splice ends the measured curve. A spec with no radius, or a bundle with no 3D placement, is not checked.
+_Avoid_: Bend limit, min radius, curvature (curvature is the measured value, not the declared one)
+
+**Strain relief**:
+The straight length a bundle must run out of a connector before it may bend, in millimetres, declared on the connector type. The 3D view draws it as a straight stub and the bend radius check begins where it ends. A connector type with none draws no stub.
+_Avoid_: Stub (the drawing, not the thing), exit length, boot
 
 **Design rule check**:
 A check the app runs continuously over the project and the active topology. An error means the BOM would be wrong and blocks export; a warning can be silenced per item.
 _Avoid_: Lint, validation
 
 **BOM**:
-The list manufacturing builds a harness from: mating connectors, wire and cable by spec and cut length, purchased cables by part number, sheaths by spec and cut length, splices and breakout parts, and tie points by type. Slack and service loops are not modelled in the MVP.
+The list manufacturing builds a harness from: mating connectors, wire and cable by spec and cut length, purchased cables by part number, sheaths by spec and cut length, splices and breakout parts, and tie points by type. A cut length is the routed length plus the slack of every stretch the piece crosses, and the row says how much of it is slack.
 _Avoid_: Parts list, cut list (a cut list is one section of the BOM)
 
 ### Project and library
@@ -147,14 +163,14 @@ _Avoid_: Catalogue, parts database
 ### Specs
 
 **Wire spec**:
-A reusable description of a single conductor: gauge, insulation outer diameter, color, ampacity.
+A reusable description of a single conductor: gauge, insulation outer diameter, color, ampacity, and minimum bend radius.
 
 **Cable spec**:
-A reusable description of a jacketed multi-conductor cable such as Cat6 or a 4-core shielded cable, with its jacket outer diameter and conductor count. May list one colour per conductor inside the jacket.
+A reusable description of a jacketed multi-conductor cable such as Cat6 or a 4-core shielded cable, with its jacket outer diameter and conductor count. May list one colour per conductor inside the jacket, and a minimum bend radius.
 _Avoid_: Wire type, cable type
 
 **Sheath spec**:
-A reusable description of a covering: braid, spiral wrap, or heat shrink, with its nominal inside diameter.
+A reusable description of a covering: braid, spiral wrap, or heat shrink, with its nominal inside diameter, and an optional minimum bend radius.
 
 **Breakout spec**:
 A reusable description of the part fitted at a breakout: a Y-boot, a taped transition, or a heat-shrink transition. Becomes a BOM row when a breakout references it.
