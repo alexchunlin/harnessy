@@ -18,7 +18,7 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addConnectorToNet, topologyLight, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
@@ -33,7 +33,7 @@ import "./connectivity.css";
 const nodeTypes = { component: ComponentNode, hub: HubNode, group: GroupNode, note: NoteNode };
 const edgeTypes = { net: NetEdge, notelink: NoteLinkEdge };
 const LAST_DOMAIN_KEY = "harnessy.lastDomain";
-const NO_NETS: Set<string> = new Set();
+const NO_LIGHT: { nets: Set<string>; components: Set<string> } = { nets: new Set(), components: new Set() };
 
 export function ConnectivityView() {
   return (
@@ -68,21 +68,15 @@ function Canvas() {
   const lastLocalSelection = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "connectivity" ? selection.ids : []), [selection]);
-  // A selection on the topology canvas lights its nets here, read-only: a net by itself, a segment by the nets routed through it.
-  const litNets = useMemo(() => {
-    if (selection.view !== "topology" || selection.ids.length === 0) return NO_NETS;
+  // A selection on the topology canvas lights its counterparts here, read-only: nets, and the components of selected connector endpoints.
+  const light = useMemo(() => {
+    if (selection.view !== "topology" || selection.ids.length === 0) return NO_LIGHT;
     const topology = activeTopology ? project.topologies.get(activeTopology) : undefined;
-    if (!topology) return NO_NETS;
-    const routes = allRoutes(project, buildGraph(topology));
-    const onSegments = netsOnSegments(routes);
-    const out = new Set<string>();
-    for (const id of selection.ids) {
-      if (routes.some((r) => r.net.id === id)) out.add(id);
-      for (const r of onSegments.get(id) ?? []) out.add(r.net.id);
-    }
-    return out.size ? out : NO_NETS;
+    if (!topology) return NO_LIGHT;
+    const out = topologyLight(project, topology, selection.ids);
+    return out.nets.size || out.components.size ? out : NO_LIGHT;
   }, [selection, project, activeTopology]);
-  const derived = useMemo(() => deriveFlow(project, activeLayer, selected, litNets), [project, activeLayer, selected, litNets]);
+  const derived = useMemo(() => deriveFlow(project, activeLayer, selected, light.nets, light.components), [project, activeLayer, selected, light]);
 
   // React Flow owns the nodes and edges it draws, so a drag in flight lives
   // there and never touches the project. When the derivation changes, the

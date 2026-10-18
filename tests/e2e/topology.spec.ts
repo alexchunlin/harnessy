@@ -101,6 +101,35 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await expect(lines).toHaveCount(1);
 });
 
+test("side by side: a connector endpoint lights its component and its own nets, and the topology selection stays", async ({ page }) => {
+  const folder = await freshExample("side-by-side-connector");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Side by side" }).click();
+  await canvasSettled(page);
+  await page.waitForTimeout(400);
+  const left = page.getByTestId("connectivity-canvas");
+  const right = page.getByTestId("topology-canvas");
+  const viewports = () => Promise.all([left, right].map((c) => c.locator(".react-flow__viewport").evaluate((e) => (e as { style: { transform: string } }).style.transform)));
+  const before = await viewports();
+
+  // The in-line switch IN sits on the 48 V bus: its bridge joins the battery net to the net out of OUT.
+  const switchIn = right.locator('.react-flow__node[data-id="end-22228e"]');
+  await switchIn.click();
+
+  await expect(left.locator('.react-flow__node[data-id="cmp-22222n"] .cmp-node')).toHaveClass(/\blit\b/);
+  await expect(left.locator('.react-flow__node[data-id="cmp-22222k"] .cmp-node')).not.toHaveClass(/\blit\b/);
+  await expect(left.locator('.react-flow__edge[data-id="net-22223y"] .net-halo')).toHaveCount(1);
+  await expect(left.locator('.react-flow__edge[data-id="net-22223z"] .net-halo')).toHaveCount(0);
+
+  // The selection and the inspector stay on the endpoint, and neither viewport moved.
+  await expect(switchIn).toHaveClass(/selected/);
+  await expect(left.locator(".react-flow__node.selected")).toHaveCount(0);
+  // Side by side hides the inspectors, but the topology one still holds the endpoint.
+  await expect(page.locator(".side-pane-right .pane-right h3").first()).toHaveText("connector");
+  await page.waitForTimeout(400);
+  expect(await viewports()).toEqual(before);
+});
+
 test("side by side shows both canvases, a net picked on either side lights it on the other, and the divider is remembered", async ({ page }) => {
   const folder = await freshExample("side-by-side");
   await openProject(page, folder);
