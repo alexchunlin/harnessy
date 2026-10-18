@@ -8,4 +8,6 @@ export * from "./derive";
 export * from "./drc";
 export * from "./bom";
 export * from "./ops";
+export * from "./definitions";
+export * from "./drawer";
 export * from "./starter";
