@@ -319,6 +319,20 @@ export const TopologyCanvasSchema = z.object({
   endpoints: z.record(z.string(), PositionSchema),
 });
 
+/** A point in 3D in whole millimetres, or a turn in whole degrees: `[x, y, z]`. */
+export const Vec3Schema = z.tuple([z.number().int(), z.number().int(), z.number().int()]);
+
+/**
+ * One topology's placement, `canvas/<top>.3d.json`. Positions of placed
+ * endpoints and tie points in millimetres, and the rotation of placed
+ * connectors in degrees, Euler order XYZ. Nothing else: no camera, no sketch.
+ */
+export const PlacementSchema = z.object({
+  positions: z.record(z.string(), Vec3Schema),
+  rotations: z.record(z.string(), Vec3Schema),
+  ties: z.record(z.string(), Vec3Schema),
+});
+
 export const DrcFileSchema = z.object({
   silences: z.array(z.object({ check: z.string(), target: z.string() })),
 });
@@ -342,5 +356,7 @@ export type ConnectivityCanvas = z.infer<typeof ConnectivityCanvasSchema>;
 export type PinLayout = z.infer<typeof PinLayoutSchema>;
 export type TopologyCanvas = z.infer<typeof TopologyCanvasSchema>;
 export type DrcFile = z.infer<typeof DrcFileSchema>;
+export type Vec3 = z.infer<typeof Vec3Schema>;
+export type Placement = z.infer<typeof PlacementSchema>;
 
 export const ALL_LAYER_ID = "all";

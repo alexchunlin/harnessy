@@ -75,9 +75,10 @@ export function useDrag(onMove: (id: string, p: Vec3) => void, onEnd?: (id: stri
 /**
  * Cartesian handles on one thing: red, green and blue arrows to move it, or
  * rings to turn it. The handles sit on an empty object that mirrors the
- * thing's position and rotation, and every change is reported back.
+ * thing's position and rotation. Every change is reported back, and
+ * letting go is reported once so the caller can commit the move.
  */
-export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange }: { at: Vec3; rotation?: Vec3; mode: "translate" | "rotate"; onChange: (position: Vec3, rotation: Vec3) => void }) {
+export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange, onEnd }: { at: Vec3; rotation?: Vec3; mode: "translate" | "rotate"; onChange: (position: Vec3, rotation: Vec3) => void; onEnd?: () => void }) {
   const target = useRef<THREE.Group>(null!);
   return (
     <>
@@ -91,6 +92,7 @@ export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange }: { at: Vec3; 
           const o = target.current;
           onChange([o.position.x, o.position.y, o.position.z], [o.rotation.x, o.rotation.y, o.rotation.z]);
         }}
+        onMouseUp={() => onEnd?.()}
       />
     </>
   );

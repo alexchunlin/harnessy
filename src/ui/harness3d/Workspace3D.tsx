@@ -7,24 +7,24 @@
  * points and tie points are dragged into place, and segments pull straight
  * between them. The routed length of every segment is live and the stored
  * length shows beside it. A tie point is a position in space; its distance
- * along the segment is derived. Writing puts the routed lengths and the tie
- * points into the project through the same edit path the topology view
- * uses, so it is one undo step.
+ * along the segment is derived.
+ *
+ * What is drawn is the project's saved placement laid over the sketch: a
+ * part nobody placed sits where the sketch has it. A drag draws from local
+ * state and, on release, places the one part it moved as one undoable edit.
+ * Opening the view changes nothing in the project.
+ *
+ * Writing still puts the routed lengths and the tie points into the project
+ * as one undo step, until lengths come from the placement itself.
  *
  * A CAD file can be loaded as a reference at real scale. It is scenery: it
- * has its own handles and nothing snaps to it.
- *
- * Placements cover every harness in the topology at once. Picking a harness
- * only filters what is drawn. Placements and the reference model are kept
- * in memory until the page reloads; they are not saved with the project yet.
- * When the topology changes underneath, placements are reconciled: placed
- * parts stay put, new endpoints land beside a placed neighbour, and removed
- * ones go.
+ * has its own handles and nothing snaps to it. It is kept in memory until
+ * the page reloads; it is not saved with the project yet.
  */
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePoint, removeTiePoint, setSegmentLength, updateTiePoint } from "../../core";
+import { addTiePoint, placementOf, placeParts, removeTiePoint, setSegmentLength, updateTiePoint, type Placement } from "../../core";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
@@ -37,16 +37,20 @@ interface PlacedTie {
   label: string;
 }
 
-interface Placement {
-  positions: Record<string, Vec3>;
-  rotations: Record<string, Vec3>;
-  placed: PlacedTie[];
-  /** Tie point order along each segment, from ends[0] to ends[1]. */
-  chains: Record<string, string[]>;
+/** A tie point made in 3D that the project does not have yet. It lives here until it is written. */
+interface FreshTie extends PlacedTie {
+  at: Vec3;
 }
 
 /** A tie point made in 3D that the project does not have yet carries this id prefix until it is written. */
 const UNWRITTEN = "tie-new";
+
+/** The one part a drag or a handle is moving right now, drawn here until it is let go. Rotation in radians. */
+interface Live {
+  id: string;
+  at: Vec3;
+  rotation?: Vec3;
+}
 
 interface Reference extends Loaded {
   file: string;
@@ -61,6 +65,7 @@ type Mode = "translate" | "rotate";
 const STUB_MM = 25;
 const REFERENCE = "reference";
 const deg = (v: Vec3): Vec3 => [round(THREE.MathUtils.radToDeg(v[0])), round(THREE.MathUtils.radToDeg(v[1])), round(THREE.MathUtils.radToDeg(v[2]))];
+const rad = (v: Vec3): Vec3 => [THREE.MathUtils.degToRad(v[0]), THREE.MathUtils.degToRad(v[1]), THREE.MathUtils.degToRad(v[2])];
 
 /** A connector's wires leave along its local -Y. */
 function exitDirection(rotation: Vec3): Vec3 {
@@ -76,55 +81,62 @@ function turnToward(from: Vec3, to: Vec3): Vec3 {
   return [e.x, e.y, e.z];
 }
 
-/**
- * Fit the placements to the topology as it is now. Everything already placed keeps
- * its place. A new endpoint lands beside a placed neighbour, offset the way
- * the sketch has the two. A tie point the project gained appears at its
- * stored distance, and a written one the project no longer has is dropped.
- */
-function reconcile(world: World3, placement: Placement): Placement {
-  const h = world.all;
-  const positions = { ...placement.positions };
-  const rotations = { ...placement.rotations };
-  const far = (s: { ends: [string, string] }, id: string) => (s.ends[0] === id ? s.ends[1] : s.ends[0]);
+interface Pose {
+  positions: Record<string, Vec3>;
+  /** Connector rotations in radians. */
+  rotations: Record<string, Vec3>;
+  placed: PlacedTie[];
+  /** Tie point order along each segment, from ends[0] to ends[1]. */
+  chains: Record<string, string[]>;
+}
 
-  let pending = h.nodes.filter((n) => !positions[n.id]);
-  while (pending.length) {
-    const before = pending.length;
-    pending = pending.filter((n) => {
-      const seg = h.segments.find((s) => s.ends.includes(n.id) && positions[far(s, n.id)]);
-      if (!seg) return true;
-      const neighbour = far(seg, n.id);
-      positions[n.id] = add(positions[neighbour], sub(world.sketch[n.id], world.sketch[neighbour]));
-      return false;
-    });
-    if (pending.length === before) {
-      for (const n of pending) positions[n.id] = world.sketch[n.id];
-      break;
-    }
-  }
+/**
+ * Where everything is drawn. A saved position wins over the sketch, and the
+ * live part wins over both. A connector with no saved rotation exits toward
+ * the far end of its segment. A tie point with no saved position sits at its
+ * typed distance along the straight line between its segment's ends. Tie
+ * points are ordered by their projection onto that line, ties broken by id.
+ */
+function poseOf(world: World3, placement: Placement, fresh: FreshTie[], live: Live | undefined): Pose {
+  const h = world.all;
+  const over = (id: string, v: Vec3) => (live?.id === id ? live.at : v);
+  const far = (s: { ends: [string, string] }, id: string) => (s.ends[0] === id ? s.ends[1] : s.ends[0]);
+  const positions: Record<string, Vec3> = {};
+  for (const n of h.nodes) positions[n.id] = over(n.id, placement.positions[n.id] ?? world.sketch[n.id]);
+
+  const rotations: Record<string, Vec3> = {};
   for (const n of h.nodes) {
-    if (n.kind !== "connector" || rotations[n.id]) continue;
+    if (n.kind !== "connector") continue;
+    const saved = placement.rotations[n.id];
     const seg = h.segments.find((s) => s.ends.includes(n.id));
-    rotations[n.id] = seg ? turnToward(positions[n.id], positions[far(seg, n.id)]) : [0, 0, 0];
+    rotations[n.id] = live?.id === n.id && live.rotation ? live.rotation : saved ? rad(saved) : seg ? turnToward(positions[n.id], positions[far(seg, n.id)]) : [0, 0, 0];
   }
 
   const segments = new Map(h.segments.map((s) => [s.id, s]));
-  const real = new Set(h.ties.map((t) => t.id));
-  let placed = placement.placed.filter((c) => segments.has(c.segment) && (c.id.startsWith(UNWRITTEN) || real.has(c.id)));
-  const chains: Record<string, string[]> = {};
-  for (const s of h.segments) chains[s.id] = (placement.chains[s.id] ?? []).filter((id) => placed.some((c) => c.id === id));
+  const placed: PlacedTie[] = [];
   for (const t of h.ties) {
     const s = segments.get(t.segment);
-    if (!s || placed.some((c) => c.id === t.id)) continue;
+    if (!s) continue;
     const [a, b] = t.from === s.ends[0] ? s.ends : [s.ends[1], s.ends[0]];
-    positions[t.id] = lerp(positions[a], positions[b], Math.min(1, t.distanceMm / Math.max(1, s.lengthMm)));
-    placed = [...placed, { id: t.id, segment: t.segment, label: t.label }];
-    // Keep the segment's tie points in order along the straight line between its ends.
+    const typed = lerp(positions[a], positions[b], Math.min(1, t.distanceMm / Math.max(1, s.lengthMm)));
+    positions[t.id] = over(t.id, placement.ties[t.id] ?? typed);
+    placed.push({ id: t.id, segment: t.segment, label: t.label });
+  }
+  for (const c of fresh) {
+    if (!segments.has(c.segment)) continue;
+    positions[c.id] = over(c.id, c.at);
+    placed.push({ id: c.id, segment: c.segment, label: c.label });
+  }
+
+  const chains: Record<string, string[]> = {};
+  for (const s of h.segments) {
     const start = positions[s.ends[0]];
     const line = sub(positions[s.ends[1]], start);
     const along = (id: string) => sub(positions[id], start).reduce((sum, v, i) => sum + v * line[i], 0);
-    chains[s.id] = [...chains[s.id], t.id].sort((x, y) => along(x) - along(y));
+    chains[s.id] = placed
+      .filter((c) => c.segment === s.id)
+      .map((c) => c.id)
+      .sort((x, y) => along(x) - along(y) || (x < y ? -1 : 1));
   }
   return { positions, rotations, placed, chains };
 }
@@ -148,22 +160,19 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     return { ...harness, name: show, nodes: harness.nodes.filter((n) => m.nodes.has(n.id)), segments: harness.segments.filter((s) => m.segments.has(s.id)), ties: [] };
   }, [world, show, harness]);
   const tieSpecs = useDoc((d) => d.project?.library.ties);
+  const placement = useDoc((d) => (d.project ? placementOf(d.project, topologyId) : undefined));
   const connectors = useMemo(() => new Set(harness.nodes.filter((n) => n.kind === "connector").map((n) => n.id)), [harness]);
 
-  let [positions, setPositions] = useKept<Record<string, Vec3>>(`${topologyId}:positions`, () => ({}));
-  let [rotations, setRotations] = useKept<Record<string, Vec3>>(`${topologyId}:rotations`, () => ({}));
-  let [placed, setPlaced] = useKept<PlacedTie[]>(`${topologyId}:ties`, () => []);
-  let [chains, setChains] = useKept<Record<string, string[]>>(`${topologyId}:chains`, () => ({}));
-  // The topology the placements were last fitted to. A fresh mount and every project edit fit it again.
-  const [fitted, setFitted] = useState<World3>();
-  if (fitted !== world) {
-    ({ positions, rotations, placed, chains } = reconcile(world, { positions, rotations, placed, chains }));
-    setPositions(positions);
-    setRotations(rotations);
-    setPlaced(placed);
-    setChains(chains);
-    setFitted(world);
-  }
+  const [fresh, setFresh] = useState<FreshTie[]>([]);
+  const [live, setLiveState] = useState<Live>();
+  // The latest live part, read when a drag is let go, which can come before React renders the last move.
+  const liveRef = useRef<Live | undefined>(undefined);
+  const setLive = (l: Live | undefined) => {
+    liveRef.current = l;
+    setLiveState(l);
+  };
+  const { positions, rotations, placed, chains } = useMemo(() => poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, fresh, live), [world, placement, fresh, live]);
+
   const [selected, setSelected] = useState<string>();
   const [frame, setFrame] = useState(0);
   const [mode, setMode] = useState<Mode>("translate");
@@ -225,6 +234,24 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     return { from: s.ends[0], mm: d };
   };
 
+  /**
+   * Let go of the live part. A part the project has is placed as one edit; a
+   * connector saves the rotation it is drawn with, turned or not. A tie point
+   * made here only moves here.
+   */
+  function commit() {
+    const l = liveRef.current;
+    if (!l) return;
+    setLive(undefined);
+    if (fresh.some((c) => c.id === l.id)) {
+      setFresh((cs) => cs.map((c) => (c.id === l.id ? { ...c, at: l.at } : c)));
+      return;
+    }
+    const isTie = harness.ties.some((t) => t.id === l.id);
+    const parts = isTie ? { ties: { [l.id]: l.at } } : { positions: { [l.id]: l.at }, ...(connectors.has(l.id) ? { rotations: { [l.id]: deg(l.rotation ?? rotations[l.id]) } } : {}) };
+    useDoc.getState().edit((p) => placeParts(p, topologyId, parts), "Place in 3D");
+  }
+
   function addTie(segId: string, at: Vec3) {
     const spec = tieSpecs?.has("p-clip-10mm") ? "p-clip-10mm" : [...(tieSpecs?.keys() ?? [])][0];
     if (!spec) {
@@ -232,43 +259,15 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
       return;
     }
     const id = `${UNWRITTEN}${Math.random().toString(36).slice(2, 7)}`;
-    const r = route(segId);
-    // Insert after the span the click landed nearest to.
-    let bestSpan = 0;
-    let bestD = Infinity;
-    for (let i = 1; i < r.length; i++) {
-      const a = r[i - 1].at;
-      const ab = sub(r[i].at, a);
-      const ap = sub(at, a);
-      const t = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / Math.max(1e-6, ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2)));
-      const d = dist(at, add(a, scale(ab, t)));
-      if (d < bestD) {
-        bestD = d;
-        bestSpan = i - 1;
-      }
-    }
-    const before = r.slice(0, bestSpan + 1).filter((x) => x.id !== undefined && chains[segId].includes(x.id)).length;
-    setPositions((p) => ({ ...p, [id]: at }));
-    setPlaced((cs) => [...cs, { id, segment: segId, label: spec }]);
-    setChains((ch) => {
-      const list = [...ch[segId]];
-      list.splice(before, 0, id);
-      return { ...ch, [segId]: list };
-    });
+    setFresh((cs) => [...cs, { id, segment: segId, label: spec, at }]);
     setSelected(id);
   }
 
   function removeTie(id: string) {
-    setPlaced((cs) => cs.filter((c) => c.id !== id));
-    setChains((ch) => Object.fromEntries(Object.entries(ch).map(([seg, list]) => [seg, list.filter((x) => x !== id)])));
+    if (fresh.some((c) => c.id === id)) setFresh((cs) => cs.filter((c) => c.id !== id));
+    else useDoc.getState().edit((p) => removeTiePoint(p, topologyId, id), "Remove tie point");
     setSelected((s) => (s === id ? undefined : s));
   }
-
-  /** Tie points the project has on the drawn segments that 3D has since removed. */
-  const removedTies = () => {
-    const top = useDoc.getState().project?.topologies.get(topologyId);
-    return (top?.ties ?? []).filter((t) => shown.segments.some((s) => s.id === t.segment) && !placed.some((c) => c.id === t.id));
-  };
 
   /** Put the routed lengths and the tie points of the drawn segments into the project, as one undoable edit. */
   function writeAll() {
@@ -285,24 +284,20 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
       if (s.assembly) fixed++;
       else next = setSegmentLength(next, topologyId, s.id, Math.ceil(routed(s.id)));
     }
-    for (const t of removedTies()) next = removeTiePoint(next, topologyId, t.id);
-    const renamed: Record<string, string> = {};
+    const written = new Set<string>();
     for (const c of shownTies) {
       const d = tieDistance(c.id);
       if (top.ties.some((t) => t.id === c.id)) next = updateTiePoint(next, topologyId, c.id, { segment: c.segment, from: d.from, distance_mm: d.mm });
       else {
+        // A tie point made here becomes real with its position placed in the same edit.
         const added = addTiePoint(next, topologyId, c.segment, `ties/${c.label}`, d.mm, d.from);
-        next = added.project;
-        renamed[c.id] = added.id;
+        next = placeParts(added.project, topologyId, { ties: { [added.id]: positions[c.id] } });
+        written.add(c.id);
       }
     }
     doc.edit(() => next, "Write 3D lengths and tie points");
-    // Tie points made here take the ids the project gave them.
-    const now = (id: string) => renamed[id] ?? id;
-    setPlaced((cs) => cs.map((c) => ({ ...c, id: now(c.id) })));
-    setChains((ch) => Object.fromEntries(Object.entries(ch).map(([seg, list]) => [seg, list.map(now)])));
-    setPositions((p) => ({ ...p, ...Object.fromEntries(Object.entries(renamed).map(([from, to]) => [to, p[from]])) }));
-    setSelected((s) => (s === undefined ? s : now(s)));
+    setFresh((cs) => cs.filter((c) => !written.has(c.id)));
+    setSelected((s) => (s !== undefined && written.has(s) ? undefined : s));
     setNotice(`Written to the project. Undo takes it back.${fixed ? ` ${fixed} purchased ${fixed === 1 ? "assembly keeps" : "assemblies keep"} the library length.` : ""}`);
   }
 
@@ -333,10 +328,7 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
   function moved(position: Vec3, rotation: Vec3) {
     if (selected === undefined) return;
     if (selected === REFERENCE) setReference((r) => (r ? { ...r, position, rotation } : r));
-    else {
-      setPositions((p) => ({ ...p, [selected]: position }));
-      if (connectors.has(selected)) setRotations((r) => ({ ...r, [selected]: rotation }));
-    }
+    else setLive({ id: selected, at: position, ...(connectors.has(selected) ? { rotation } : {}) });
   }
 
   const shownAt = shown.nodes.map((n) => positions[n.id]);
@@ -344,13 +336,11 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
   const reach = Math.max(100, ...shownAt.map((p) => dist(p, middle)));
   const diffs = shown.segments.filter((s) => Math.abs(Math.ceil(routed(s.id)) - measured[s.id]) >= 1);
   const stored = new Map(harness.ties.map((t) => [t.id, t]));
-  const tieChanges =
-    removedTies().length +
-    shownTies.filter((c) => {
-      const t = stored.get(c.id);
-      const d = tieDistance(c.id);
-      return !t || t.segment !== c.segment || t.from !== d.from || Math.abs(t.distanceMm - d.mm) >= 1;
-    }).length;
+  const tieChanges = shownTies.filter((c) => {
+    const t = stored.get(c.id);
+    const d = tieDistance(c.id);
+    return !t || t.segment !== c.segment || t.from !== d.from || Math.abs(t.distanceMm - d.mm) >= 1;
+  }).length;
   const selectedLabel = selected === undefined ? undefined : selected === REFERENCE ? reference?.file : (harness.nodes.find((n) => n.id === selected)?.label ?? placed.find((c) => c.id === selected)?.label);
   const unit = reference ? UNITS[reference.units] : 1;
 
@@ -363,8 +353,8 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
             <primitive object={reference.object} />
           </group>
         )}
-        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} measured={measured} selected={selected} onSelect={setSelected} onDrag={(id, p) => setPositions((ps) => ({ ...ps, [id]: p }))} onAddTie={addTie} tieDistance={tieDistance} />
-        {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} />}
+        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} measured={measured} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} onAddTie={addTie} tieDistance={tieDistance} />
+        {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} onEnd={commit} />}
       </Stage>
       <aside className="h3d-panel">
         <p className="muted">Hover or click a connector for its name and type. Click a part for its handles: arrows move it along X, Y and Z, and rings turn a connector. Breakouts and points (circles) and tie points (diamonds) also drag freely. Double-click a segment to add a tie point there. Delete removes the selected tie point. F frames the harness. Esc lets go.</p>
@@ -442,8 +432,8 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
   );
 }
 
-function RouteScene({ harness, positions, rotations, placed, path, routed, measured, selected, onSelect, onDrag, onAddTie, tieDistance }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; path: (segId: string) => Vec3[]; routed: (segId: string) => number; measured: Record<string, number>; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onAddTie: (segId: string, at: Vec3) => void; tieDistance: (id: string) => { from: string; mm: number } }) {
-  const start = useDrag(onDrag);
+function RouteScene({ harness, positions, rotations, placed, path, routed, measured, selected, onSelect, onDrag, onDragEnd, onAddTie, tieDistance }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; path: (segId: string) => Vec3[]; routed: (segId: string) => number; measured: Record<string, number>; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; onAddTie: (segId: string, at: Vec3) => void; tieDistance: (id: string) => { from: string; mm: number } }) {
+  const start = useDrag(onDrag, onDragEnd);
   const [hovered, setHovered] = useState<string>();
   // The card follows the pointer first, and falls back to the selected connector.
   const carded = harness.nodes.find((n) => n.kind === "connector" && n.id === hovered) ?? harness.nodes.find((n) => n.kind === "connector" && n.id === selected);

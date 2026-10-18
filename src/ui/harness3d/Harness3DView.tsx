@@ -1,7 +1,8 @@
 /**
  * The 3D harness view: the harnesses of the active topology placed in space
- * against a CAD model of the machine. It reads the project, and writes
- * segment lengths and tie points back when asked.
+ * against a CAD model of the machine. It draws the saved placement, places
+ * a part when it is dragged, and writes segment lengths and tie points back
+ * when asked.
  */
 import { useMemo, useState } from "react";
 import { useDoc, useProject } from "../store";
@@ -38,7 +39,7 @@ export function Harness3DView() {
           {shown.nodes} endpoints, {shown.segments} segments. Drag empty space to orbit. The cube snaps to standard views.
         </span>
       </div>
-      {/* One workspace per topology. It keeps its placements while the harness filter changes. */}
+      {/* One workspace per topology. The harness filter only changes what is drawn. */}
       <Workspace3D key={topology.id} world={world} show={show} topologyId={topology.id} />
     </div>
   );

@@ -1,8 +1,9 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
+import { placementOf } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
-import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -692,6 +693,43 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
 
 export function removeTiePoint(project: Project, topologyId: string, tieId: string): Project {
   return updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+}
+
+// Placement ------------------------------------------------------------------------
+
+/** What one placement edit sets: positions of endpoints, rotations of connectors in degrees, and positions of tie points. */
+export interface Parts {
+  positions?: Record<string, Vec3>;
+  rotations?: Record<string, Vec3>;
+  ties?: Record<string, Vec3>;
+}
+
+const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]), Math.round(v[1]), Math.round(v[2])];
+
+/**
+ * Place some endpoints, connectors and tie points of one topology, as one
+ * edit. Values round to whole millimetres and degrees. Only connectors keep a
+ * rotation. Entries for ids the topology lacks are dropped, old ones included.
+ */
+export function placeParts(project: Project, topologyId: string, parts: Parts): Project {
+  const t = project.topologies.get(topologyId);
+  if (!t) throw new Error(`no topology ${topologyId}`);
+  const endpoints = new Set(t.endpoints.map((e) => e.id));
+  const connectors = new Set(t.endpoints.filter((e) => e.kind === "connector").map((e) => e.id));
+  const ties = new Set(t.ties.map((x) => x.id));
+  const merge = (old: Record<string, Vec3>, set: Record<string, Vec3> | undefined, keep: Set<string>) => {
+    const out: Record<string, Vec3> = {};
+    for (const [id, v] of Object.entries({ ...old, ...set })) if (keep.has(id)) out[id] = roundVec(v);
+    return out;
+  };
+  const old = placementOf(project, topologyId);
+  const placements = new Map(project.placements);
+  placements.set(topologyId, {
+    positions: merge(old.positions, parts.positions, endpoints),
+    rotations: merge(old.rotations, parts.rotations, connectors),
+    ties: merge(old.ties, parts.ties, ties),
+  });
+  return next(project, { placements });
 }
 
 // Design rule silences ---------------------------------------------------------

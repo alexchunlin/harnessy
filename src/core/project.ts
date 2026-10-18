@@ -4,6 +4,7 @@ import {
   ConnectivityCanvasSchema,
   DrcFileSchema,
   NetsFileSchema,
+  PlacementSchema,
   ProjectFileSchema,
   TopologyCanvasSchema,
   TopologySchema,
@@ -16,6 +17,7 @@ import {
   type Domain,
   type DrcFile,
   type Net,
+  type Placement,
   type ProjectFile,
   type Topology,
   type TopologyCanvas,
@@ -35,6 +37,8 @@ export interface Project {
   topologies: Map<string, Topology>;
   connectivityCanvas: ConnectivityCanvas;
   topologyCanvases: Map<string, TopologyCanvas>;
+  /** Each topology's 3D placement, keyed by topology id. A topology nobody placed has none. */
+  placements: Map<string, Placement>;
   drc: DrcFile;
   /** The project's own library entries, which shadow the repo library. */
   projectLibrary: Library;
@@ -57,6 +61,7 @@ export function emptyProject(name: string, repoLibrary: Library = emptyLibrary()
     topologies: new Map(),
     connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [], bends: {}, pins: {} },
     topologyCanvases: new Map(),
+    placements: new Map(),
     drc: { silences: [] },
     projectLibrary,
     library: mergeLibraries(repoLibrary, projectLibrary),
@@ -121,6 +126,12 @@ export function loadProject(files: Files, repoLibrary: Library = emptyLibrary())
     } else if (path === "canvas/connectivity.json") {
       const c = parseJson(ConnectivityCanvasSchema, path, body, problems);
       if (c) project.connectivityCanvas = c;
+    } else if (path === "canvas/reference.json") {
+      // The reference board and model file. Not read yet, and never a topology canvas.
+    } else if ((m = /^canvas\/([^/]+)\.3d\.json$/.exec(path))) {
+      // A placement for a topology the project lacks loads too; nothing reads it.
+      const placement = parseJson(PlacementSchema, path, body, problems);
+      if (placement) project.placements.set(m[1], placement);
     } else if ((m = /^canvas\/([^/]+)\.json$/.exec(path))) {
       const c = parseJson(TopologyCanvasSchema, path, body, problems);
       if (c) project.topologyCanvases.set(m[1], c);
@@ -146,6 +157,7 @@ export function saveProject(project: Project): Files {
   for (const t of project.topologies.values()) files.set(`topologies/${t.id}.json`, serialize(TopologySchema, t));
   files.set("canvas/connectivity.json", serialize(ConnectivityCanvasSchema, project.connectivityCanvas));
   for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, c));
+  for (const [id, p] of project.placements) if (!isEmptyPlacement(p)) files.set(`canvas/${id}.3d.json`, serialize(PlacementSchema, p));
   files.set("drc.json", serialize(DrcFileSchema, project.drc));
   for (const folder of LIBRARY_FOLDERS) {
     for (const entry of project.projectLibrary[folder].values()) {
@@ -153,6 +165,10 @@ export function saveProject(project: Project): Files {
     }
   }
   return files;
+}
+
+function isEmptyPlacement(p: Placement): boolean {
+  return Object.keys(p.positions).length === 0 && Object.keys(p.rotations).length === 0 && Object.keys(p.ties).length === 0;
 }
 
 /** Paths that `saveProject` would write which `previous` has and `next` lacks. */
