@@ -7,6 +7,7 @@ import {
   connectorLabel,
   degree,
   findNet,
+  markRoot,
   netConductors,
   netLabeller,
   netsThrough,
@@ -22,6 +23,7 @@ import {
   setSegmentAssembly,
   setSegmentLength,
   setSpliceNets,
+  unmarkRoot,
   updateSheath,
   updateTiePoint,
   type Project,
@@ -97,6 +99,7 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
   const graph = buildGraph(topology);
   const d = degree(graph, id);
   const through = netsThrough(routes, id);
+  const isRoot = project.topologyCanvases.get(topology.id)?.roots.includes(id) ?? false;
   return (
     <div className="pane pane-right">
       <h3>{e.kind}</h3>
@@ -108,6 +111,10 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
         <label>Segments</label>
         <span>{d}</span>
       </div>
+      <label className="row" title="The harness grows from its roots. Two or more roots lie flat as a trunk.">
+        <input type="checkbox" checked={isRoot} onChange={(ev) => edit((p) => (ev.target.checked ? markRoot : unmarkRoot)(p, topology.id, id))} />
+        Root
+      </label>
       {e.kind !== "connector" && (
         <div className="field">
           <label>Kind</label>
