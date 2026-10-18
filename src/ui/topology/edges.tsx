@@ -77,7 +77,6 @@ export function SegmentEdge(props: EdgeProps<Edge<SegmentEdgeData>>) {
         <EdgeLabelRenderer>
           <div className="seg-label out-of-layer" style={{ transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}>
             <span>{d.lengthMm !== undefined ? `${d.lengthMm} mm` : "?"}</span>
-            {d.segment.harness && <span className="seg-harness">{d.segment.harness.name}</span>}
           </div>
         </EdgeLabelRenderer>
       </>
@@ -119,7 +118,6 @@ export function SegmentEdge(props: EdgeProps<Edge<SegmentEdgeData>>) {
               {d.badge} cond.
             </span>
           )}
-          {d.segment.harness && <span className="seg-harness">{d.segment.harness.name}</span>}
         </div>
       </EdgeLabelRenderer>
     </>

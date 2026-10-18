@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ENDPOINT_SIZE } from "../../core";
-import { type EndpointNodeData, type LabelNodeData, type TieNodeData, type WaitingGroupNodeData } from "./model";
+import { type BoxNodeData, type EndpointNodeData, type TieNodeData, type WaitingGroupNodeData } from "./model";
 
 /** Width of the grab ring around an endpoint that starts a segment. */
 const RING = 7;
@@ -30,14 +30,17 @@ export function WaitingGroupNode({ data }: NodeProps<Node<WaitingGroupNodeData>>
   return <div className="waiting-group" title={`${data.name}: connectors with nets and no segment yet`}>{data.name}</div>;
 }
 
-export function HarnessLabelNode({ data }: NodeProps<Node<LabelNodeData>>) {
+/** A harness's rounded box. The title band on its top edge carries the name and part number and is the only part that drags. */
+export function HarnessBoxNode({ data }: NodeProps<Node<BoxNodeData>>) {
   const h = data.harness;
   const unnamed = h.anchors.length === 0;
   const doubled = h.anchors.length > 1;
   return (
-    <div className={`harness-label${unnamed ? " unnamed" : ""}${doubled ? " doubled" : ""}${data.outOfLayer ? " out-of-layer" : ""}`} title={doubled ? "Two names in one piece" : unnamed ? "Unnamed harness" : h.partNumber ?? ""}>
-      {h.label}
-      {h.partNumber && <span className="muted"> {h.partNumber}</span>}
+    <div className={`harness-box${unnamed ? " unnamed" : ""}${doubled ? " doubled" : ""}${data.outOfLayer ? " out-of-layer" : ""}`}>
+      <div className="harness-box-title" title={doubled ? "Two names in one piece" : unnamed ? "Unnamed harness" : h.partNumber ?? ""}>
+        <span className="harness-box-name">{h.label}</span>
+        {h.partNumber && <span className="harness-box-pn">{h.partNumber}</span>}
+      </div>
     </div>
   );
 }
