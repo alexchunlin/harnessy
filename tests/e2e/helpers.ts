@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
-import { layoutTopology, loadLibrary, loadProject, type Files, type Position } from "../../src/core";
+import { layoutTopology, loadLibrary, loadProject, type Files, type PieceLayout, type Position } from "../../src/core";
 
 export const E2E_HOME = process.env.HARNESSY_E2E_HOME ?? "/tmp/harnessy-e2e";
 const REPO = process.cwd();
@@ -100,4 +100,14 @@ export async function drawnLayout(folder: string, topologyId: string): Promise<M
 /** The viewport's transform, which an edit must leave alone. */
 export async function viewportTransform(page: Page): Promise<string> {
   return (await page.locator(".react-flow__viewport").getAttribute("style")) ?? "";
+}
+
+/** Core's harness boxes for the project as saved in `folder`, piece by piece, purchased cables with none. */
+export async function harnessBoxes(folder: string, topologyId: string): Promise<PieceLayout[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  return layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!).pieces;
 }

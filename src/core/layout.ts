@@ -272,6 +272,18 @@ function boxAround(r: Rect): Rect {
   return { x: r.x - BOX_PAD, y: r.y - BOX_PAD - BOX_TITLE, w: r.w + 2 * BOX_PAD, h: r.h + 2 * BOX_PAD + BOX_TITLE };
 }
 
+/** The harness box around endpoint boxes wherever they are drawn, so a view can redraw it mid-glide or mid-drag. */
+export function harnessBoxRect(endpoints: { at: Position; size: { w: number; h: number } }[]): Rect {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const { at, size } of endpoints) {
+    minX = Math.min(minX, at.x - size.w / 2);
+    maxX = Math.max(maxX, at.x + size.w / 2);
+    minY = Math.min(minY, at.y - size.h / 2);
+    maxY = Math.max(maxY, at.y + size.h / 2);
+  }
+  return boxAround({ x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+}
+
 function bounds(graph: Graph, pos: Positions): Rect {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [id, p] of pos) {

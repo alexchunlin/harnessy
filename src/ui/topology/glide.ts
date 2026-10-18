@@ -25,6 +25,8 @@ export function useGlide(target: Map<string, Position>, from: { current: Map<str
       setShown(target);
       return;
     }
+    // Draw the start at once, so an entry in `from` holds from this frame and not only from the first tick.
+    setShown(start);
     const t0 = performance.now();
     let frame = 0;
     const tick = (t: number) => {

@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
 import { deriveTopology, drawnPositions, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
-import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
+import { EndpointNode, HarnessBoxNode, TieNode } from "./nodes";
 import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
-const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode };
+const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessBoxNode };
 const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
 
 export function TopologyView() {
@@ -62,7 +62,18 @@ function Canvas({ topologyId }: { topologyId: string }) {
   // Homes come from the layout; after an edit the endpoints glide to them and the viewport stays where it is.
   const homes = useMemo(() => drawnPositions(project, topology), [project, topology]);
   const glideFrom = useRef(new Map<string, Position>());
-  const drawn = useGlide(homes, glideFrom);
+  const glided = useGlide(homes, glideFrom);
+  // A harness box mid-drag carries every endpoint of its piece by the same amount; the box redraws around them.
+  const [boxDrag, setBoxDrag] = useState<{ piece: string; members: Set<string>; delta: Position } | null>(null);
+  const boxDragStart = useRef<Position | null>(null);
+  const drawn = useMemo(() => {
+    if (!boxDrag) return glided;
+    const { members, delta } = boxDrag;
+    return new Map([...glided].map(([id, p]) => [id, members.has(id) ? { x: p.x + delta.x, y: p.y + delta.y } : p]));
+  }, [glided, boxDrag]);
+  // The drop's edit gives the piece new homes; the drag lets go only once they are in, so the box never jumps back for a frame.
+  useEffect(() => setBoxDrag(null), [homes]);
+  const [menu, setMenu] = useState<{ x: number; y: number; piece: string } | null>(null);
   const model = useMemo(() => deriveTopology(project, topology, selected, drawn, drafts, options), [project, topology, selected, drawn, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -161,10 +172,17 @@ function Canvas({ topologyId }: { topologyId: string }) {
           return changed ? { ...f, nodes } : f;
         });
       }
+      for (const c of changes) {
+        if (c.type !== "position" || !c.position || !c.dragging || !c.id.startsWith("harness:") || !boxDragStart.current) continue;
+        const piece = c.id.slice("harness:".length);
+        const members = modelRef.current.harnesses.find((h) => h.piece.id === piece)?.piece.endpoints ?? new Set<string>();
+        const delta = { x: Math.round(c.position.x - boxDragStart.current.x), y: Math.round(c.position.y - boxDragStart.current.y) };
+        setBoxDrag({ piece, members, delta });
+      }
       setDrafts((prev) => {
         let next: Map<string, Position> | undefined;
         for (const c of changes) {
-          if (c.type === "position" && c.position && c.dragging) {
+          if (c.type === "position" && c.position && c.dragging && !c.id.startsWith("harness:")) {
             next ??= new Map(prev);
             next.set(c.id, c.position);
           }
@@ -178,8 +196,30 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const onEdgesChange = useCallback((changes: EdgeChange<TopoEdge>[]) => applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]), [applySelectChanges]);
 
+  const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    boxDragStart.current = node.type === "harness" ? { ...node.position } : null;
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node, dragged: Node[]) => {
+      if (node.type === "harness") {
+        boxDragStart.current = null;
+        if (!boxDrag || (boxDrag.delta.x === 0 && boxDrag.delta.y === 0)) {
+          setBoxDrag(null);
+          return;
+        }
+        const { piece, members, delta } = boxDrag;
+        // Each endpoint starts its glide where the drag left it, which is its new home.
+        for (const id of members) {
+          const p = drawn.get(id);
+          if (p) glideFrom.current.set(id, p);
+        }
+        edit((p) => {
+          const was = p.topologyCanvases.get(topologyId)?.pieces[piece]?.offset ?? { x: 0, y: 0 };
+          return setBoxOffset(p, topologyId, piece, { x: was.x + delta.x, y: was.y + delta.y });
+        });
+        return;
+      }
       const moved = dragged.length ? dragged : [node];
       edit((p) => {
         let next = p;
@@ -205,7 +245,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       });
       setDrafts(new Map());
     },
-    [edit, topologyId, topology, model],
+    [edit, topologyId, topology, model, boxDrag, drawn],
   );
 
   const onConnect = useCallback(
@@ -301,7 +341,15 @@ function Canvas({ topologyId }: { topologyId: string }) {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={(e, node) => {
+            if (node.type !== "harness") return;
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, piece: node.id.slice("harness:".length) });
+          }}
+          onPaneClick={() => setMenu(null)}
+          onMoveStart={() => setMenu(null)}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
           onEdgeDoubleClick={(_, e) => e.type === "segment" && e.data?.segment.assembly === undefined && openLength(e.id)}
@@ -321,8 +369,31 @@ function Canvas({ topologyId }: { topologyId: string }) {
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {menu && <BoxMenu at={menu} onClose={() => setMenu(null)} onReset={() => edit((p) => resetBoxOffset(p, topologyId, menu.piece))} />}
       </div>
       <Inspector project={project} topology={topology} routes={model.routes} selected={selection.view === "topology" ? selection.ids : []} edit={edit} onSelect={(ids) => select("topology", ids)} />
+    </div>
+  );
+}
+
+/** A harness box's context menu. Closes on any pointer press outside it, or Escape. */
+function BoxMenu({ at, onClose, onReset }: { at: { x: number; y: number }; onClose: () => void; onReset: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: PointerEvent) => !ref.current?.contains(e.target as globalThis.Node) && onClose();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key);
+    };
+  }, [onClose]);
+  return (
+    <div className="topo-menu" role="menu" ref={ref} style={{ left: at.x, top: at.y }} onContextMenu={(e) => e.preventDefault()}>
+      <button role="menuitem" onClick={() => (onReset(), onClose())}>
+        Reset position
+      </button>
     </div>
   );
 }
