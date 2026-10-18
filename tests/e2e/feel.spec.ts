@@ -200,6 +200,57 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
   await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(1);
 });
 
+test("R turns selected components a quarter under the canvas, each about its own centre, in one undo step", async ({ page }) => {
+  const folder = await freshExample("feel-turn");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  type Pins = Record<string, { left: string[]; right: string[]; top: string[]; bottom: string[] }>;
+  const pinsFile = async () => ((await readJson(folder, "canvas/connectivity.json")) as { pins: Pins }).pins;
+
+  const dcdc = page.locator(".react-flow__node-component", { hasText: "24 V DC/DC" }).first();
+  const id = (await dcdc.getAttribute("data-id"))!;
+  expect((await pinsFile())[id]).toBeUndefined();
+  const centreOf = async () => {
+    const b = (await dcdc.locator(".cmp-node").boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const before = await centreOf();
+
+  await dcdc.locator(".cmp-title").click();
+  await page.keyboard.press("r");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.top?.join() === "IN");
+  expect((await pinsFile())[id]).toEqual({ left: [], right: [], top: ["IN"], bottom: ["OUT4", "OUT3", "OUT2", "OUT1"] });
+  await expect(dcdc.locator(".cmp-connector.top")).toHaveCount(1);
+  await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(4);
+  // The component file did not change.
+  expect(await readJson(folder, `components/${id}.json`)).toEqual(await readJson(`${process.cwd()}/examples/rammp-gen1.5`, `components/${id}.json`));
+  // The box turned about its centre, give or take the grid and the zoom.
+  const after = await centreOf();
+  expect(Math.abs(after.x - before.x)).toBeLessThan(8);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(8);
+
+  // R typed into a field turns nothing.
+  const name = page.locator(".pane-right input").first();
+  await name.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("R");
+  await waitForFile(folder, `components/${id}.json`, (v) => (v as { name: string }).name.endsWith("R"));
+  expect((await pinsFile())[id]).toEqual({ left: [], right: [], top: ["IN"], bottom: ["OUT4", "OUT3", "OUT2", "OUT1"] });
+
+  // Two selected components each turn once, and one undo puts both back.
+  const camera = page.locator(".react-flow__node-component", { hasText: "Fisheye camera 1" }).first();
+  const cameraId = (await camera.getAttribute("data-id"))!;
+  const cameraPins = await camera.locator(".cmp-connector.left").count();
+  expect(cameraPins).toBeGreaterThan(0);
+  await dcdc.locator(".cmp-title").click();
+  await camera.locator(".cmp-title").click({ modifiers: ["Shift"] });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
+  await page.keyboard.press("r");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.right?.join() === "IN" && (v as { pins: Pins }).pins[cameraId]?.top?.length === cameraPins);
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.top?.join() === "IN" && (v as { pins: Pins }).pins[cameraId] === undefined);
+});
+
 test("boxes snap to the grid, size to their labels, and arrange in a row one pitch apart", async ({ page }) => {
   const folder = await freshExample("feel-grid");
   await openProject(page, folder);
