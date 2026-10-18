@@ -1,5 +1,5 @@
 import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setInlineConnectors, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
-import { allNets, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
+import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
 import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges } from "../../core";
@@ -264,6 +264,9 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
   const overridden = net.conductor_specs !== undefined || net.spec !== undefined || net.conductors !== undefined;
   const free = allConnectorAddresses(project).filter((a) => !net.connectors.includes(a));
   const hasBends = Object.keys(project.connectivityCanvas.bends).some((k) => k === id || k.startsWith(`${id}:`));
+  const activeTopology = useDoc((s) => s.activeTopology);
+  // A net that runs only over purchased assemblies has its pinout moulded in.
+  const pinned = asksForPins(activeTopology ? project.topologies.get(activeTopology) : undefined, net, domain);
   return (
     <div className="pane pane-right">
       <h3>Net</h3>
@@ -297,19 +300,23 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
           <li key={a} className="net-connector" data-address={a} onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
             <div className="row">
               <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
-              <button onClick={() => edit((p) => numberPinsInOrder(p, id, a))} title="Set this connector's pins to 1, 2, 3 in conductor order">
-                Number in order
-              </button>
+              {pinned && (
+                <button onClick={() => edit((p) => numberPinsInOrder(p, id, a))} title="Set this connector's pins to 1, 2, 3 in conductor order">
+                  Number in order
+                </button>
+              )}
               <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
                 x
               </button>
             </div>
-            <PinFields
-              label={connectorLabel(project, a)}
-              pins={netPins(project, net, domain, a)}
-              color={(i) => conductorColor(project.library, conductors.length > 1 ? conductors[i] : conductors[0], i, d?.color ?? "#888")}
-              onSet={(i, pin) => edit((p) => setPin(p, id, a, i, pin))}
-            />
+            {pinned && (
+              <PinFields
+                label={connectorLabel(project, a)}
+                pins={netPins(project, net, domain, a)}
+                color={(i) => conductorColor(project.library, conductors.length > 1 ? conductors[i] : conductors[0], i, d?.color ?? "#888")}
+                onSet={(i, pin) => edit((p) => setPin(p, id, a, i, pin))}
+              />
+            )}
           </li>
         ))}
       </ul>

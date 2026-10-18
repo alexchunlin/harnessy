@@ -18,8 +18,9 @@ export function DrcPanel() {
 
   function jump(f: Finding) {
     if (view !== "side-by-side") setView(f.view);
-    // Connector addresses select their component on the connectivity canvas.
-    const id = f.view === "connectivity" && f.target.includes("/") ? parseAddress(f.target).component : f.target;
+    // A net and connector address (`net:cmp/DES`) selects the net. A bare
+    // connector address selects its component on the connectivity canvas.
+    const id = f.view !== "connectivity" ? f.target : f.target.includes(":") ? f.target.split(":")[0] : f.target.includes("/") ? parseAddress(f.target).component : f.target;
     select(f.view, [id]);
   }
 
