@@ -363,6 +363,8 @@ export interface Stretch {
   lengthMm: number | undefined;
   /** The stretch's own slack, undefined when unset. */
   slackMm: number | undefined;
+  /** The slack the stretch takes when it has none of its own: its harness's default, else the project's, else zero. */
+  inheritedSlackMm: number;
   /** The slack the cut list adds for this stretch. */
   effectiveSlackMm: number;
   owner: SlackOwner;
@@ -394,6 +396,7 @@ export function stretchesOf(project: Project, graph: Graph, segment: Segment): S
       return b.tie.distance_mm - a.tie.distance_mm || (a.tie.id < b.tie.id ? -1 : 1);
     });
   const length = segmentLength(graph, segment, assemblyLength);
+  const inherited = built ? defaultSlack(project, graph, segment) : 0;
   const bounds: { id: string; at: number | undefined; slack: number | undefined; owner: SlackOwner }[] = [
     { id: segment.ends[0], at: 0, slack: undefined, owner: { kind: "segment", id: segment.id } },
     ...ties.map(({ tie, at }) => ({ id: tie.id, at, slack: tie.slack_mm, owner: { kind: "tie" as const, id: tie.id } })),
@@ -409,11 +412,19 @@ export function stretchesOf(project: Project, graph: Graph, segment: Segment): S
       to: b.id,
       lengthMm: a.at === undefined || b.at === undefined ? undefined : b.at - a.at,
       slackMm,
-      effectiveSlackMm: slackMm ?? 0,
+      inheritedSlackMm: inherited,
+      effectiveSlackMm: slackMm ?? inherited,
       owner: b.owner,
     });
   }
   return out;
+}
+
+/** The default slack for a segment's stretches: its harness anchor's, else the project's, else zero. */
+export function defaultSlack(project: Project, graph: Graph, segment: Segment): number {
+  const piece = pieceOf(pieces(graph), segment.id);
+  const anchor = piece && [...piece.segments].sort().map((id) => graph.segments.get(id)!).find((s) => s.harness !== undefined)?.harness;
+  return anchor?.slack_mm ?? project.file.slack_mm ?? 0;
 }
 
 /** The slack every conductor crossing this segment gains: the sum of its stretches' effective slack. A purchased assembly has none. */
