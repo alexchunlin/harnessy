@@ -7,6 +7,7 @@ import {
   connectorLabel,
   degree,
   findNet,
+  markRoot,
   netConductors,
   netLabeller,
   netsThrough,
@@ -23,6 +24,7 @@ import {
   setSegmentAssembly,
   setSegmentLength,
   setSpliceNets,
+  unmarkRoot,
   updateSheath,
   updateTiePoint,
   type Project,
@@ -99,6 +101,7 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
   const d = degree(graph, id);
   const through = netsThrough(routes, id);
   const moved = project.topologyCanvases.get(topology.id)?.offsets[id] !== undefined;
+  const isRoot = project.topologyCanvases.get(topology.id)?.roots.includes(id) ?? false;
   return (
     <div className="pane pane-right">
       <h3>{e.kind}</h3>
@@ -109,6 +112,15 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
       <div className="field">
         <label>Segments</label>
         <span>{d}</span>
+      </div>
+      <div className="row">
+        <label className="row" title="The harness grows from its roots. Two or more roots lie flat as a trunk.">
+          <input type="checkbox" checked={isRoot} onChange={(ev) => edit((p) => (ev.target.checked ? markRoot : unmarkRoot)(p, topology.id, id))} />
+          Root
+        </label>
+        <button disabled={!moved} title={moved ? "Back to where the layout puts it" : "At its home"} onClick={() => edit((p) => resetEndpointOffset(p, topology.id, id))}>
+          Reset position
+        </button>
       </div>
       {e.kind !== "connector" && (
         <div className="field">
@@ -168,11 +180,6 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
           </div>
         </>
       )}
-      <div className="row">
-        <button disabled={!moved} title={moved ? "Back to where the layout puts it" : "At its home"} onClick={() => edit((p) => resetEndpointOffset(p, topology.id, id))}>
-          Reset position
-        </button>
-      </div>
       <button onClick={() => edit((p) => removeEndpoint(p, topology.id, id))}>Delete endpoint{d > 0 ? ` and ${d} segment${d === 1 ? "" : "s"}` : ""}</button>
     </div>
   );

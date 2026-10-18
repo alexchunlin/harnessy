@@ -145,7 +145,12 @@ export function saveProject(project: Project): Files {
   for (const [domain, nets] of project.nets) files.set(`nets/${domain}.json`, serialize(NetsFileSchema, nets));
   for (const t of project.topologies.values()) files.set(`topologies/${t.id}.json`, serialize(TopologySchema, t));
   files.set("canvas/connectivity.json", serialize(ConnectivityCanvasSchema, project.connectivityCanvas));
-  for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, liveOffsets(c, project.topologies.get(id))));
+  for (const [id, c] of project.topologyCanvases) {
+    // Roots and offsets for endpoints that no longer exist are dead weight in the file. In memory they outlive their endpoint, so undo can bring both back.
+    const ends = new Set(project.topologies.get(id)?.endpoints.map((e) => e.id));
+    const offsets = Object.fromEntries(Object.entries(c.offsets).filter(([e]) => ends.has(e)));
+    files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, { ...c, offsets, roots: c.roots.filter((r) => ends.has(r)) }));
+  }
   files.set("drc.json", serialize(DrcFileSchema, project.drc));
   for (const folder of LIBRARY_FOLDERS) {
     for (const entry of project.projectLibrary[folder].values()) {
@@ -153,13 +158,6 @@ export function saveProject(project: Project): Files {
     }
   }
   return files;
-}
-
-/** An offset outlives its endpoint in memory, so undo can bring both back; the saved file keeps only the live ones. */
-function liveOffsets(canvas: TopologyCanvas, topology: Topology | undefined): TopologyCanvas {
-  const live = new Set(topology?.endpoints.map((e) => e.id));
-  const offsets = Object.fromEntries(Object.entries(canvas.offsets).filter(([id]) => live.has(id)));
-  return { ...canvas, offsets };
 }
 
 /** Paths that `saveProject` would write which `previous` has and `next` lacks. */

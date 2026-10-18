@@ -339,7 +339,9 @@ test("dragging a connector box far from home writes only an offset and draws a c
     const box = await all.nth(i).boundingBox();
     const candidate = (await all.nth(i).getAttribute("data-id"))!;
     if (!joined.has(candidate) || !box || box.x < 260 || box.y < 120 || box.x + box.width > size.width - 420 || box.y + box.height > size.height - 160) continue;
-    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest(".react-flow__node")?.getAttribute("data-id"), [box.x + box.width / 2, box.y + box.height / 2]);
+    type Hit = { closest(s: string): { getAttribute(a: string): string | null } | null };
+    type Doc = { elementFromPoint(x: number, y: number): Hit | null };
+    const hit = await page.evaluate(([x, y]) => (globalThis as unknown as { document: Doc }).document.elementFromPoint(x, y)?.closest(".react-flow__node")?.getAttribute("data-id"), [box.x + box.width / 2, box.y + box.height / 2]);
     if (hit === candidate) {
       id = candidate;
       break;

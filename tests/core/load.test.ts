@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import * as ops from "../../src/core/ops";
 import { loadProject, saveProject } from "../../src/core/project";
 import { loadLibrary } from "../../src/core/library";
+import * as ops from "../../src/core/ops";
 import { runChecks } from "../../src/core/drc";
 import { testLibrary, twoNetProject } from "./fixture";
 
@@ -57,6 +57,13 @@ describe("loading", () => {
     expect(p.topologyCanvases.get(ids.top)!.offsets[ids.batEnd]).toEqual({ x: 30, y: -41 });
     p = ops.resetEndpointOffset(p, ids.top, ids.batEnd);
     expect(p.topologyCanvases.get(ids.top)!.offsets).toEqual({ [ids.mibEnd]: { x: 5, y: 5 } });
+  });
+
+  it("a saved topology canvas drops roots for endpoints that no longer exist", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.markRoot(ops.markRoot(project, ids.top, ids.batEnd), ids.top, ids.mibEnd);
+    p = ops.removeEndpoint(p, ids.top, ids.mibEnd);
+    expect(JSON.parse(saveProject(p).get(`canvas/${ids.top}.json`)!).roots).toEqual([ids.batEnd]);
   });
 
   it("a project library file shadows the repo entry whole", () => {
