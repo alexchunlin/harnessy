@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { create } from "zustand";
 import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/react";
-import type { RatsnestEdgeData, SegmentEdgeData, Strand } from "./model";
+import type { CalloutEdgeData, RatsnestEdgeData, SegmentEdgeData, Strand } from "./model";
 
 export interface SegmentEdgeCallbacks {
   onLength: (segmentId: string, lengthMm: number | undefined) => void;
@@ -267,6 +267,12 @@ function LengthField({ id, value }: { id: string; value: number | undefined }) {
       mm
     </span>
   );
+}
+
+/** A thin line from a moved endpoint's home to its box. It draws from the layout's centres, not from the node's handle. */
+export function CalloutEdge({ data }: EdgeProps<Edge<CalloutEdgeData>>) {
+  const d = data!;
+  return <path className="callout" data-endpoint={d.endpoint} d={`M ${d.from.x} ${d.from.y} L ${d.to.x} ${d.to.y}`} />;
 }
 
 /** One line of the ratsnest: 1 px, dashed, faint, in the net's domain colour. Hover for the net and its two ends. */

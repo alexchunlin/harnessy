@@ -21,6 +21,8 @@ export const SIBLING_PITCH = 104;
 export const STEP_DEGREES = 15;
 /** Clear space between packed pieces, with room above each for its harness label. */
 export const PIECE_GAP = 80;
+/** How far an endpoint can move off its home before its segments stop following it and a call-out line takes over. */
+export const CALLOUT_DISTANCE = 24;
 /** Space between connectors in the waiting grid, down a column and between columns. */
 export const WAITING_GAP = 16;
 /** Room over each waiting column for its component's name. */
@@ -73,6 +75,8 @@ export interface TopologyLayout {
   pieces: PieceLayout[];
   /** One per breakout or splice with children, through its children's homes. */
   arcs: FanArc[];
+  /** One per endpoint moved past the call-out distance, in endpoint id order. */
+  callouts: Callout[];
   /** Connectors with nets and no segment, under the pieces, by component name. */
   waiting: WaitingGroup[];
 }
@@ -95,6 +99,13 @@ export interface WaitingConnector {
   endpoint?: string;
   /** Where the connector box's centre draws. Waiting connectors have no offset. */
   position: Position;
+}
+
+/** A thin line from an endpoint's home to its box, drawn when the box sits past the call-out distance. */
+export interface Callout {
+  endpoint: string;
+  from: Position;
+  to: Position;
 }
 
 type Positions = Map<string, Position>;
@@ -127,16 +138,20 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   // A waiting connector with an endpoint record draws where the grid puts it. Other endpoints with no segment have no home.
   for (const g of waiting) for (const c of g.connectors) if (c.endpoint) home.set(c.endpoint, c.position);
 
-  const endpoints = new Map<string, EndpointLayout>();
-  for (const [id, p] of home) endpoints.set(id, { home: p, drawn: p });
+  const { endpoints, anchor, callouts } = applyOffsets(graph, home, canvas.offsets);
+  const calledOut = new Set(callouts.map((c) => c.endpoint));
+  // A line meets the box where the box is. A called-out end stays at its home, where there is no box to meet.
+  const endAt = (id: string, other: Position) => {
+    const kind = graph.endpoints.get(id)!.kind;
+    return calledOut.has(id) ? anchor.get(id)! : segmentEnd(kind, anchor.get(id)!, other);
+  };
   const segments = new Map<string, [Position, Position]>();
   for (const s of topology.segments) {
-    const a = endpoints.get(s.ends[0]);
-    const b = endpoints.get(s.ends[1]);
-    const [ka, kb] = s.ends.map((id) => graph.endpoints.get(id)?.kind);
-    if (a && b && ka && kb) segments.set(s.id, [segmentEnd(ka, a.drawn, b.drawn), segmentEnd(kb, b.drawn, a.drawn)]);
+    const a = anchor.get(s.ends[0]);
+    const b = anchor.get(s.ends[1]);
+    if (a && b) segments.set(s.id, [endAt(s.ends[0], b), endAt(s.ends[1], a)]);
   }
-  return { endpoints, segments, pieces: out, arcs, waiting };
+  return { endpoints, segments, pieces: out, arcs, waiting, callouts };
 }
 
 /**
@@ -159,6 +174,38 @@ export function segmentEnd(kind: Endpoint["kind"], centre: Position, other: Posi
     return { x, y: y < centre.y ? centre.y - hh : centre.y + hh };
   }
   return { x, y };
+}
+
+// Offsets -----------------------------------------------------------------------
+
+/**
+ * Add each designer offset to its endpoint's home. Children already laid
+ * out from their parent's home, so an offset moves only its own endpoint.
+ * Close by, the segments follow the box. Past the call-out distance they
+ * stay true at home and a call-out line points to the box. A waiting
+ * endpoint has no offset. `anchor` is where each endpoint's segments aim.
+ */
+function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["offsets"]) {
+  const endpoints = new Map<string, EndpointLayout>();
+  const anchor: Positions = new Map();
+  const callouts: Callout[] = [];
+  for (const [id, p] of home) {
+    const offset = degree(graph, id) > 0 ? offsets[id] : undefined;
+    if (!offset) {
+      endpoints.set(id, { home: p, drawn: p });
+      anchor.set(id, p);
+      continue;
+    }
+    // The offset is in its harness's frame. A turned harness rotates it here before it lands on the canvas.
+    const drawn = { x: p.x + offset.x, y: p.y + offset.y };
+    endpoints.set(id, { home: p, drawn });
+    if (Math.hypot(offset.x, offset.y) > CALLOUT_DISTANCE) {
+      callouts.push({ endpoint: id, from: p, to: drawn });
+      anchor.set(id, p);
+    } else anchor.set(id, drawn);
+  }
+  callouts.sort((a, b) => (a.endpoint < b.endpoint ? -1 : a.endpoint > b.endpoint ? 1 : 0));
+  return { endpoints, anchor, callouts };
 }
 
 // The waiting grid ------------------------------------------------------------------

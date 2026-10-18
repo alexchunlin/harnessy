@@ -42,6 +42,25 @@ describe("loading", () => {
     expect(JSON.parse(saveProject(loaded).get(`canvas/${ids.top}.json`)!)).toEqual({ offsets: {}, pieces: {}, roots: [] });
   });
 
+  it("a saved canvas file drops offsets for endpoints that no longer exist", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.setEndpointOffset(project, ids.top, ids.batEnd, { x: 30, y: -40 });
+    p = ops.setEndpointOffset(p, ids.top, ids.mibEnd, { x: 5, y: 5 });
+    // A second segment keeps the battery end in the topology once the MIB end goes.
+    p = ops.growSegment(p, ids.top, ids.batEnd).project;
+    p = ops.removeEndpoint(p, ids.top, ids.mibEnd);
+    expect(JSON.parse(saveProject(p).get(`canvas/${ids.top}.json`)!).offsets).toEqual({ [ids.batEnd]: { x: 30, y: -40 } });
+  });
+
+  it("Reset position drops an endpoint's offset and leaves the others", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.setEndpointOffset(project, ids.top, ids.batEnd, { x: 30.4, y: -40.6 });
+    p = ops.setEndpointOffset(p, ids.top, ids.mibEnd, { x: 5, y: 5 });
+    expect(p.topologyCanvases.get(ids.top)!.offsets[ids.batEnd]).toEqual({ x: 30, y: -41 });
+    p = ops.resetEndpointOffset(p, ids.top, ids.batEnd);
+    expect(p.topologyCanvases.get(ids.top)!.offsets).toEqual({ [ids.mibEnd]: { x: 5, y: 5 } });
+  });
+
   it("a saved topology canvas drops roots for endpoints that no longer exist", () => {
     const { project, ids } = twoNetProject();
     let p = ops.markRoot(ops.markRoot(project, ids.top, ids.batEnd), ids.top, ids.mibEnd);

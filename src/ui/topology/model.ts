@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -44,9 +44,9 @@ export interface SegmentEdgeData {
   fanAt: [boolean, boolean];
   /** The box each end sits in, so the fan starts past its edge. */
   endSizes: [{ w: number; h: number }, { w: number; h: number }];
-  /** Where the line ends at each endpoint, from `segmentEnd`: a connector's box edge, or the centre of anything smaller. */
+  /** Where the line ends at each endpoint: a connector's box edge, the centre of anything smaller, or the home of a called-out end. */
   ends: [Position, Position];
-  /** Each end's box centre, as drawn. */
+  /** Each end's box centre, or its home when called out. */
   centres: [Position, Position];
   /** true when some conductor is selected or hovered: strands not lit dim */
   anyLit: boolean;
@@ -63,7 +63,15 @@ export interface RatsnestEdgeData {
 }
 
 export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<LabelNodeData, "harness"> | Node<WaitingGroupNodeData, "waitingGroup">;
-export type TopoEdge = Edge<SegmentEdgeData, "segment"> | Edge<RatsnestEdgeData, "ratsnest">;
+/** A thin line from an endpoint's home to its box, once the box sits past the call-out distance. */
+export interface CalloutEdgeData {
+  endpoint: string;
+  from: Position;
+  to: Position;
+  [key: string]: unknown;
+}
+
+export type TopoEdge = Edge<SegmentEdgeData, "segment"> | Edge<RatsnestEdgeData, "ratsnest"> | Edge<CalloutEdgeData, "callout">;
 
 export interface TopologyOptions {
   /** Draw the ratsnest of unrouted nets. */
@@ -98,12 +106,18 @@ export function topologyLayout(project: Project, topology: Topology): TopologyLa
   return layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_CANVAS);
 }
 
+/** The key under which `drawnFrom` keeps the home of an endpoint the designer moved. */
+export const homeKey = (id: string) => `home:${id}`;
+
 /**
  * Where the layout draws each endpoint's centre. A waiting connector with no
- * endpoint record draws under its address. Nothing here reads a stored position.
+ * endpoint record draws under its address. An endpoint with an offset also
+ * has its home, under `homeKey`, so the home glides with everything else and
+ * its segments can stay there. Nothing here reads a stored position.
  */
 export function drawnFrom(layout: TopologyLayout): Map<string, Position> {
   const out = new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+  for (const [id, e] of layout.endpoints) if (e.drawn !== e.home) out.set(homeKey(id), e.home);
   for (const g of layout.waiting) for (const c of g.connectors) if (!c.endpoint) out.set(c.address, c.position);
   return out;
 }
@@ -126,7 +140,7 @@ export function arcPath(a: FanArc): string {
 /**
  * Derive React Flow nodes and edges for one topology. `drawn` holds each
  * endpoint's centre, from `drawnPositions` or a glide towards it; `drafts`
- * holds the top-left of a tie point mid-drag.
+ * holds the top-left of an endpoint or tie point mid-drag.
  */
 export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drawn: Map<string, Position>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
   const graph = buildGraph(topology);
@@ -154,7 +168,21 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const shown: Endpoint[] = topology.endpoints.filter((e) => drawn.has(e.id));
   for (const id of waitingIds) if (!graph.endpoints.has(id)) shown.push({ id, kind: "connector", connector: id });
   const positions = new Map<string, Position>();
-  for (const e of shown) positions.set(e.id, drawn.get(e.id) ?? { x: 0, y: 0 });
+  const homes = new Map<string, Position>();
+  for (const e of shown) {
+    const at = drawn.get(e.id) ?? { x: 0, y: 0 };
+    const draft = drafts.get(e.id);
+    const size = ENDPOINT_SIZE[e.kind];
+    positions.set(e.id, draft ? { x: draft.x + size.w / 2, y: draft.y + size.h / 2 } : at);
+    homes.set(e.id, drawn.get(homeKey(e.id)) ?? at);
+  }
+  // Past the call-out distance an endpoint's segments stay at its home, so the arc stays true; a call-out line points to the box.
+  const calledOut = new Set<string>();
+  for (const [id, p] of positions) {
+    const h = homes.get(id)!;
+    if (degree(graph, id) > 0 && Math.hypot(p.x - h.x, p.y - h.y) > CALLOUT_DISTANCE) calledOut.add(id);
+  }
+  const anchorOf = (id: string) => (calledOut.has(id) ? homes.get(id) : positions.get(id));
 
   // A segment is in the layer when any net routed through it is, or when it
   // carries no net at all. An endpoint follows its segments; a lone connector
@@ -189,12 +217,12 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const waiting = waitingIds.has(e.id);
     const lit = e.kind === "connector" && options.highlightComponents.has(e.connector.split("/")[0]);
     // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
-    // Endpoints sit at their derived homes and do not drag; a drag from the ring still grows a segment.
+    // A drag on the body moves the box off its home; a drag from the ring grows a segment. A waiting connector has no home to leave.
     const size = ENDPOINT_SIZE[e.kind];
     const centre = positions.get(e.id)!;
     nodes.push({
       id: e.id, type: "endpoint", position: { x: centre.x - size.w / 2, y: centre.y - size.h / 2 }, data: { endpoint: e, label, title, waiting, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
-      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: false, connectable: !outOfLayer, className: [waiting ? "waiting" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ") || undefined,
+      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer && !waiting && degree(graph, e.id) > 0, connectable: !outOfLayer, className: [waiting ? "waiting" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ") || undefined,
       zIndex: e.kind === "connector" ? 2 : 3, width: size.w, height: size.h, measured: { width: size.w, height: size.h },
     });
   }
@@ -221,8 +249,10 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const classes = [routeColor ? "on-route" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ");
     const { strands, badge } = s.assembly ? { strands: [], badge: undefined } : strandsOf(project, onHere, domains, label, litConductors);
     const kinds = s.ends.map((e) => graph.endpoints.get(e)!.kind);
-    const centres: [Position, Position] = [positions.get(s.ends[0])!, positions.get(s.ends[1])!];
-    const ends: [Position, Position] = [segmentEnd(kinds[0], centres[0], centres[1]), segmentEnd(kinds[1], centres[1], centres[0])];
+    // A called-out end stays at its home, where no box sits; any other end meets its box.
+    const centres: [Position, Position] = [anchorOf(s.ends[0])!, anchorOf(s.ends[1])!];
+    const endAt = (i: 0 | 1) => (calledOut.has(s.ends[i]) ? centres[i] : segmentEnd(kinds[i], centres[i], centres[1 - i]));
+    const ends: [Position, Position] = [endAt(0), endAt(1)];
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
       data: {
@@ -253,12 +283,19 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     }
   }
 
+  for (const id of [...calledOut].sort()) {
+    edges.push({
+      id: `callout:${id}`, type: "callout", source: id, target: id, sourceHandle: "h", targetHandle: "h", className: "callout-edge",
+      data: { endpoint: id, from: homes.get(id)!, to: positions.get(id)! }, selectable: false, focusable: false, deletable: false, interactionWidth: 0, zIndex: 0,
+    });
+  }
+
   for (const t of topology.ties) {
     const seg = graph.segments.get(t.segment);
     if (!seg) continue;
     // A tie point draws at its fraction of the way along the drawn segment.
-    const a = positions.get(t.from);
-    const b = positions.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
+    const a = anchorOf(t.from);
+    const b = anchorOf(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
     if (!a || !b) continue;
     const len = segmentLength(graph, seg, assemblyLength) ?? 0;
     const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;
