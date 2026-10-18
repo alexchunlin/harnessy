@@ -335,6 +335,29 @@ export const PlacementSchema = z.object({
   ties: z.record(z.string(), Vec3Schema),
 });
 
+export const REFERENCE_UNITS = ["mm", "cm", "m", "in"] as const;
+
+/**
+ * The reference CAD model: a file inside the project's `reference/` folder,
+ * the unit it was drawn in, and where it sits in whole millimetres and
+ * degrees, Euler order XYZ. Every topology shares it.
+ */
+export const ReferenceModelSchema = z.object({
+  path: z.string().regex(/^reference\/[^/]+$/),
+  units: z.enum(REFERENCE_UNITS),
+  position: Vec3Schema,
+  rotation: Vec3Schema,
+});
+
+/**
+ * `canvas/reference.json`: the reference photo board and the reference CAD
+ * model, both optional. A project with neither has no file.
+ */
+export const ReferenceFileSchema = z.object({
+  photos: z.array(z.object({ path: z.string(), caption: z.string().optional() })).optional(),
+  model: ReferenceModelSchema.optional(),
+});
+
 export const DrcFileSchema = z.object({
   silences: z.array(z.object({ check: z.string(), target: z.string() })),
 });
@@ -360,5 +383,8 @@ export type TopologyCanvas = z.infer<typeof TopologyCanvasSchema>;
 export type DrcFile = z.infer<typeof DrcFileSchema>;
 export type Vec3 = z.infer<typeof Vec3Schema>;
 export type Placement = z.infer<typeof PlacementSchema>;
+export type ReferenceModel = z.infer<typeof ReferenceModelSchema>;
+export type ReferenceFile = z.infer<typeof ReferenceFileSchema>;
+export type ReferenceUnits = ReferenceModel["units"];
 
 export const ALL_LAYER_ID = "all";

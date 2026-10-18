@@ -16,18 +16,18 @@
  * placed takes its length from the core bundle curve, so there is nothing
  * to write back.
  *
- * A CAD file can be loaded as a reference at real scale. It is scenery: it
- * has its own handles and nothing snaps to it. It is kept in memory until
- * the page reloads; it is not saved with the project yet.
+ * The project's reference CAD model draws at real scale. It is scenery: it
+ * has its own handles and nothing snaps to it. Each move of it is one edit
+ * to its entry in `canvas/reference.json`.
  */
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { lengthsOf, placementOf, placeParts, removeTiePoint, type Placement, type SegmentLength } from "../../core";
+import { clearPlacement, lengthsOf, placementOf, placeParts, removeTiePoint, type Placement, type SegmentLength } from "../../core";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
-import { ACCEPT, loadReference, setOpacity, UNITS, type Loaded, type Units } from "./reference";
+import { placeReference, rad, ReferenceObject, ReferencePanel, type ReferenceState } from "./ReferenceModel";
 
 interface PlacedTie {
   id: string;
@@ -36,6 +36,7 @@ interface PlacedTie {
   label: string;
 }
 
+
 /** The one part a drag or a handle is moving right now, drawn here until it is let go. Rotation in radians. */
 interface Live {
   id: string;
@@ -43,18 +44,10 @@ interface Live {
   rotation?: Vec3;
 }
 
-interface Reference extends Loaded {
-  file: string;
-  position: Vec3;
-  rotation: Vec3;
-  opacity: number;
-}
-
 type Mode = "translate" | "rotate";
 
 const REFERENCE = "reference";
 const deg = (v: Vec3): Vec3 => [round(THREE.MathUtils.radToDeg(v[0])), round(THREE.MathUtils.radToDeg(v[1])), round(THREE.MathUtils.radToDeg(v[2]))];
-const rad = (v: Vec3): Vec3 => [THREE.MathUtils.degToRad(v[0]), THREE.MathUtils.degToRad(v[1]), THREE.MathUtils.degToRad(v[2])];
 
 /** A connector's wires leave along its local -Y. */
 function exitDirection(rotation: Vec3): Vec3 {
@@ -125,17 +118,7 @@ function poseOf(world: World3, placement: Placement, live: Live | undefined): Po
   return { positions, rotations, placed, chains };
 }
 
-/** useState that outlives the component: values live in a module map until the page reloads. */
-const kept = new Map<string, unknown>();
-function useKept<T>(key: string, init: () => T): [T, Dispatch<SetStateAction<T>>] {
-  const [value, set] = useState<T>(() => (kept.has(key) ? (kept.get(key) as T) : init()));
-  useEffect(() => {
-    kept.set(key, value);
-  }, [key, value]);
-  return [value, set];
-}
-
-export function Workspace3D({ world, show, topologyId }: { world: World3; show: string; topologyId: string }) {
+export function Workspace3D({ world, show, topologyId, referenceModel }: { world: World3; show: string; topologyId: string; referenceModel: ReferenceState }) {
   const harness = world.all;
   // What is drawn: one harness, or all of them.
   const shown: Harness3 = useMemo(() => {
@@ -143,12 +126,12 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     if (show === ALL || !m) return harness;
     return { ...harness, name: show, nodes: harness.nodes.filter((n) => m.nodes.has(n.id)), segments: harness.segments.filter((s) => m.segments.has(s.id)), ties: [] };
   }, [world, show, harness]);
-  const placement = useDoc((d) => (d.project ? placementOf(d.project, topologyId) : undefined));
   // The lengths the project uses, the same numbers the topology inspector and the BOM show.
   const lengths = useDoc((d) => {
     const top = d.project?.topologies.get(topologyId);
     return d.project && top ? lengthsOf(d.project, top).segments : undefined;
   });
+  const placement = useDoc((d) => (d.project ? placementOf(d.project, topologyId) : undefined));
   const connectors = useMemo(() => new Set(harness.nodes.filter((n) => n.kind === "connector").map((n) => n.id)), [harness]);
   const strainRelief = useMemo(() => Object.fromEntries(harness.nodes.map((n) => [n.id, n.strainReliefMm ?? 0])), [harness]);
 
@@ -164,10 +147,8 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
   const [selected, setSelected] = useState<string>();
   const [frame, setFrame] = useState(0);
   const [mode, setMode] = useState<Mode>("translate");
-  // One reference model for the whole session, whatever is drawn.
-  const [reference, setReference] = useKept<Reference | undefined>("reference", () => undefined);
-  const [loading, setLoading] = useState<string>();
-  const [error, setError] = useState<string>();
+  // The project's reference model, drawn where its handles have it while they are held. Rotation in radians.
+  const reference = referenceModel.status === "ready" ? { ...referenceModel, position: live?.id === REFERENCE ? live.at : referenceModel.model.position, rotation: live?.id === REFERENCE && live.rotation ? live.rotation : rad(referenceModel.model.rotation) } : undefined;
 
   const shownTies = placed.filter((c) => shown.segments.some((s) => s.id === c.segment));
   const selectedTie = placed.find((c) => c.id === selected);
@@ -196,10 +177,6 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  useEffect(() => {
-    if (reference) setOpacity(reference.object, reference.opacity);
-  }, [reference?.object, reference?.opacity]);
-
   /** The points a segment passes through, each tagged with the tie point or endpoint it belongs to. */
   const route = (segId: string): { id?: string; at: Vec3 }[] => {
     const s = harness.segments.find((x) => x.id === segId)!;
@@ -222,15 +199,26 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
 
   /**
    * Let go of the live part. A part the project has is placed as one edit; a
-   * connector saves the rotation it is drawn with, turned or not.
+   * connector saves the rotation it is drawn with, turned or not. A tie point
+   * made here only moves here.
    */
   function commit() {
     const l = liveRef.current;
     if (!l) return;
     setLive(undefined);
+    if (l.id === REFERENCE) {
+      if (referenceModel.status !== "none") placeReference(referenceModel.model, l.at, l.rotation ?? rad(referenceModel.model.rotation));
+      return;
+    }
     const isTie = harness.ties.some((t) => t.id === l.id);
     const parts = isTie ? { ties: { [l.id]: l.at } } : { positions: { [l.id]: l.at }, ...(connectors.has(l.id) ? { rotations: { [l.id]: deg(l.rotation ?? rotations[l.id]) } } : {}) };
     useDoc.getState().edit((p) => placeParts(p, topologyId, parts), "Place in 3D");
+  }
+
+  /** The harness "Clear placement" acts on: the shown one, or with all shown, the one holding the selected part. */
+  const clearTarget = show !== ALL ? [...(world.members[show]?.nodes ?? [])][0] : (harness.nodes.some((n) => n.id === selected) || harness.ties.some((t) => t.id === selected) ? selected : undefined);
+  function clearShown() {
+    if (clearTarget) useDoc.getState().edit((p) => clearPlacement(p, topologyId, clearTarget), "Clear placement");
   }
 
   function removeTie(id: string) {
@@ -238,51 +226,21 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     setSelected((s) => (s === id ? undefined : s));
   }
 
-  async function importReference(file: File) {
-    setError(undefined);
-    setLoading(file.name);
-    try {
-      // Let "Reading" paint before a large STEP file blocks the page.
-      await new Promise((r) => setTimeout(r, 30));
-      const loaded = await loadReference(file);
-      setReference({ ...loaded, file: file.name, position: [0, 0, 0], rotation: [0, 0, 0], opacity: 0.6 });
-      setSelected(REFERENCE);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(undefined);
-    }
-  }
-
-  /** Put the middle of the model on the middle of the harness, unturned. */
-  function centreReference() {
-    if (!reference) return;
-    const all = shown.nodes.map((n) => positions[n.id]);
-    const mid = scale(all.reduce((t, p) => add(t, p), [0, 0, 0] as Vec3), 1 / all.length);
-    setReference({ ...reference, rotation: [0, 0, 0], position: sub(mid, scale(reference.centre, UNITS[reference.units])) });
-  }
-
   function moved(position: Vec3, rotation: Vec3) {
     if (selected === undefined) return;
-    if (selected === REFERENCE) setReference((r) => (r ? { ...r, position, rotation } : r));
-    else setLive({ id: selected, at: position, ...(connectors.has(selected) ? { rotation } : {}) });
+    setLive(selected === REFERENCE ? { id: REFERENCE, at: position, rotation } : { id: selected, at: position, ...(connectors.has(selected) ? { rotation } : {}) });
   }
 
   const shownAt = shown.nodes.map((n) => positions[n.id]);
   const middle = scale(shownAt.reduce((t, p) => add(t, p), [0, 0, 0] as Vec3), 1 / Math.max(1, shownAt.length));
   const reach = Math.max(100, ...shownAt.map((p) => dist(p, middle)));
-  const selectedLabel = selected === undefined ? undefined : selected === REFERENCE ? reference?.file : (harness.nodes.find((n) => n.id === selected)?.label ?? placed.find((c) => c.id === selected)?.label);
-  const unit = reference ? UNITS[reference.units] : 1;
+  const selectedLabel = selected === undefined ? undefined : selected === REFERENCE ? reference?.model.path : (harness.nodes.find((n) => n.id === selected)?.label ?? placed.find((c) => c.id === selected)?.label);
 
   return (
     <div className="h3d-workspace">
       <Stage onPointerMissed={() => setSelected(undefined)}>
         <Frame centre={middle} radius={reach} token={frame} />
-        {reference && (
-          <group position={reference.position} rotation={reference.rotation} scale={unit}>
-            <primitive object={reference.object} />
-          </group>
-        )}
+        {reference && <ReferenceObject loaded={reference.loaded} units={reference.model.units} position={reference.position} rotation={reference.rotation} />}
         <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} lengths={lengths} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} />
         {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} onEnd={commit} />}
       </Stage>
@@ -300,51 +258,17 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
             Frame
           </button>
           {selectedTie && <button onClick={() => removeTie(selectedTie.id)}>Remove tie point</button>}
+          <button disabled={clearTarget === undefined} onClick={clearShown} title="Return the harness to its typed numbers and the sketch">
+            Clear placement
+          </button>
         </div>
-        <h4>Reference model</h4>
-        <label className="h3d-row">
-          <input type="file" accept={ACCEPT} onChange={(e) => e.target.files?.[0] && void importReference(e.target.files[0])} />
-        </label>
-        {loading && <p className="muted">Reading {loading}. A large STEP file can take a while.</p>}
-        {error && <p className="error">{error}</p>}
-        {reference && (
-          <>
-            <p className="muted">
-              {reference.file}: {round(reference.size[0] * unit)} × {round(reference.size[1] * unit)} × {round(reference.size[2] * unit)} mm
-            </p>
-            <div className="h3d-row">
-              <label>
-                File units{" "}
-                <select value={reference.units} onChange={(e) => setReference({ ...reference, units: e.target.value as Units })}>
-                  {Object.keys(UNITS).map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                See-through <input type="range" min={0.1} max={1} step={0.05} value={reference.opacity} onChange={(e) => setReference({ ...reference, opacity: Number(e.target.value) })} />
-              </label>
-            </div>
-            <div className="h3d-row">
-              <button onClick={() => setSelected(REFERENCE)}>Handles</button>
-              <button onClick={centreReference}>Centre on harness</button>
-              <button
-                onClick={() => {
-                  setReference(undefined);
-                  if (selected === REFERENCE) setSelected(undefined);
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          </>
-        )}
+        <ReferencePanel state={referenceModel} middle={middle} onHandles={() => setSelected(REFERENCE)} onRemoved={() => setSelected((id) => (id === REFERENCE ? undefined : id))} />
         <details>
           <summary>Placement data</summary>
           <pre>
             {JSON.stringify(
               {
-                reference: reference ? { file: reference.file, units: reference.units, position: roundVec(reference.position), rotation_deg: deg(reference.rotation) } : null,
+                reference: referenceModel.status === "none" ? null : referenceModel.model,
                 connectors: Object.fromEntries(shown.nodes.filter((n) => connectors.has(n.id)).map((n) => [n.id, { position: roundVec(positions[n.id]), rotation_deg: deg(rotations[n.id] ?? [0, 0, 0]) }])),
                 points: Object.fromEntries([...shown.nodes.filter((n) => !connectors.has(n.id)).map((n) => n.id), ...shownTies.map((c) => c.id)].map((id) => [id, roundVec(positions[id])])),
               },

@@ -6,6 +6,7 @@ import {
   NetsFileSchema,
   PlacementSchema,
   ProjectFileSchema,
+  ReferenceFileSchema,
   TopologyCanvasSchema,
   TopologySchema,
   LIBRARY_SCHEMAS,
@@ -19,6 +20,7 @@ import {
   type Net,
   type Placement,
   type ProjectFile,
+  type ReferenceFile,
   type Topology,
   type TopologyCanvas,
   type LibraryFolder,
@@ -39,6 +41,8 @@ export interface Project {
   topologyCanvases: Map<string, TopologyCanvas>;
   /** Each topology's 3D placement, keyed by topology id. A topology nobody placed has none. */
   placements: Map<string, Placement>;
+  /** `canvas/reference.json`: the reference photos and CAD model every topology shares. */
+  reference: ReferenceFile;
   drc: DrcFile;
   /** The project's own library entries, which shadow the repo library. */
   projectLibrary: Library;
@@ -62,6 +66,7 @@ export function emptyProject(name: string, repoLibrary: Library = emptyLibrary()
     connectivityCanvas: { components: {}, hubs: {}, groups: [], notes: [], bends: {}, pins: {} },
     topologyCanvases: new Map(),
     placements: new Map(),
+    reference: {},
     drc: { silences: [] },
     projectLibrary,
     library: mergeLibraries(repoLibrary, projectLibrary),
@@ -127,7 +132,8 @@ export function loadProject(files: Files, repoLibrary: Library = emptyLibrary())
       const c = parseJson(ConnectivityCanvasSchema, path, body, problems);
       if (c) project.connectivityCanvas = c;
     } else if (path === "canvas/reference.json") {
-      // The reference board and model file. Not read yet, and never a topology canvas.
+      const r = parseJson(ReferenceFileSchema, path, body, problems);
+      if (r) project.reference = r;
     } else if ((m = /^canvas\/([^/]+)\.3d\.json$/.exec(path))) {
       // A placement for a topology the project lacks loads too; nothing reads it.
       const placement = parseJson(PlacementSchema, path, body, problems);
@@ -158,6 +164,7 @@ export function saveProject(project: Project): Files {
   files.set("canvas/connectivity.json", serialize(ConnectivityCanvasSchema, project.connectivityCanvas));
   for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, c));
   for (const [id, p] of project.placements) if (!isEmptyPlacement(p)) files.set(`canvas/${id}.3d.json`, serialize(PlacementSchema, p));
+  if (project.reference.model || project.reference.photos?.length) files.set("canvas/reference.json", serialize(ReferenceFileSchema, project.reference));
   files.set("drc.json", serialize(DrcFileSchema, project.drc));
   for (const folder of LIBRARY_FOLDERS) {
     for (const entry of project.projectLibrary[folder].values()) {
