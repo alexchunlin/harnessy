@@ -47,6 +47,13 @@ export function renameProject(project: Project, name: string): Project {
   return next(project, { file: { ...project.file, name } });
 }
 
+/** Set the project's default slack. Zero and absent mean the same, so zero leaves the key out of the file. */
+export function setProjectSlack(project: Project, slackMm: number | undefined): Project {
+  if (slackMm !== undefined && !(slackMm >= 0)) throw new Error(`slack is never negative: ${slackMm}`);
+  const slack_mm = slackMm ? Math.round(slackMm) : undefined;
+  return next(project, { file: { ...project.file, slack_mm } });
+}
+
 export function addDomain(project: Project, domain: Domain): Project {
   if (project.file.domains.some((d) => d.id === domain.id)) throw new Error(`domain ${domain.id} exists`);
   const nets = new Map(project.nets);
@@ -676,6 +683,9 @@ export function setSegmentAssembly(project: Project, topologyId: string, segment
 }
 
 export function setHarnessAnchor(project: Project, topologyId: string, segmentId: string, anchor: HarnessAnchor | undefined): Project {
+  const slack = anchor?.slack_mm;
+  if (slack !== undefined && !(slack >= 0)) throw new Error(`slack is never negative: ${slack}`);
+  if (slack !== undefined) anchor = { ...anchor!, slack_mm: Math.round(slack) };
   return updateSegment(project, topologyId, segmentId, (s) => ({ ...s, harness: anchor }));
 }
 

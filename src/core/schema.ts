@@ -200,6 +200,8 @@ export const ProjectFileSchema = z.object({
   domains: z.array(DomainSchema),
   layers: z.array(LayerSchema),
   keep_apart: z.array(z.tuple([slug, slug])).optional(),
+  /** Slack for every stretch whose harness sets no default. Zero when absent. */
+  slack_mm: mm.optional(),
 });
 
 export const ComponentSchema = z
@@ -241,7 +243,12 @@ export const EndpointSchema = z.discriminatedUnion("kind", [
   z.object({ id: projectId("end"), kind: z.literal("splice"), nets: z.array(projectId("net")), spec: spliceRef.optional() }),
 ]);
 
-export const HarnessAnchorSchema = z.object({ name: z.string(), part_number: z.string().optional() });
+export const HarnessAnchorSchema = z.object({
+  name: z.string(),
+  part_number: z.string().optional(),
+  /** Slack for every stretch in this harness that has none of its own. */
+  slack_mm: mm.optional(),
+});
 
 export const SegmentSchema = z.object({
   id: projectId("seg"),

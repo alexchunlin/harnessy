@@ -30,6 +30,7 @@ import {
   type Route,
   type Topology,
 } from "../../core";
+import { SlackInput } from "../shell/SlackInput";
 import { endpointName, netStrands, SHEATH_PALETTE } from "./model";
 
 type Edit = (fn: (p: Project) => Project) => void;
@@ -223,15 +224,28 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
           <div className="field">
             <label>Name (anchored on this segment)</label>
             <input
+              aria-label="Harness name"
               value={s.harness?.name ?? ""}
               placeholder="unnamed"
-              onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, ev.target.value ? { name: ev.target.value, part_number: s.harness?.part_number } : undefined))}
+              onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, ev.target.value ? { ...s.harness, name: ev.target.value } : undefined))}
             />
           </div>
           {s.harness && (
             <div className="field">
               <label>Part number</label>
-              <input value={s.harness.part_number ?? ""} onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, { name: s.harness!.name, part_number: ev.target.value || undefined }))} />
+              <input value={s.harness.part_number ?? ""} onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, { ...s.harness!, part_number: ev.target.value || undefined }))} />
+            </div>
+          )}
+          {s.harness && (
+            <div className="field">
+              <label>Default slack (mm)</label>
+              <SlackInput
+                key={s.harness.slack_mm ?? ""}
+                label="Harness default slack (mm)"
+                value={s.harness.slack_mm}
+                placeholder={String(project.file.slack_mm ?? 0)}
+                onCommit={(v) => edit((p) => setHarnessAnchor(p, topology.id, id, { ...s.harness!, slack_mm: v }))}
+              />
             </div>
           )}
         </>
@@ -317,7 +331,7 @@ function StretchList({ project, topology, segmentId, edit }: { project: Project;
                 key={`${st.owner.id}:${st.slackMm ?? ""}`}
                 label={`Slack ${name}`}
                 value={st.slackMm}
-                placeholder={String(st.effectiveSlackMm)}
+                placeholder={String(st.inheritedSlackMm)}
                 onCommit={(v) => edit((p) => setStretchSlack(p, topology.id, st.owner, v))}
               />
             </li>
@@ -325,35 +339,6 @@ function StretchList({ project, topology, segmentId, edit }: { project: Project;
         })}
       </ul>
     </>
-  );
-}
-
-/** A millimetre field that commits on blur or Enter, so one edit is one undo step. Negative or non-numeric input reverts. */
-function SlackInput({ label, value, placeholder, onCommit }: { label: string; value: number | undefined; placeholder: string; onCommit: (v: number | undefined) => void }) {
-  const [text, setText] = useState(value === undefined ? "" : String(value));
-  const commit = () => {
-    const v = text.trim() === "" ? undefined : Number(text);
-    if (v !== undefined && !(v >= 0)) {
-      setText(value === undefined ? "" : String(value));
-      return;
-    }
-    if (v !== value) onCommit(v);
-  };
-  return (
-    <input
-      type="number"
-      min={0}
-      style={{ width: 70 }}
-      aria-label={label}
-      value={text}
-      placeholder={placeholder}
-      onChange={(ev) => setText(ev.target.value)}
-      onBlur={commit}
-      onKeyDown={(ev) => {
-        if (ev.key === "Enter") ev.currentTarget.blur();
-        if (ev.key === "Escape") setText(value === undefined ? "" : String(value));
-      }}
-    />
   );
 }
 
