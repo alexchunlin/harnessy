@@ -1,6 +1,6 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
-import { componentConnectors, findNet, pinLayout, type Project } from "./project";
+import { componentConnectors, findNet, netPinCount, netPins, pinLayout, type Project } from "./project";
 import { buildGraph, buses, busOf, degree, otherEnd, stretchesOf, type SlackOwner } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
@@ -55,7 +55,7 @@ export function addDomain(project: Project, domain: Domain): Project {
 }
 
 export function updateDomain(project: Project, id: string, patch: Partial<Omit<Domain, "id">>): Project {
-  return next(project, { file: { ...project.file, domains: project.file.domains.map((d) => (d.id === id ? { ...d, ...patch } : d)) } });
+  return fitDomainPins(next(project, { file: { ...project.file, domains: project.file.domains.map((d) => (d.id === id ? { ...d, ...patch } : d)) } }), id);
 }
 
 /** One spec per conductor on a domain. Clears the single spec and count; an empty or undefined list leaves the domain with no spec and one conductor. */
@@ -281,7 +281,10 @@ export function removeComponent(project: Project, id: string): Project {
     nets.set(
       domain,
       list
-        .map((n) => ({ ...n, connectors: n.connectors.filter((a) => !a.startsWith(`${id}/`)) }))
+        .map((n) => {
+          if (!n.connectors.some((a) => a.startsWith(`${id}/`))) return n;
+          return fitPins(project, { ...n, connectors: n.connectors.filter((a) => !a.startsWith(`${id}/`)) }, domain);
+        })
         .filter((n, i) => n.connectors.length >= 2 || n.connectors.length === list[i].connectors.length),
     );
   }
@@ -327,6 +330,69 @@ function updateNet(project: Project, id: string, fn: (n: Net) => Net): Project {
   return next(project, { nets });
 }
 
+// Pins ---------------------------------------------------------------------------
+
+/**
+ * Bring a net's pins in step with its connectors and pin count: drop entries
+ * for connectors it no longer has, trim or pad each array to the count, drop
+ * entries with no pin set, and drop the key when nothing is left. Returns the
+ * same net when nothing changes.
+ */
+function fitPins(project: Project, net: Net, domain: string): Net {
+  if (!net.pins) return net;
+  const count = netPinCount(project, net, domain);
+  const pins: Record<string, (number | null)[]> = {};
+  for (const address of net.connectors) {
+    const stored = net.pins[address];
+    if (!stored) continue;
+    const row = Array.from({ length: count }, (_, i) => stored[i] ?? null);
+    if (row.some((x) => x !== null)) pins[address] = row;
+  }
+  const fitted = Object.keys(pins).length ? pins : undefined;
+  if (JSON.stringify(fitted) === JSON.stringify(net.pins)) return net;
+  return { ...net, pins: fitted };
+}
+
+function fitNetPins(project: Project, id: string): Project {
+  const found = findNet(project, id);
+  if (!found) return project;
+  const fitted = fitPins(project, found.net, found.domain);
+  return fitted === found.net ? project : updateNet(project, id, () => fitted);
+}
+
+function fitDomainPins(project: Project, domain: string): Project {
+  const list = project.nets.get(domain);
+  if (!list) return project;
+  const fitted = list.map((n) => fitPins(project, n, domain));
+  if (fitted.every((n, i) => n === list[i])) return project;
+  const nets = new Map(project.nets);
+  nets.set(domain, fitted);
+  return next(project, { nets });
+}
+
+function putPins(project: Project, id: string, address: string, fn: (row: (number | null)[]) => (number | null)[]): Project {
+  const found = findNet(project, id);
+  if (!found) throw new Error(`no net ${id}`);
+  if (!found.net.connectors.includes(address)) throw new Error(`net ${id} does not terminate ${address}`);
+  const row = fn(netPins(project, found.net, found.domain, address));
+  const net = fitPins(project, { ...found.net, pins: { ...found.net.pins, [address]: row } }, found.domain);
+  return updateNet(project, id, () => net);
+}
+
+/** Set or clear (undefined or null) the pin conductor `index` lands on at one connector of a net. */
+export function setPin(project: Project, id: string, address: string, index: number, pin: number | null | undefined): Project {
+  if (pin != null && !(Number.isInteger(pin) && pin >= 1)) throw new Error(`pin must be a whole number from 1 up, got ${pin}`);
+  return putPins(project, id, address, (row) => {
+    if (!Number.isInteger(index) || index < 0 || index >= row.length) throw new Error(`net ${id} has no conductor ${index + 1}`);
+    return row.map((x, i) => (i === index ? (pin ?? null) : x));
+  });
+}
+
+/** Number a connector row of a net 1 to n in conductor order, overwriting what it held. */
+export function numberPinsInOrder(project: Project, id: string, address: string): Project {
+  return putPins(project, id, address, (row) => row.map((_, i) => i + 1));
+}
+
 export function addConnectorToNet(project: Project, id: string, address: string): Project {
   const found = findNet(project, id);
   if (found?.net.connectors.includes(address)) return project;
@@ -334,7 +400,7 @@ export function addConnectorToNet(project: Project, id: string, address: string)
 }
 
 export function removeConnectorFromNet(project: Project, id: string, address: string): Project {
-  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), (key) => keyNet(key) === id);
+  return dropBends(fitNetPins(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), id), (key) => keyNet(key) === id);
 }
 
 // Bends -------------------------------------------------------------------------
@@ -375,12 +441,12 @@ export function renameNet(project: Project, id: string, name: string | undefined
 
 /** One spec for every conductor and a count. Clears a per-conductor list; both undefined returns the net to its domain default. */
 export function setNetSpec(project: Project, id: string, spec: string | undefined, conductors: number | undefined): Project {
-  return updateNet(project, id, (n) => ({ ...n, spec, conductors, conductor_specs: undefined }));
+  return fitNetPins(updateNet(project, id, (n) => ({ ...n, spec, conductors, conductor_specs: undefined })), id);
 }
 
 /** One spec per conductor. Clears the single spec and count; an empty or undefined list returns the net to its domain default. */
 export function setNetConductors(project: Project, id: string, specs: string[] | undefined): Project {
-  return updateNet(project, id, (n) => ({ ...n, spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined }));
+  return fitNetPins(updateNet(project, id, (n) => ({ ...n, spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined })), id);
 }
 
 /** Name the bus a net is on. The name sits on this net and leaves every other member, so a bus has one anchor. */
@@ -400,7 +466,7 @@ export function moveNetToDomain(project: Project, id: string, domain: string): P
   const nets = new Map(project.nets);
   nets.set(found.domain, nets.get(found.domain)!.filter((n) => n.id !== id));
   nets.set(domain, [...nets.get(domain)!, found.net]);
-  return next(project, { nets });
+  return fitNetPins(next(project, { nets }), id);
 }
 
 export function removeNet(project: Project, id: string): Project {
