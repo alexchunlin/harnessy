@@ -203,3 +203,37 @@ test("segments meet connector boxes at their edges, and each fan draws its faint
   expect(arcs.length).toBeGreaterThan(0);
   await expect(page.locator(".fan-arcs path")).toHaveCount(arcs.length);
 });
+
+test("the Root toggle marks and unmarks an endpoint in one undo step each, and survives a reload", async ({ page }) => {
+  const folder = await freshExample("roots");
+  await openTopology(page, folder);
+  const id = BATTERY_ENDS[0];
+  const canvas = "canvas/top-222268.json";
+  const roots = (want: string[]) => (v: unknown) => JSON.stringify((v as { roots: string[] }).roots) === JSON.stringify(want);
+  // Undo keys skip a focused field, so each undo clicks the inspector heading first.
+  const undo = async () => {
+    await page.locator(".pane-right h3").first().click();
+    await page.keyboard.press("ControlOrMeta+z");
+  };
+
+  await page.locator(`.react-flow__node[data-id="${id}"]`).click();
+  const toggle = page.getByRole("checkbox", { name: "Root" });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await waitForFile(folder, canvas, roots([id]));
+  await undo();
+  await waitForFile(folder, canvas, roots([]));
+  await expect(toggle).not.toBeChecked();
+
+  await toggle.check();
+  await waitForFile(folder, canvas, roots([id]));
+  await toggle.uncheck();
+  await waitForFile(folder, canvas, roots([]));
+  await undo();
+  await waitForFile(folder, canvas, roots([id]));
+
+  await page.reload();
+  await canvasSettled(page);
+  await page.locator(`.react-flow__node[data-id="${id}"]`).click();
+  await expect(page.getByRole("checkbox", { name: "Root" })).toBeChecked();
+});

@@ -322,8 +322,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
           <ViewportPortal>
             {/* Each fan's faint arc, under the segments and boxes. */}
             <svg className="fan-arcs" aria-hidden>
-              {arcs.map((a) => (
-                <path key={a.node} d={arcPath(a)} data-fan={a.node} />
+              {arcs.map((a, i) => (
+                <path key={`${a.node}:${i}`} d={arcPath(a)} data-fan={a.node} />
               ))}
             </svg>
           </ViewportPortal>

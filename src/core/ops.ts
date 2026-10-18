@@ -550,6 +550,23 @@ export function setSpliceNets(project: Project, topologyId: string, endpointId: 
   }));
 }
 
+/** Mark an endpoint as a root of its harness. The canvas keeps roots sorted so the file diffs cleanly. */
+export function markRoot(project: Project, topologyId: string, endpointId: string): Project {
+  const canvas = project.topologyCanvases.get(topologyId);
+  if (!canvas || canvas.roots.includes(endpointId)) return project;
+  const topologyCanvases = new Map(project.topologyCanvases);
+  topologyCanvases.set(topologyId, { ...canvas, roots: [...canvas.roots, endpointId].sort() });
+  return next(project, { topologyCanvases });
+}
+
+export function unmarkRoot(project: Project, topologyId: string, endpointId: string): Project {
+  const canvas = project.topologyCanvases.get(topologyId);
+  if (!canvas || !canvas.roots.includes(endpointId)) return project;
+  const topologyCanvases = new Map(project.topologyCanvases);
+  topologyCanvases.set(topologyId, { ...canvas, roots: canvas.roots.filter((r) => r !== endpointId) });
+  return next(project, { topologyCanvases });
+}
+
 /** Remove an endpoint and every segment ending there, plus sheaths and ties on those segments. */
 export function removeEndpoint(project: Project, topologyId: string, endpointId: string): Project {
   const t = project.topologies.get(topologyId);
