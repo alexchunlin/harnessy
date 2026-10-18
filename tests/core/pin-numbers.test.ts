@@ -137,8 +137,8 @@ describe("pins on the cut list", () => {
       ["Battery OUT", 2, "MIB P1", undefined],
     ]);
     const csv = cutListCsv(bom).split("\n");
-    expect(csv[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,from,from_pin,to,to_pin,net,domain,notes");
-    expect(csv).toContain("Power harness,wire,wires/awg12-red,W12R,12 AWG red,red,1,300,Battery OUT,1,MIB P1,2,battery power,48v,conductor 1 of 2");
+    expect(csv[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,slack_mm,from,from_pin,to,to_pin,net,domain,notes");
+    expect(csv).toContain("Power harness,wire,wires/awg12-red,W12R,12 AWG red,red,1,300,0,Battery OUT,1,MIB P1,2,battery power,48v,conductor 1 of 2");
   });
 
   it("a project with no pins exports with blank pin columns", () => {

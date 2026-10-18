@@ -18,7 +18,7 @@ test("opens the RAMMP example and exports both CSV files", async ({ page }) => {
   const texts = await Promise.all([d1, d2].map(async (d) => fs.readFile((await d.path())!, "utf8")));
   const cut = texts[[d1, d2].findIndex((d) => d.suggestedFilename().endsWith("cut-list.csv"))];
   const summary = texts[[d1, d2].findIndex((d) => d.suggestedFilename().endsWith("summary.csv"))];
-  expect(cut.split("\n")[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,from,from_pin,to,to_pin,net,domain,notes");
+  expect(cut.split("\n")[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,slack_mm,from,from_pin,to,to_pin,net,domain,notes");
   expect(cut.split("\n").length).toBeGreaterThan(10);
   expect(summary).toContain("harness,row,ref,part_number,description,qty,length_mm");
   expect(downloads).toHaveLength(2);
