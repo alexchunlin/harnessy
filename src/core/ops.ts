@@ -3,7 +3,7 @@ import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { placementOf } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces } from "./derive";
-import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -479,7 +479,9 @@ export function removeTopology(project: Project, id: string): Project {
   topologies.delete(id);
   const topologyCanvases = new Map(project.topologyCanvases);
   topologyCanvases.delete(id);
-  return next(project, { topologies, topologyCanvases });
+  const placements = new Map(project.placements);
+  placements.delete(id);
+  return next(project, { topologies, topologyCanvases, placements });
 }
 
 function updateTopology(project: Project, id: string, fn: (t: Topology) => Topology): Project {
@@ -556,7 +558,8 @@ export function removeEndpoint(project: Project, topologyId: string, endpointId:
   let p = project;
   for (const s of t.segments) if (s.ends.includes(endpointId)) p = removeSegment(p, topologyId, s.id);
   p = updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => e.id !== endpointId) }));
-  return setEndpointPosition(p, topologyId, endpointId, undefined);
+  p = setEndpointPosition(p, topologyId, endpointId, undefined);
+  return prunePlacement(p, topologyId);
 }
 
 // Segments -----------------------------------------------------------------------
@@ -633,7 +636,7 @@ export function removeSegment(project: Project, topologyId: string, segmentId: s
     const ep = graph.endpoints.get(e);
     if (ep?.kind === "breakout" && degree(graph, e) === 2 && !ep.spec) p = setEndpointKind(p, topologyId, e, "point");
   }
-  return p;
+  return prunePlacement(p, topologyId);
 }
 
 // Sheaths and tie points --------------------------------------------------------
@@ -692,7 +695,7 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
 }
 
 export function removeTiePoint(project: Project, topologyId: string, tieId: string): Project {
-  return updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+  return prunePlacement(updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) })), topologyId);
 }
 
 // Placement ------------------------------------------------------------------------
@@ -714,21 +717,41 @@ const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]), Math.round(v[1]), Math.ro
 export function placeParts(project: Project, topologyId: string, parts: Parts): Project {
   const t = project.topologies.get(topologyId);
   if (!t) throw new Error(`no topology ${topologyId}`);
+  const old = placementOf(project, topologyId);
+  const placements = new Map(project.placements);
+  placements.set(topologyId, kept(t, {
+    positions: { ...old.positions, ...parts.positions },
+    rotations: { ...old.rotations, ...parts.rotations },
+    ties: { ...old.ties, ...parts.ties },
+  }));
+  return next(project, { placements });
+}
+
+/** A placement keeping only what the topology has: endpoint positions, connector rotations and tie point positions, rounded. */
+function kept(t: Topology, placement: Placement): Placement {
   const endpoints = new Set(t.endpoints.map((e) => e.id));
   const connectors = new Set(t.endpoints.filter((e) => e.kind === "connector").map((e) => e.id));
   const ties = new Set(t.ties.map((x) => x.id));
-  const merge = (old: Record<string, Vec3>, set: Record<string, Vec3> | undefined, keep: Set<string>) => {
+  const keep = (from: Record<string, Vec3>, ids: Set<string>) => {
     const out: Record<string, Vec3> = {};
-    for (const [id, v] of Object.entries({ ...old, ...set })) if (keep.has(id)) out[id] = roundVec(v);
+    for (const [id, v] of Object.entries(from)) if (ids.has(id)) out[id] = roundVec(v);
     return out;
   };
-  const old = placementOf(project, topologyId);
+  return { positions: keep(placement.positions, endpoints), rotations: keep(placement.rotations, connectors), ties: keep(placement.ties, ties) };
+}
+
+/**
+ * Drop placement entries for parts the topology no longer has. A topology
+ * left with nothing placed loses its placement, so its file goes.
+ */
+function prunePlacement(project: Project, topologyId: string): Project {
+  const t = project.topologies.get(topologyId);
+  const old = project.placements.get(topologyId);
+  if (!t || !old) return project;
+  const placement = kept(t, old);
   const placements = new Map(project.placements);
-  placements.set(topologyId, {
-    positions: merge(old.positions, parts.positions, endpoints),
-    rotations: merge(old.rotations, parts.rotations, connectors),
-    ties: merge(old.ties, parts.ties, ties),
-  });
+  if (Object.values(placement).every((r) => Object.keys(r).length === 0)) placements.delete(topologyId);
+  else placements.set(topologyId, placement);
   return next(project, { placements });
 }
 
