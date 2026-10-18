@@ -6,6 +6,7 @@ export * from "./library";
 export * from "./project";
 export * from "./derive";
 export * from "./drc";
+export * from "./pin-checks";
 export * from "./bom";
 export * from "./ops";
 export * from "./definitions";

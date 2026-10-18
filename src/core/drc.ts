@@ -1,6 +1,7 @@
 import type { Topology } from "./schema";
 import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
+import { checkPins } from "./pin-checks";
 import { type Graph, allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength, stretchesOf } from "./derive";
 
 export type Severity = "error" | "warning";
@@ -39,7 +40,10 @@ export type CheckId =
   | "keep-apart"
   | "net-no-spec"
   | "slack-on-assembly"
-  | "slack-exceeds-stretch";
+  | "slack-exceeds-stretch"
+  | "pin-duplicate"
+  | "pin-out-of-range"
+  | "pin-missing";
 
 export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-too-few-connectors": "error",
@@ -65,6 +69,9 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-no-spec": "warning",
   "slack-on-assembly": "warning",
   "slack-exceeds-stretch": "warning",
+  "pin-duplicate": "error",
+  "pin-out-of-range": "error",
+  "pin-missing": "warning",
 };
 
 export function assemblyLengthOf(project: Project): (ref: string) => number | undefined {
@@ -83,6 +90,7 @@ export function runChecks(project: Project, topology: Topology | undefined): Fin
 
   checkProject(project, add);
   if (topology) checkTopology(project, topology, add);
+  checkPins(project, topology, (check, target, message) => add(check, target, "connectivity", message));
 
   const silenced = new Set(project.drc.silences.map((s) => silenceKey(s.check, s.target)));
   for (const f of out) if (f.severity === "warning" && silenced.has(silenceKey(f.check, f.target))) f.silenced = true;

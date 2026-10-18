@@ -169,13 +169,14 @@ describe("pins on the cut list", () => {
 
   it("a cable row leaves the pin columns blank and lists its core pairs in notes", () => {
     let { p, ids } = complete();
-    p = ops.setNetSpec(p, ids.sig, "cables/shielded-6c-24awg", undefined);
+    // Both ends are two-pin housings, so a two-core cable fits them.
+    p = ops.setNetSpec(p, ids.sig, "cables/can-twisted-pair-22awg", undefined);
     const cable = () => buildBom(p, p.topologies.get(ids.top)!).cutList.find((r) => r.row === "cable")!;
     expect(cable().notes).toBeUndefined();
     p = ops.numberPinsInOrder(p, ids.sig, `${ids.mib}/J1`);
-    for (let i = 0; i < 5; i++) p = ops.setPin(p, ids.sig, `${ids.sensor}/J1`, i, 6 - i);
+    p = ops.setPin(p, ids.sig, `${ids.sensor}/J1`, 0, 2);
     const row = cable();
     expect([row.from, row.from_pin, row.to, row.to_pin]).toEqual(["MIB J1", undefined, "Sensor J1", undefined]);
-    expect(row.notes).toBe("1→6, 2→5, 3→4, 4→3, 5→2, 6→?");
+    expect(row.notes).toBe("1→2, 2→?");
   });
 });
