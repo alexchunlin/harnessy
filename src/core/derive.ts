@@ -1,4 +1,5 @@
-import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
+import type { Component, Endpoint, Net, Position, Segment, TiePoint, Topology } from "./schema";
+import { resolveRef } from "./library";
 import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
@@ -346,6 +347,78 @@ export function segmentLength(graph: Graph, segment: Segment, assemblyLength?: (
   void graph;
   if (segment.assembly && assemblyLength) return assemblyLength(segment.assembly);
   return segment.length_mm;
+}
+
+// Stretches and slack -------------------------------------------------------------
+
+/** Who stores a stretch's slack: the tie point at its far end, or the segment for its last stretch. */
+export type SlackOwner = { kind: "segment"; id: string } | { kind: "tie"; id: string };
+
+export interface Stretch {
+  /** Bound on the first-end side: an endpoint id or a tie point id. */
+  from: string;
+  /** Bound on the far side: a tie point id or the segment's second end. */
+  to: string;
+  /** Routed length between the bounds, undefined while a length or distance is unknown. */
+  lengthMm: number | undefined;
+  /** The stretch's own slack, undefined when unset. */
+  slackMm: number | undefined;
+  /** The slack the cut list adds for this stretch. */
+  effectiveSlackMm: number;
+  owner: SlackOwner;
+}
+
+function libraryAssemblyLength(project: Project): (ref: string) => number | undefined {
+  return (ref) => resolveRef(project.library, ref, "assemblies")?.length_mm;
+}
+
+/** A tie point's distance from its segment's first end. Undefined when it is measured from the far end of a segment with no known length. */
+export function tieDistanceFromStart(graph: Graph, segment: Segment, tie: TiePoint, assemblyLength?: (ref: string) => number | undefined): number | undefined {
+  if (tie.from === segment.ends[0]) return tie.distance_mm;
+  const length = segmentLength(graph, segment, assemblyLength);
+  return length === undefined ? undefined : length - tie.distance_mm;
+}
+
+/** A segment's stretches in order from `ends[0]`. Derived from its tie points, never stored. */
+export function stretchesOf(project: Project, graph: Graph, segment: Segment): Stretch[] {
+  const assemblyLength = libraryAssemblyLength(project);
+  const built = isBuilt(segment);
+  const ties = graph.topology.ties
+    .filter((t) => t.segment === segment.id)
+    .map((tie) => ({ tie, at: tieDistanceFromStart(graph, segment, tie, assemblyLength) }))
+    .sort((a, b) => {
+      // With no known length, ties measured from the far end sort after the rest, the one nearest the far end last.
+      if (a.at !== undefined && b.at !== undefined) return a.at - b.at || (a.tie.id < b.tie.id ? -1 : 1);
+      if (a.at !== undefined) return -1;
+      if (b.at !== undefined) return 1;
+      return b.tie.distance_mm - a.tie.distance_mm || (a.tie.id < b.tie.id ? -1 : 1);
+    });
+  const length = segmentLength(graph, segment, assemblyLength);
+  const bounds: { id: string; at: number | undefined; slack: number | undefined; owner: SlackOwner }[] = [
+    { id: segment.ends[0], at: 0, slack: undefined, owner: { kind: "segment", id: segment.id } },
+    ...ties.map(({ tie, at }) => ({ id: tie.id, at, slack: tie.slack_mm, owner: { kind: "tie" as const, id: tie.id } })),
+    { id: segment.ends[1], at: length, slack: segment.slack_mm, owner: { kind: "segment" as const, id: segment.id } },
+  ];
+  const out: Stretch[] = [];
+  for (let i = 1; i < bounds.length; i++) {
+    const a = bounds[i - 1];
+    const b = bounds[i];
+    const slackMm = built ? b.slack : undefined;
+    out.push({
+      from: a.id,
+      to: b.id,
+      lengthMm: a.at === undefined || b.at === undefined ? undefined : b.at - a.at,
+      slackMm,
+      effectiveSlackMm: slackMm ?? 0,
+      owner: b.owner,
+    });
+  }
+  return out;
+}
+
+/** The slack every conductor crossing this segment gains: the sum of its stretches' effective slack. A purchased assembly has none. */
+export function segmentSlack(project: Project, graph: Graph, segment: Segment): number {
+  return stretchesOf(project, graph, segment).reduce((sum, s) => sum + s.effectiveSlackMm, 0);
 }
 
 export function isRouted(route: Route): boolean {

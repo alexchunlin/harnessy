@@ -3,9 +3,9 @@ import { allNets, componentConnectors, connectorLabel, netConductors, netSpec, t
 import { resolveRef, resolveSpec } from "./library";
 import { parseAddress } from "./refs";
 import { assemblyLengthOf, hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
-import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, netLabeller, routeOf, PURCHASED, segmentLength, type Graph } from "./derive";
+import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, netLabeller, routeOf, PURCHASED, segmentLength, segmentSlack, type Graph } from "./derive";
 
-export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "from", "to", "net", "domain", "notes"] as const;
+export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "slack_mm", "from", "to", "net", "domain", "notes"] as const;
 export type CutListColumn = (typeof CUT_LIST_COLUMNS)[number];
 export type RowKind = "housing" | "contacts" | "wire" | "cable" | "sheath" | "tie" | "splice" | "breakout" | "assembly";
 
@@ -56,6 +56,15 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
   const name = (id: string) => endpointName(project, graph, id);
   const label = netLabeller(project);
   const rows: CutListRow[] = [];
+  // A cut length is the routed length plus the slack of every stretch on every segment the piece crosses. The row says how much is slack.
+  const cut = (routed: number | undefined, segmentIds: Iterable<string>) => {
+    let slack = 0;
+    for (const id of segmentIds) {
+      const s = graph.segments.get(id);
+      if (s) slack += segmentSlack(project, graph, s);
+    }
+    return { length_mm: routed === undefined ? undefined : routed + slack, slack_mm: slack };
+  };
   const row = (r: Partial<CutListRow> & { row: RowKind; harness: string }) => rows.push({ ...emptyRow(), ...r });
 
   const contactsAt = new Map<string, number>();
@@ -82,7 +91,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
         part_number: resolved.spec.part_number,
         description: resolved.spec.name,
         qty: 1,
-        length_mm: routeTotal(graph, route.segments, assemblyLength),
+        ...cut(routeTotal(graph, route.segments, assemblyLength), route.segments),
         from: ends[0] ? name(ends[0]) : undefined,
         to: ends[1] ? name(ends[1]) : undefined,
         net: netLabel,
@@ -102,7 +111,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
             description: own?.spec.name,
             color: own?.kind === "wire" ? own.spec.color : undefined,
             qty: 1,
-            length_mm: leg.lengthMm,
+            ...cut(leg.lengthMm, leg.segments.map((s) => s.id)),
             from: name(leg.from),
             to: name(leg.to),
             net: netLabel,
@@ -162,7 +171,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
       part_number: spec?.part_number,
       description: spec?.name,
       qty: 1,
-      length_mm: length,
+      ...cut(length, sh.segments),
       from: ends ? name(ends[0]) : undefined,
       to: ends ? name(ends[1]) : undefined,
       notes: sh.overlap_mm ? `includes ${sh.overlap_mm} mm overlap` : undefined,
@@ -244,7 +253,7 @@ function resolveConnectorType(project: Project, address: string) {
 }
 
 function emptyRow(): CutListRow {
-  return { harness: "", row: "wire", ref: undefined, part_number: undefined, description: undefined, color: undefined, qty: undefined, length_mm: undefined, from: undefined, to: undefined, net: undefined, domain: undefined, notes: undefined };
+  return { harness: "", row: "wire", ref: undefined, part_number: undefined, description: undefined, color: undefined, qty: undefined, length_mm: undefined, slack_mm: undefined, from: undefined, to: undefined, net: undefined, domain: undefined, notes: undefined };
 }
 
 // CSV --------------------------------------------------------------------------

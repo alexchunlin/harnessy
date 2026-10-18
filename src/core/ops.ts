@@ -1,7 +1,7 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
-import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
+import { buildGraph, buses, busOf, degree, otherEnd, stretchesOf, type SlackOwner } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
@@ -690,8 +690,39 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
   }));
 }
 
+/**
+ * Set or clear one stretch's slack. A tie point owns the stretch on its
+ * first-end side; the segment owns its last stretch. Slack is never negative.
+ */
+export function setStretchSlack(project: Project, topologyId: string, owner: SlackOwner, slackMm: number | undefined): Project {
+  if (slackMm !== undefined && !(slackMm >= 0)) throw new Error(`slack is never negative: ${slackMm}`);
+  const slack_mm = slackMm === undefined ? undefined : Math.round(slackMm);
+  if (owner.kind === "segment") return updateSegment(project, topologyId, owner.id, (s) => ({ ...s, slack_mm }));
+  return updateTopology(project, topologyId, (t) => {
+    if (!t.ties.some((tie) => tie.id === owner.id)) throw new Error(`no tie point ${owner.id}`);
+    return { ...t, ties: t.ties.map((tie) => (tie.id === owner.id ? { ...tie, slack_mm } : tie)) };
+  });
+}
+
+/**
+ * Remove a tie point. The stretch beyond it absorbs the stretch it bounded,
+ * and takes the sum of both stretches' effective slack, so no cut length moves.
+ */
 export function removeTiePoint(project: Project, topologyId: string, tieId: string): Project {
-  return updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+  const t = project.topologies.get(topologyId);
+  const tie = t?.ties.find((x) => x.id === tieId);
+  const seg = tie && t?.segments.find((s) => s.id === tie.segment);
+  const p = updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+  if (!t || !seg) return p;
+  const graph = buildGraph(t);
+  const stretches = stretchesOf(project, graph, seg);
+  const i = stretches.findIndex((s) => s.owner.kind === "tie" && s.owner.id === tieId);
+  const [removed, absorbing] = [stretches[i], stretches[i + 1]];
+  if (!removed || !absorbing) return p;
+  const sum = removed.effectiveSlackMm + absorbing.effectiveSlackMm;
+  // An unset stretch that would come out the same anyway stays unset.
+  if (absorbing.slackMm === undefined && sum === absorbing.effectiveSlackMm) return p;
+  return setStretchSlack(p, topologyId, absorbing.owner, sum);
 }
 
 // Design rule silences ---------------------------------------------------------
