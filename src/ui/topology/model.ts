@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas } from "../../core";
+import { ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -43,6 +43,10 @@ export interface SegmentEdgeData {
   fanAt: [boolean, boolean];
   /** The box each end sits in, so the fan starts past its edge. */
   endSizes: [{ w: number; h: number }, { w: number; h: number }];
+  /** Where the line ends at each endpoint, from `segmentEnd`: a connector's box edge, or the centre of anything smaller. */
+  ends: [Position, Position];
+  /** Each end's box centre, as drawn. */
+  centres: [Position, Position];
   /** true when some conductor is selected or hovered: strands not lit dim */
   anyLit: boolean;
   [key: string]: unknown;
@@ -90,6 +94,22 @@ const EMPTY_CANVAS: TopologyCanvas = { offsets: {}, pieces: {}, roots: [] };
 export function drawnPositions(project: Project, topology: Topology): Map<string, Position> {
   const layout = layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_CANVAS);
   return new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+}
+
+/** The faint arc through each fan's children, as the layout draws them. */
+export function fanArcs(project: Project, topology: Topology): FanArc[] {
+  return layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_CANVAS).arcs;
+}
+
+/** An SVG path for one fan arc. A whole circle is drawn as two halves, since one SVG arc cannot close on itself. */
+export function arcPath(a: FanArc): string {
+  const at = (deg: number) => {
+    const r = (deg * Math.PI) / 180;
+    return `${a.centre.x + Math.cos(r) * a.radius} ${a.centre.y + Math.sin(r) * a.radius}`;
+  };
+  const sweep = a.to - a.from;
+  if (sweep >= 360) return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from + 180)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from)}`;
+  return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 ${sweep > 180 ? 1 : 0} 1 ${at(a.to)}`;
 }
 
 /**
@@ -184,12 +204,14 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const classes = [routeColor ? "on-route" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ");
     const { strands, badge } = s.assembly ? { strands: [], badge: undefined } : strandsOf(project, onHere, domains, label, litConductors);
     const kinds = s.ends.map((e) => graph.endpoints.get(e)!.kind);
+    const centres: [Position, Position] = [positions.get(s.ends[0])!, positions.get(s.ends[1])!];
+    const ends: [Position, Position] = [segmentEnd(kinds[0], centres[0], centres[1]), segmentEnd(kinds[1], centres[1], centres[0])];
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
       data: {
         segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor,
         faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [],
-        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], anyLit: litConductors.size > 0,
+        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], ends, centres, anyLit: litConductors.size > 0,
       },
       selected: (selected.has(s.id) || highlightSegments.has(s.id)) && !outOfLayer, selectable: !outOfLayer, focusable: !outOfLayer, className: classes || undefined,
       zIndex: routeColor ? 4 : 1, interactionWidth: outOfLayer ? 0 : 16,

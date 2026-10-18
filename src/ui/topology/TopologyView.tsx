@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
+import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
-import { deriveTopology, drawnPositions, type TopoEdge, type TopoNode } from "./model";
+import { arcPath, deriveTopology, drawnPositions, fanArcs, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
 import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
 import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
@@ -63,6 +63,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
   const homes = useMemo(() => drawnPositions(project, topology), [project, topology]);
   const glideFrom = useRef(new Map<string, Position>());
   const drawn = useGlide(homes, glideFrom);
+  const arcs = useMemo(() => fanArcs(project, topology), [project, topology]);
   const model = useMemo(() => deriveTopology(project, topology, selected, drawn, drafts, options), [project, topology, selected, drawn, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -318,6 +319,14 @@ function Canvas({ topologyId }: { topologyId: string }) {
           colorMode={theme}
           elevateEdgesOnSelect
         >
+          <ViewportPortal>
+            {/* Each fan's faint arc, under the segments and boxes. */}
+            <svg className="fan-arcs" aria-hidden>
+              {arcs.map((a) => (
+                <path key={a.node} d={arcPath(a)} data-fan={a.node} />
+              ))}
+            </svg>
+          </ViewportPortal>
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>

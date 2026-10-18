@@ -64,3 +64,7 @@
 .strand.dim .strand-line, .strand.dim .strand-outline { opacity: 0.25; }
 .strand.lit .strand-outline { stroke-opacity: 0.8; }
 .seg-badge { color: var(--muted); font-size: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 0 4px; }
+
+/* The faint arc through each fan's children, under every segment and box. */
+.fan-arcs { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: -1; }
+.fan-arcs path { fill: none; stroke: var(--muted); stroke-width: 1; stroke-opacity: 0.35; }

@@ -28,7 +28,7 @@ export const useConductorHover = create<{ address: string | null; set: (address:
 /** How far past the box edge the strands run parallel before they converge, and how long the convergence takes. */
 const FAN_PARALLEL = 24;
 const FAN_CONVERGE = 16;
-/** The connect ring around an endpoint, matching RING in nodes.tsx: a segment attaches at the ring's top centre. */
+/** The connect ring around an endpoint, matching RING in nodes.tsx. */
 const RING = 7;
 /** The fan starts this far past the ring, so a strand is clickable along its whole length. */
 const RING_CLEAR = 4;
@@ -49,8 +49,10 @@ function cssColor(color: string, fallback: string): string {
   return ok ? color : fallback;
 }
 
-export function SegmentEdge({ id, sourceX, sourceY, targetX, targetY, data, selected }: EdgeProps<Edge<SegmentEdgeData>>) {
+export function SegmentEdge({ id, data, selected }: EdgeProps<Edge<SegmentEdgeData>>) {
   const d = data!;
+  // The line runs between the ends the layout rules give, not React Flow's handle points.
+  const [{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }] = d.ends;
   const open = useLengthEditor((s) => s.open === id);
   const setOpen = useLengthEditor((s) => s.setOpen);
   const path = `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
@@ -132,9 +134,8 @@ interface FanGeometry {
 }
 
 /**
- * Fans at the ends of a segment that carries strands. A segment attaches at
- * the top centre of an endpoint's connect ring, so each fan starts where the
- * line leaves that ring and the strands are apart by the time they are
+ * Fans at the ends of a segment that carries strands. Each fan starts where
+ * the line leaves its endpoint's connect ring and the strands are apart by the time they are
  * clickable. On a short segment both fans shrink to fit, and a point
  * endpoint gets none, since the bundle only turns a corner there.
  */
@@ -146,14 +147,15 @@ function fanGeometry(a: { x: number; y: number }, b: { x: number; y: number }, d
   if (len < 1) return [];
   const ux = dx / len;
   const uy = dy / len;
-  // Distance along (vx, vy) from the ring's top centre to where the line leaves the ring's box; zero when it heads upward.
-  const exit = (size: { w: number; h: number }, vx: number, vy: number) => {
-    if (vy < -1e-6) return 0;
-    const tx = Math.abs(vx) > 1e-6 ? (size.w / 2 + RING) / Math.abs(vx) : Infinity;
-    const ty = vy > 1e-6 ? (size.h + 2 * RING) / vy : Infinity;
-    return Math.min(tx, ty);
+  // Distance along (vx, vy) from the line's end to where it leaves the box's connect ring.
+  const exit = (end: { x: number; y: number }, centre: { x: number; y: number }, size: { w: number; h: number }, vx: number, vy: number) => {
+    const hw = size.w / 2 + RING;
+    const hh = size.h / 2 + RING;
+    const tx = Math.abs(vx) > 1e-6 ? (vx > 0 ? centre.x + hw - end.x : end.x - centre.x + hw) / Math.abs(vx) : Infinity;
+    const ty = Math.abs(vy) > 1e-6 ? (vy > 0 ? centre.y + hh - end.y : end.y - centre.y + hh) / Math.abs(vy) : Infinity;
+    return Math.max(0, Math.min(tx, ty));
   };
-  const out = [exit(d.endSizes[0], ux, uy) + RING_CLEAR, exit(d.endSizes[1], -ux, -uy) + RING_CLEAR];
+  const out = [exit(a, d.centres[0], d.endSizes[0], ux, uy) + RING_CLEAR, exit(b, d.centres[1], d.endSizes[1], -ux, -uy) + RING_CLEAR];
   const room = Math.max(0, len - out[0] - out[1]);
   const scale = Math.min(1, room / (2 * (FAN_PARALLEL + FAN_CONVERGE) + 12));
   if (scale < 0.25) return [];

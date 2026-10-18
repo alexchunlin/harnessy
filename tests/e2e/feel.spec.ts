@@ -348,7 +348,8 @@ test("dragging from the ring into empty canvas grows a point that glides to its 
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
   await canvasSettled(page);
-  for (let i = 0; i < 6; i++) await page.locator(".react-flow__controls-zoomin").click();
+  // Zoom in until a connector box is big enough that the drag starts on its ring rather than its body.
+  for (let i = 0; i < 11; i++) await page.locator(".react-flow__controls-zoomin").click();
   await page.waitForTimeout(400);
 
   const before = (await readJson(folder, TOPOLOGY)) as Topo;
