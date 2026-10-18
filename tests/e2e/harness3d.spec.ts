@@ -188,3 +188,88 @@ test("the view opens with lengths locked: a drag moves the whole harness as one 
   await expect(page.getByRole("button", { name: "Lengths locked" })).toHaveAttribute("aria-pressed", "false");
   expect(await snapshot(folder)).toEqual(opened);
 });
+
+interface Tie {
+  id: string;
+  segment: string;
+  from: string;
+  distance_mm: number;
+  spec: string;
+}
+const tiesIn = async (folder: string) => ((await readJson(folder, TOPOLOGY)) as { ties: Tie[] }).ties;
+const placementTies = async (folder: string) => {
+  const file = path.join(folder, PLACEMENT);
+  return (await fs.access(file).then(() => true, () => false)) ? (JSON.parse(await fs.readFile(file, "utf8")) as { ties: Record<string, Vec3> }).ties : {};
+};
+
+test("a tie point made in 3D is saved with its position, moves and deletes as one edit, and keeps its place after a reload", async ({ page }) => {
+  const folder = await freshExample("tie-3d");
+  await openProject(page, folder);
+  await open3d(page);
+  await showTwoConnectorHarness(page);
+  await page.waitForTimeout(1000);
+  const typed = await tiesIn(folder);
+
+  // Double-clicking the tube makes a real tie point at once: the tie point, its position and a distance where it was made.
+  const before = await shown(page);
+  const [a, b] = Object.values(before.connectors).map((c) => c.position);
+  const middle = a.map((v, i) => (v + b[i]) / 2) as Vec3;
+  const at = await onScreen(page, before, middle);
+  await page.mouse.dblclick(at.x, at.y);
+  await expect.poll(async () => (await tiesIn(folder)).length).toBe(typed.length + 1);
+  const tie = (await tiesIn(folder)).find((t) => !typed.some((x) => x.id === t.id))!;
+  expect(tie.spec.startsWith("ties/")).toBe(true);
+  const half = Math.hypot(...a.map((v, i) => v - b[i])) / 2;
+  expect(Math.abs(tie.distance_mm - half)).toBeLessThanOrEqual(10);
+  await expect.poll(async () => Object.keys(await placementTies(folder))).toEqual([tie.id]);
+  expect((await shown(page)).points[tie.id]).toBeDefined();
+
+  // One undo takes back the tie point and its position together.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(async () => (await tiesIn(folder)).length).toBe(typed.length);
+  await expect.poll(async () => Object.keys(await placementTies(folder))).toEqual([]);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect.poll(async () => Object.keys(await placementTies(folder))).toEqual([tie.id]);
+
+  // In Stretch a tie point drags on its own, and its new position survives a reload.
+  await page.getByRole("button", { name: "Stretch" }).click();
+  const made = await shown(page);
+  const from = await onScreen(page, made, made.points[tie.id]);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y - 60, { steps: 12 });
+  await page.mouse.up();
+  const dragged = (await shown(page)).points[tie.id];
+  expect(dragged).not.toEqual(made.points[tie.id]);
+  await expect.poll(async () => (await placementTies(folder))[tie.id]).toEqual(dragged);
+  await page.reload();
+  await page.getByRole("button", { name: "Connectivity" }).waitFor();
+  if (!(await page.locator(".h3d-workspace canvas").isVisible())) await open3d(page);
+  await showTwoConnectorHarness(page);
+  await page.waitForTimeout(1000);
+  const reloaded = await shown(page);
+  expect(reloaded.points[tie.id]).toEqual(dragged);
+
+  // Delete removes the selected tie point and its position, and one undo restores both.
+  const there = await onScreen(page, reloaded, dragged);
+  await page.mouse.click(there.x, there.y);
+  await expect(page.getByRole("button", { name: "Remove tie point" })).toBeVisible();
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => (await tiesIn(folder)).some((t) => t.id === tie.id)).toBe(false);
+  await expect.poll(async () => Object.keys(await placementTies(folder))).toEqual([]);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(async () => (await tiesIn(folder)).some((t) => t.id === tie.id)).toBe(true);
+  await expect.poll(async () => (await placementTies(folder))[tie.id]).toEqual(dragged);
+
+  // Once its segment is placed, the topology inspector shows the tie point's distance from 3D, read-only.
+  await page.getByRole("button", { name: "Lengths locked" }).click();
+  await dragConnector(page, reloaded, Object.values(reloaded.connectors)[0].position);
+  await waitForFile(folder, PLACEMENT, (v) => Object.keys((v as { positions: Record<string, Vec3> }).positions).length === 2);
+  await page.getByRole("button", { name: "Topology", exact: true }).click();
+  await canvasSettled(page);
+  await page.locator(`.seg-label[data-segment="${tie.segment}"]`).click();
+  const inspector = page.locator(".pane-right");
+  await inspector.locator(".insp-list li").last().click();
+  await expect(inspector.locator(".tie-distance")).toContainText("from 3D");
+  await expect(inspector.locator('input[type="number"]')).toHaveCount(0);
+});

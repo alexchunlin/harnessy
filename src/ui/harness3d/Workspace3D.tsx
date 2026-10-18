@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { buildGraph, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Placement, type RigidMove, type SegmentLength } from "../../core";
+import { addTiePointAt, buildGraph, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Placement, type RigidMove, type SegmentLength } from "../../core";
 import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
@@ -282,6 +282,22 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     if (clearTarget) useDoc.getState().edit((p) => clearPlacement(p, topologyId, clearTarget), "Clear placement");
   }
 
+  /** Make a tie point where a tube was double-clicked, saved with its position as one edit. Its distance is measured on the curve as drawn. */
+  function addTie(segmentId: string, at: Vec3) {
+    const drawnPose = {
+      positions: Object.fromEntries(harness.nodes.map((n) => [n.id, positions[n.id]])),
+      rotations: Object.fromEntries([...connectors].map((id) => [id, rotations[id].map((r) => THREE.MathUtils.radToDeg(r)) as Vec3])),
+      ties: Object.fromEntries(harness.ties.map((t) => [t.id, positions[t.id]])),
+    };
+    let made: string | undefined;
+    useDoc.getState().edit((p) => {
+      const r = addTiePointAt(p, topologyId, segmentId, at, drawnPose);
+      made = r.id;
+      return r.project;
+    }, "Add tie point");
+    if (made) setSelected(made);
+  }
+
   function removeTie(id: string) {
     useDoc.getState().edit((p) => removeTiePoint(p, topologyId, id), "Remove tie point");
     setSelected((s) => (s === id ? undefined : s));
@@ -302,11 +318,11 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
       <Stage onPointerMissed={() => setSelected(undefined)}>
         <Frame centre={middle} radius={reach} token={frame} />
         {reference && <ReferenceObject loaded={reference.loaded} units={reference.model.units} position={reference.position} rotation={reference.rotation} />}
-        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} lengths={lengths} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} />
+        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} lengths={lengths} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} onAddTie={addTie} />
         {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} onEnd={commit} />}
       </Stage>
       <aside className="h3d-panel">
-        <p className="muted">Hover or click a connector for its name and type. Click a part for its handles: arrows move it along X, Y and Z, and rings turn a connector. Breakouts and points (circles) and tie points (diamonds) also drag freely. Delete removes the selected tie point. F frames the harness. Esc lets go.</p>
+        <p className="muted">Hover or click a connector for its name and type. Click a part for its handles: arrows move it along X, Y and Z, and rings turn a connector. Breakouts and points (circles) and tie points (diamonds) also drag freely. Double-click a tube to add a tie point there, and Delete removes the selected one. F frames the harness. Esc lets go.</p>
         <div className="h3d-row">
           <span>{selectedLabel ?? "Nothing selected"}</span>
           <button className={liveMode === "translate" ? "active" : ""} disabled={selected === undefined} onClick={() => setMode("translate")} title="G">
@@ -352,7 +368,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   );
 }
 
-function RouteScene({ harness, positions, rotations, placed, path, routed, lengths, selected, onSelect, onDrag, onDragEnd, tieDistance }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; path: (segId: string) => Vec3[]; routed: (segId: string) => number; lengths: Map<string, SegmentLength> | undefined; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => { from: string; mm: number } }) {
+function RouteScene({ harness, positions, rotations, placed, path, routed, lengths, selected, onSelect, onDrag, onDragEnd, tieDistance, onAddTie }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; path: (segId: string) => Vec3[]; routed: (segId: string) => number; lengths: Map<string, SegmentLength> | undefined; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => { from: string; mm: number }; onAddTie: (segmentId: string, at: Vec3) => void }) {
   const start = useDrag(onDrag, onDragEnd);
   const [hovered, setHovered] = useState<string>();
   // The card follows the pointer first, and falls back to the selected connector.
@@ -373,7 +389,16 @@ function RouteScene({ harness, positions, rotations, placed, path, routed, lengt
         return (
           <group key={s.id}>
             {pts.slice(1).map((p, i) => (
-              <Tube key={i} points={[pts[i], p]} radius={s.odMm / 2} color={s.color} />
+              <Tube
+                key={i}
+                points={[pts[i], p]}
+                radius={s.odMm / 2}
+                color={s.color}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onAddTie(s.id, [e.point.x, e.point.y, e.point.z]);
+                }}
+              />
             ))}
             {/* A placed segment shows the length the project uses. An unplaced one shows what is drawn beside what is typed. */}
             <Label at={mid} tone="muted">

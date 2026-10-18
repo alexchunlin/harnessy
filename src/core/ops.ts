@@ -3,6 +3,7 @@ import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { moveRigidly, placementOf, type Pose, type RigidMove } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces, segmentLength } from "./derive";
+import { bundleCurves } from "./curve";
 import { lengthsOf } from "./lengths";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, ReferenceModel, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
 import { ALL_LAYER_ID, ReferenceModelSchema } from "./schema";
@@ -686,6 +687,35 @@ export function addTiePoint(project: Project, topologyId: string, segmentId: str
   const length = segmentLength(lengthsOf(project, t), segmentId) ?? 0;
   const tie: TiePoint = { id, segment: segmentId, from: from ?? seg.ends[0], distance_mm: Math.round(distanceMm ?? length / 2), spec };
   return { project: updateTopology(project, topologyId, (t) => ({ ...t, ties: [...t.ties, tie] })), id };
+}
+
+/** The tie spec a tie point made in 3D starts with: the 10 mm P-clip when the library has it, else the first tie spec. */
+export function defaultTieSpec(project: Project): string {
+  const ties = project.library.ties;
+  const id = ties.has("p-clip-10mm") ? "p-clip-10mm" : ties.keys().next().value;
+  if (id === undefined) throw new Error("the library has no tie specs");
+  return `ties/${id}`;
+}
+
+/**
+ * Make a tie point at a position, as one edit: the tie point, its position,
+ * and a typed distance set to where it was made along the curve. This is the
+ * one place a stored distance is written from placement, so the tie point
+ * still means something after a clear. `pose` is what the view draws for
+ * parts nobody placed; the saved placement wins where it has a part.
+ */
+export function addTiePointAt(project: Project, topologyId: string, segmentId: string, position: Vec3, pose: Partial<Pose> = {}): { project: Project; id: string } {
+  const made = addTiePoint(project, topologyId, segmentId, defaultTieSpec(project));
+  const t = made.project.topologies.get(topologyId)!;
+  const saved = placementOf(project, topologyId);
+  const drawn: Pose = {
+    positions: { ...pose.positions, ...saved.positions },
+    rotations: { ...pose.rotations, ...saved.rotations },
+    ties: { ...pose.ties, ...saved.ties, [made.id]: position },
+  };
+  const fromStart = bundleCurves(project, t, drawn).get(segmentId)?.ties[made.id];
+  const withDistance = fromStart === undefined ? made.project : updateTiePoint(made.project, topologyId, made.id, { distance_mm: fromStart });
+  return { project: placeParts(withDistance, topologyId, { ties: { [made.id]: position } }), id: made.id };
 }
 
 export function updateTiePoint(project: Project, topologyId: string, tieId: string, patch: Partial<Omit<TiePoint, "id">>): Project {

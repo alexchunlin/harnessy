@@ -385,12 +385,20 @@ function TieInspector({ project, topology, id, edit }: Props & { id: string }) {
   const t = topology.ties.find((x) => x.id === id)!;
   const graph = buildGraph(topology);
   const seg = graph.segments.get(t.segment);
+  const distance = lengthsOf(project, topology).ties.get(id);
   return (
     <div className="pane pane-right">
       <h3>Tie point</h3>
       <div className="field">
         <label>Distance (mm)</label>
-        <input type="number" min={0} value={t.distance_mm} onChange={(e) => edit((p) => updateTiePoint(p, topology.id, id, { distance_mm: Number(e.target.value) || 0 }))} />
+        {/* A placed tie point measures the 3D curve. The typed distance waits in the file for when it is unplaced. */}
+        {distance?.source === "3d" ? (
+          <span className="tie-distance" title="Placed in 3D. Move it in the 3D view to change it.">
+            {distance.mm} mm <span className="muted">from 3D</span>
+          </span>
+        ) : (
+          <input type="number" min={0} value={t.distance_mm} onChange={(e) => edit((p) => updateTiePoint(p, topology.id, id, { distance_mm: Number(e.target.value) || 0 }))} />
+        )}
       </div>
       <div className="field">
         <label>Measured from</label>
