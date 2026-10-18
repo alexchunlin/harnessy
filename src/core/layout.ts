@@ -8,8 +8,13 @@ import { buildGraph, degree, otherEnd, pieces, type Graph, type Piece } from "./
 import type { Project } from "./project";
 import type { Endpoint, Position, Segment, Topology, TopologyCanvas } from "./schema";
 
-/** The drawn length of every logical edge, in canvas pixels. */
-export const UNIFORM_LENGTH = 150;
+/**
+ * The drawn length of every logical edge, in canvas pixels. At this length,
+ * children STEP_DEGREES apart sit about one SIBLING_PITCH apart, so connector
+ * boxes on a fan do not overlap whichever way it faces. 350 is the least
+ * that keeps the RAMMP example clear.
+ */
+export const UNIFORM_LENGTH = 400;
 /** The least distance between two siblings on a crowded arc: a connector box and a little air. */
 export const SIBLING_PITCH = 104;
 /** The angle between neighbouring children of a node that has a parent. */
@@ -42,6 +47,20 @@ export interface PieceLayout {
   rect: { x: number; y: number; w: number; h: number };
 }
 
+/**
+ * A faint arc through the children of one breakout or splice, so the fan
+ * reads as one group. Angles are in degrees with screen y down, so the sweep
+ * runs clockwise from `from` to `to`. A root's arc is the whole circle.
+ */
+export interface FanArc {
+  /** The breakout or splice the fan grows from. */
+  node: string;
+  centre: Position;
+  radius: number;
+  from: number;
+  to: number;
+}
+
 export interface TopologyLayout {
   /** Every endpoint of the topology, by id. Centres, in canvas pixels. */
   endpoints: Map<string, EndpointLayout>;
@@ -49,6 +68,8 @@ export interface TopologyLayout {
   segments: Map<string, [Position, Position]>;
   /** Built harnesses first, then purchased cables, each in piece id order. */
   pieces: PieceLayout[];
+  /** One per breakout or splice with children, through its children's homes. */
+  arcs: FanArc[];
 }
 
 type Positions = Map<string, Position>;
@@ -60,16 +81,19 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
   const ordered = [...all.filter((p) => p.built), ...all.filter((p) => !p.built)];
   const roots = new Set(canvas.roots);
   const laid = ordered.map((piece) => {
-    const local = layoutPiece(graph, piece, roots);
-    return { piece, local, rect: bounds(graph, local) };
+    const { pos: local, arcs } = layoutPiece(graph, piece, roots);
+    return { piece, local, arcs, rect: bounds(graph, local) };
   });
   const home: Positions = new Map();
   const out: PieceLayout[] = [];
+  const arcs: FanArc[] = [];
   const bottom = pack(
     laid.map((l) => l.rect),
     (i, x, y) => {
       const { piece, local, rect } = laid[i];
-      for (const [id, p] of local) home.set(id, { x: p.x - rect.x + x, y: p.y - rect.y + y });
+      const move = (p: Position) => ({ x: p.x - rect.x + x, y: p.y - rect.y + y });
+      for (const [id, p] of local) home.set(id, move(p));
+      for (const a of laid[i].arcs) arcs.push({ ...a, centre: move(a.centre) });
       out.push({ id: piece.id, built: piece.built, rect: { x, y, w: rect.w, h: rect.h } });
     },
   );
@@ -88,9 +112,32 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
   for (const s of topology.segments) {
     const a = endpoints.get(s.ends[0]);
     const b = endpoints.get(s.ends[1]);
-    if (a && b) segments.set(s.id, [a.drawn, b.drawn]);
+    const [ka, kb] = s.ends.map((id) => graph.endpoints.get(id)?.kind);
+    if (a && b && ka && kb) segments.set(s.id, [segmentEnd(ka, a.drawn, b.drawn), segmentEnd(kb, b.drawn, a.drawn)]);
   }
-  return { endpoints, segments, pieces: out };
+  return { endpoints, segments, pieces: out, arcs };
+}
+
+/**
+ * Where a segment ends at an endpoint centred on `centre`, coming from
+ * `other`. A connector box is met at the point on its edge nearest `other`,
+ * so lines do not all converge on its middle. Every smaller box is met at its
+ * centre.
+ */
+export function segmentEnd(kind: Endpoint["kind"], centre: Position, other: Position): Position {
+  if (kind !== "connector") return centre;
+  const hw = ENDPOINT_SIZE.connector.w / 2;
+  const hh = ENDPOINT_SIZE.connector.h / 2;
+  const x = Math.min(Math.max(other.x, centre.x - hw), centre.x + hw);
+  const y = Math.min(Math.max(other.y, centre.y - hh), centre.y + hh);
+  const inX = hw - Math.abs(x - centre.x);
+  const inY = hh - Math.abs(y - centre.y);
+  if (inX > 0 && inY > 0) {
+    // `other` lies inside the box: push out to the nearer edge.
+    if (inX < inY) return { x: x < centre.x ? centre.x - hw : centre.x + hw, y };
+    return { x, y: y < centre.y ? centre.y - hh : centre.y + hh };
+  }
+  return { x, y };
 }
 
 // One piece ---------------------------------------------------------------------
@@ -143,21 +190,25 @@ function logicalTree(graph: Graph, piece: Piece): LogicalTree {
   return { nodes, edges };
 }
 
-/** Homes for one piece, relative to its root at the origin. */
-function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions {
+/** Homes and fan arcs for one piece, relative to its root at the origin. */
+function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): { pos: Positions; arcs: FanArc[] } {
   const tree = logicalTree(graph, piece);
   const root = tree.nodes.find((n) => roots.has(n)) ?? middleOfLongestPath(tree);
   const pos: Positions = new Map([[root, { x: 0, y: 0 }]]);
   const visited = new Set<string>();
+  const arcs: FanArc[] = [];
   const grow = (node: string, parent: string | undefined, away: number) => {
     visited.add(node);
     const kids = tree.edges.get(node)!.filter((e) => e.b !== parent && !visited.has(e.b));
-    const k = kids.length;
-    // A root spreads its children evenly over the whole circle; every other node fans them around the direction away from its parent.
-    const angles = parent === undefined ? kids.map((_, i) => (i * 360) / k) : kids.map((_, i) => away + (i - (k - 1) / 2) * STEP_DEGREES);
+    const { angles, length } = fan(kids.length, parent === undefined, away);
+    const kind = graph.endpoints.get(node)?.kind;
+    if (kids.length > 0 && (kind === "breakout" || kind === "splice")) {
+      const [from, to] = parent === undefined ? [0, 360] : [angles[0], angles[angles.length - 1]];
+      arcs.push({ node, centre: pos.get(node)!, radius: length, from, to });
+    }
     kids.forEach((e, i) => {
       if (visited.has(e.b)) return;
-      pos.set(e.b, step(pos.get(node)!, angles[i], UNIFORM_LENGTH));
+      pos.set(e.b, step(pos.get(node)!, angles[i], length));
       spaceEvenly(pos, e);
       grow(e.b, node, angles[i]);
     });
@@ -165,7 +216,25 @@ function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions 
   grow(root, undefined, 0);
   // A cycle is a design rule error; anything the walk could not reach sits on the root so it stays visible.
   for (const id of piece.endpoints) if (!pos.has(id)) pos.set(id, { x: 0, y: 0 });
-  return pos;
+  return { pos, arcs };
+}
+
+/**
+ * The angles of a node's children and the length of its segments to them. A
+ * root spreads its children evenly over the whole circle; every other node
+ * fans them STEP_DEGREES apart around the direction away from its parent.
+ * A fan that would pass the half circle shrinks its step to fit it. A
+ * crowded fan lengthens its segments until neighbours sit SIBLING_PITCH
+ * apart; every other fan keeps the uniform length.
+ */
+function fan(k: number, isRoot: boolean, away: number): { angles: number[]; length: number } {
+  const gaps = isRoot ? k : k - 1;
+  const stepDegrees = isRoot ? 360 / k : Math.min(STEP_DEGREES, 180 / Math.max(gaps, 1));
+  const angles = isRoot ? Array.from({ length: k }, (_, i) => i * stepDegrees) : Array.from({ length: k }, (_, i) => away + (i - (k - 1) / 2) * stepDegrees);
+  const crowded = isRoot ? k > 1 : gaps * STEP_DEGREES > 180;
+  // Neighbours on a circle of radius r, `step` apart, sit 2 r sin(step / 2) apart.
+  const pitchLength = SIBLING_PITCH / (2 * Math.sin((stepDegrees * Math.PI) / 360));
+  return { angles, length: crowded ? Math.max(UNIFORM_LENGTH, pitchLength) : UNIFORM_LENGTH };
 }
 
 /** Collapsed points sit evenly on the straight line between their edge's ends. */

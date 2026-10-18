@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
-import { layoutTopology, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
+import { ENDPOINT_SIZE, layoutTopology, SIBLING_PITCH, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
 import type { Position, TopologyCanvas } from "../../src/core/schema";
 import type { Project } from "../../src/core/project";
 import { freshProject, loadExample } from "./fixture";
@@ -26,6 +26,11 @@ function bench() {
         free.push(...["P1", "J1", "J2", "ETH"].map((d) => `${c.id}/${d}`));
       }
       const r = ops.placeConnector(p, top, free.shift()!);
+      p = r.project;
+      return r.id;
+    },
+    splice(): string {
+      const r = ops.addEndpoint(p, top, "splice");
       p = r.project;
       return r.id;
     },
@@ -141,6 +146,87 @@ describe("topology layout", () => {
     expect(spread[1]).toBeCloseTo(STEP_DEGREES / 2);
   });
 
+  it("a breakout with twenty children fits them in the half circle, at the sibling pitch, and its parent's segment keeps the uniform length", () => {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    b.join(start, hub);
+    const kids = Array.from({ length: 20 }, () => b.connector());
+    for (const k of kids) b.join(hub, k);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    expect(dist(at(start), at(hub))).toBeCloseTo(UNIFORM_LENGTH);
+    const away = angle(at(start), at(hub));
+    const spread = kids.map((k) => turn(angle(at(hub), at(k)), away)).sort((x, y) => x - y);
+    // The fan fills the half circle and no more: its outer children sit square to the away direction.
+    expect(spread[0]).toBeCloseTo(-90);
+    expect(spread[19]).toBeCloseTo(90);
+    // One length for all twenty, longer than uniform, with neighbours one sibling pitch apart.
+    const length = dist(at(hub), at(kids[0]));
+    expect(length).toBeGreaterThan(UNIFORM_LENGTH);
+    for (const k of kids) expect(dist(at(hub), at(k))).toBeCloseTo(length);
+    const byAngle = [...kids].sort((x, y) => turn(angle(at(hub), at(x)), away) - turn(angle(at(hub), at(y)), away));
+    for (let i = 1; i < byAngle.length; i++) expect(dist(at(byAngle[i - 1]), at(byAngle[i]))).toBeCloseTo(SIBLING_PITCH);
+  });
+
+  it("a segment meets a connector box at the point on its edge nearest the other end", () => {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    const seg = b.join(start, hub);
+    const kids = [b.connector(), b.connector(), b.connector()];
+    const kidSegs = kids.map((k) => b.join(hub, k));
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    const { w, h } = ENDPOINT_SIZE.connector;
+
+    const onEdge = (end: Position, centre: Position) => {
+      const dx = Math.abs(end.x - centre.x);
+      const dy = Math.abs(end.y - centre.y);
+      expect(dx).toBeLessThanOrEqual(w / 2 + 1e-9);
+      expect(dy).toBeLessThanOrEqual(h / 2 + 1e-9);
+      expect(Math.abs(dx - w / 2) < 1e-9 || Math.abs(dy - h / 2) < 1e-9).toBe(true);
+    };
+    // The start connector's end: on its edge, and no point of its box is nearer the hub.
+    const [startEnd, hubEnd] = out.segments.get(seg)!;
+    onEdge(startEnd, at(start));
+    const nearest = { x: Math.min(Math.max(at(hub).x, at(start).x - w / 2), at(start).x + w / 2), y: Math.min(Math.max(at(hub).y, at(start).y - h / 2), at(start).y + h / 2) };
+    expect(startEnd.x).toBeCloseTo(nearest.x);
+    expect(startEnd.y).toBeCloseTo(nearest.y);
+    // A breakout end stays at its centre.
+    expect(hubEnd).toEqual(at(hub));
+    kidSegs.forEach((s, i) => onEdge(out.segments.get(s)![1], at(kids[i])));
+  });
+
+  it("carries one fan arc per breakout or splice with children, passing through each child's box", () => {
+    // start - hub; the hub fans to a splice and two connectors; the splice fans to two more.
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    const splice = b.splice();
+    b.join(start, hub);
+    const hubKids = [splice, b.connector(), b.connector()];
+    for (const k of hubKids) b.join(hub, k);
+    const spliceKids = [b.connector(), b.connector()];
+    for (const k of spliceKids) b.join(splice, k);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    expect(out.arcs.map((a) => a.node).sort()).toEqual([hub, splice].sort());
+    for (const [node, kids] of [[hub, hubKids], [splice, spliceKids]] as const) {
+      const arc = out.arcs.find((a) => a.node === node)!;
+      expect(arc.centre).toEqual(at(node));
+      for (const k of kids) {
+        expect(dist(arc.centre, at(k))).toBeCloseTo(arc.radius);
+        // Each child's angle lies within the arc's sweep, which runs clockwise on screen from `from` to `to`.
+        const a = angle(arc.centre, at(k));
+        expect(turn(a, arc.from)).toBeGreaterThanOrEqual(-1e-6);
+        expect(turn(arc.to, a)).toBeGreaterThanOrEqual(-1e-6);
+      }
+    }
+  });
+
   it("packs piece rectangles without overlap, purchased cables after harnesses, each endpoint inside its own", () => {
     const b = bench();
     const members = new Map<string, string[]>();
@@ -187,6 +273,22 @@ describe("topology layout", () => {
         expect(at.y).toBeLessThanOrEqual(p.rect.y + p.rect.h);
       }
     }
+  });
+
+  it("lays out the RAMMP example with no two connector boxes overlapping", () => {
+    const project = loadExample();
+    const [topology] = [...project.topologies.values()];
+    const out = layoutTopology(project, topology, project.topologyCanvases.get(topology.id)!);
+    const { w, h } = ENDPOINT_SIZE.connector;
+    const boxes = topology.endpoints.filter((e) => e.kind === "connector").map((e) => ({ id: e.id, at: out.endpoints.get(e.id)!.drawn }));
+    const overlaps: string[] = [];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const [a, b] = [boxes[i].at, boxes[j].at];
+        if (Math.abs(a.x - b.x) < w && Math.abs(a.y - b.y) < h) overlaps.push(`${boxes[i].id} and ${boxes[j].id}`);
+      }
+    }
+    expect(overlaps).toEqual([]);
   });
 
   it("lays out the RAMMP example with every endpoint at a finite position and no two pieces overlapping", () => {
