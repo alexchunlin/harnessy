@@ -70,6 +70,17 @@ describe("slack-exceeds-stretch", () => {
     expect(checks(p, ids.top, "slack-exceeds-stretch")).toEqual([]);
   });
 
+  it("is tripped by a harness or project default as well as a stretch's own slack", () => {
+    let { project: p, ids } = twoNetProject();
+    // 300 mm segment, a clip at 200 mm: stretches of 200 and 100 mm, neither with slack of its own.
+    p = ops.addTiePoint(p, ids.top, ids.seg, "ties/zip-tie", 200).project;
+    p = ops.setProjectSlack(p, 150);
+    expect(checks(p, ids.top, "slack-exceeds-stretch").map((f) => f.target)).toEqual([ids.seg]);
+    const anchor = p.topologies.get(ids.top)!.segments.find((s) => s.id === ids.seg)!.harness!;
+    p = ops.setHarnessAnchor(p, ids.top, ids.seg, { ...anchor, slack_mm: 250 });
+    expect(checks(p, ids.top, "slack-exceeds-stretch")).toHaveLength(2);
+  });
+
   it("can be silenced", () => {
     let { project: p, ids } = twoNetProject();
     p = ops.setStretchSlack(p, ids.top, { kind: "segment", id: ids.seg }, 301);
