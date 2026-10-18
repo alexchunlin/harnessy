@@ -28,12 +28,12 @@ describe("routes and harnesses", () => {
 
   it("a point that gains a third segment becomes a breakout, and drops back when one goes", () => {
     let { project: p, ids } = twoNetProject();
-    const grow = ops.growSegment(p, ids.top, ids.mibEnd, { x: 400, y: 0 });
+    const grow = ops.growSegment(p, ids.top, ids.mibEnd);
     p = grow.project;
     // mibEnd now has two segments: a connector with degree 2 is an error we do not care about here
-    const grow2 = ops.growSegment(p, ids.top, grow.endpoint, { x: 500, y: 50 });
+    const grow2 = ops.growSegment(p, ids.top, grow.endpoint);
     p = grow2.project;
-    const grow3 = ops.growSegment(p, ids.top, grow.endpoint, { x: 500, y: -50 });
+    const grow3 = ops.growSegment(p, ids.top, grow.endpoint);
     p = grow3.project;
     expect(p.topologies.get(ids.top)!.endpoints.find((e) => e.id === grow.endpoint)?.kind).toBe("breakout");
     p = ops.removeSegment(p, ids.top, grow3.segment);
@@ -51,9 +51,9 @@ describe("routes and harnesses", () => {
   it("a split leaves the piece without the anchor unnamed with a fallback label", () => {
     let { project: p, ids } = twoNetProject();
     // Route the sensor net as a separate piece with no anchor
-    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = s.project;
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
     p = ops.addSegment(p, ids.top, s.id, m.id, 150).project;
     const hs = harnesses(p, buildGraph(p.topologies.get(ids.top)!));
@@ -64,9 +64,9 @@ describe("routes and harnesses", () => {
 
   it("joining two named pieces is an error until one anchor is dropped", () => {
     let { project: p, ids } = twoNetProject();
-    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = s.project;
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
     const seg2 = ops.addSegment(p, ids.top, s.id, m.id, 150);
     p = seg2.project;
@@ -74,7 +74,7 @@ describe("routes and harnesses", () => {
     // Join: replace the direct segments with a shared point: bat -> P -> mib, sensor -> P -> mibJ1 is a cycle-free tree if we insert a point on each
     p = ops.removeSegment(p, ids.top, ids.seg);
     p = ops.removeSegment(p, ids.top, seg2.id);
-    const hub = ops.addEndpoint(p, ids.top, "breakout", { x: 50, y: 50 });
+    const hub = ops.addEndpoint(p, ids.top, "breakout");
     p = hub.project;
     const a = ops.addSegment(p, ids.top, ids.batEnd, hub.id, 100);
     p = ops.setHarnessAnchor(a.project, ids.top, a.id, { name: "Power harness" });
@@ -90,7 +90,8 @@ describe("routes and harnesses", () => {
 });
 
 describe("ratsnest", () => {
-  const positions = (p: Project, top: string) => new Map(Object.entries(p.topologyCanvases.get(top)!.endpoints));
+  /** Drawn positions as the view would hand them over; the ratsnest only orders by them. */
+  const at = (...pairs: [string, number, number][]) => new Map(pairs.map(([id, x, y]) => [id, { x, y }]));
   const route = (p: Project, top: string, netId: string) => {
     const { net, domain } = findNet(p, netId)!;
     return routeOf(buildGraph(p.topologies.get(top)!), net, domain);
@@ -98,35 +99,36 @@ describe("ratsnest", () => {
 
   it("an unrouted net with both connectors placed is one pair, left end first", () => {
     let { project: p, ids } = twoNetProject();
-    const sensor = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 600, y: 0 });
+    const sensor = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = sensor.project;
-    const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 300, y: 80 });
+    const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = mib.project;
-    expect(ratsnestPairs(route(p, ids.top, ids.sig), positions(p, ids.top))).toEqual([[mib.id, sensor.id]]);
+    expect(ratsnestPairs(route(p, ids.top, ids.sig), at([sensor.id, 600, 0], [mib.id, 300, 80]))).toEqual([[mib.id, sensor.id]]);
   });
 
   it("a routed net has no ratsnest", () => {
     const { project, ids } = twoNetProject();
-    expect(ratsnestPairs(route(project, ids.top, ids.power), positions(project, ids.top))).toEqual([]);
+    expect(ratsnestPairs(route(project, ids.top, ids.power), at([ids.batEnd, 0, 0], [ids.mibEnd, 300, 0]))).toEqual([]);
   });
 
   it("a net with one placed connector draws nothing", () => {
     let { project: p, ids } = twoNetProject();
-    p = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 300, y: 80 }).project;
-    expect(ratsnestPairs(route(p, ids.top, ids.sig), positions(p, ids.top))).toEqual([]);
+    const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
+    p = mib.project;
+    expect(ratsnestPairs(route(p, ids.top, ids.sig), at([mib.id, 300, 80]))).toEqual([]);
   });
 
   it("endpoints sharing an x are ordered top to bottom, as one chain", () => {
     let { project: p, ids } = twoNetProject();
     const net = ops.createNet(p, "24v", [`${ids.mib}/J1`, `${ids.mib}/J2`, `${ids.sensor}/J1`], "three ends");
     p = net.project;
-    const lower = ops.placeConnector(p, ids.top, `${ids.mib}/J2`, { x: 100, y: 200 });
+    const lower = ops.placeConnector(p, ids.top, `${ids.mib}/J2`);
     p = lower.project;
-    const right = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 300, y: 100 });
+    const right = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = right.project;
-    const upper = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 0 });
+    const upper = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = upper.project;
-    expect(ratsnestPairs(route(p, ids.top, net.id), positions(p, ids.top))).toEqual([
+    expect(ratsnestPairs(route(p, ids.top, net.id), at([lower.id, 100, 200], [right.id, 300, 100], [upper.id, 100, 0]))).toEqual([
       [upper.id, lower.id],
       [lower.id, right.id],
     ]);
@@ -139,13 +141,13 @@ describe("splices and legs", () => {
     // Add a second sensor on the sensor power net, spliced at a point in the middle
     const s2 = ops.placeComponent(p, "components/sensor", { x: 600, y: 0 }, "Sensor 2");
     p = ops.addConnectorToNet(s2.project, ids.sig, `${s2.id}/J1`);
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 0, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
-    const mid = ops.addEndpoint(p, ids.top, "point", { x: 100, y: 100 });
+    const mid = ops.addEndpoint(p, ids.top, "point");
     p = mid.project;
-    const a = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 200, y: 50 });
+    const a = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = a.project;
-    const b = ops.placeConnector(p, ids.top, `${s2.id}/J1`, { x: 200, y: 150 });
+    const b = ops.placeConnector(p, ids.top, `${s2.id}/J1`);
     p = b.project;
     p = ops.addSegment(p, ids.top, m.id, mid.id, 100).project;
     p = ops.addSegment(p, ids.top, mid.id, a.id, 200).project;
@@ -200,9 +202,9 @@ describe("degree, cycles, lengths, assemblies", () => {
     p = sw.project;
     const eth = ops.createNet(p, "ethernet", [`${ids.mib}/ETH`, `${sw.id}/P1`]);
     p = eth.project;
-    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`, { x: 0, y: 0 });
+    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`);
     p = e1.project;
-    const e2 = ops.placeConnector(p, ids.top, `${sw.id}/P1`, { x: 0, y: 0 });
+    const e2 = ops.placeConnector(p, ids.top, `${sw.id}/P1`);
     p = e2.project;
     const s = ops.addSegment(p, ids.top, e1.id, e2.id);
     p = ops.setSegmentAssembly(s.project, ids.top, s.id, "assemblies/rj45-patch-500");
@@ -215,7 +217,7 @@ describe("degree, cycles, lengths, assemblies", () => {
 
   it("a purchased assembly must run connector to connector", () => {
     let { project: p, ids } = twoNetProject();
-    const g = ops.growSegment(p, ids.top, ids.mibEnd, { x: 500, y: 0 });
+    const g = ops.growSegment(p, ids.top, ids.mibEnd);
     p = ops.setSegmentAssembly(g.project, ids.top, g.segment, "assemblies/rj45-patch-500");
     expect(checks(p, ids.top, "assembly-ends-not-connectors").map((f) => f.target)).toEqual([g.segment]);
   });
@@ -224,14 +226,14 @@ describe("degree, cycles, lengths, assemblies", () => {
 describe("sheaths, ties, silences, keep apart", () => {
   it("a sheath over a non-contiguous set is an error and its cut length includes overlap", () => {
     let { project: p, ids } = twoNetProject();
-    const g = ops.growSegment(p, ids.top, ids.batEnd, { x: -100, y: 0 });
+    const g = ops.growSegment(p, ids.top, ids.batEnd);
     p = ops.setSegmentLength(g.project, ids.top, g.segment, 50);
     const sh = ops.applySheath(p, ids.top, [g.segment, ids.seg], "sheaths/braid-10", 20);
     p = sh.project;
     expect(checks(p, ids.top, "sheath-not-contiguous")).toHaveLength(0);
-    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = s.project;
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
     const far = ops.addSegment(p, ids.top, s.id, m.id, 10);
     p = ops.updateSheath(far.project, ids.top, sh.id, { segments: [ids.seg, far.id] });
@@ -259,14 +261,14 @@ describe("sheaths, ties, silences, keep apart", () => {
   it("keep_apart pairs sharing a segment warn", () => {
     let { project: p, ids } = twoNetProject();
     // put sensor power on the same segment as battery power by routing MIB J1 -> sensor through the power segment's endpoints
-    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = s.project;
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
     p = ops.removeSegment(p, ids.top, ids.seg);
-    const p1 = ops.addEndpoint(p, ids.top, "breakout", { x: 0, y: 0 });
+    const p1 = ops.addEndpoint(p, ids.top, "breakout");
     p = p1.project;
-    const p2 = ops.addEndpoint(p, ids.top, "breakout", { x: 0, y: 0 });
+    const p2 = ops.addEndpoint(p, ids.top, "breakout");
     p = p2.project;
     p = ops.addSegment(p, ids.top, ids.batEnd, p1.id, 10).project;
     p = ops.addSegment(p, ids.top, s.id, p1.id, 10).project;

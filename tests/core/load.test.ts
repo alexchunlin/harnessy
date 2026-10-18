@@ -32,6 +32,15 @@ describe("loading", () => {
     expect(f.filter((x) => x.check === "dangling-reference").map((x) => x.target)).toContain(ids.sensor);
   });
 
+  it("a topology canvas with the old endpoints map loads cleanly, and the saved file holds only offsets, pieces and roots", () => {
+    const { project, ids } = twoNetProject();
+    const files = saveProject(project);
+    files.set(`canvas/${ids.top}.json`, JSON.stringify({ endpoints: { [ids.batEnd]: { x: 40, y: 40 }, [ids.mibEnd]: { x: 240, y: 40 } } }));
+    const { project: loaded, problems } = loadProject(files, testLibrary());
+    expect(problems).toEqual([]);
+    expect(JSON.parse(saveProject(loaded).get(`canvas/${ids.top}.json`)!)).toEqual({ offsets: {}, pieces: {}, roots: [] });
+  });
+
   it("a project library file shadows the repo entry whole", () => {
     const { project } = twoNetProject();
     const files = saveProject(project);

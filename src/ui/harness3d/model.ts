@@ -3,7 +3,7 @@
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, harnesses, layoutTopology, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -105,7 +105,7 @@ export const ALL = "All harnesses";
 export interface World3 {
   /** Every harness in the topology as one piece of data. */
   all: Harness3;
-  /** Where each endpoint starts before anyone places it: the topology canvas drawing stood up in 3D. */
+  /** Where each endpoint starts before anyone places it: the topology layout's drawing stood up in 3D. */
   sketch: Record<string, Vec3>;
   members: Record<string, { nodes: Set<string>; segments: Set<string> }>;
   /** Harness names, sorted. */
@@ -113,7 +113,7 @@ export interface World3 {
 }
 
 /**
- * Every harness of a topology at once, with a starting position for each endpoint. Each harness keeps the shape of its topology canvas drawing
+ * Every harness of a topology at once, with a starting position for each endpoint. Each harness keeps the shape the topology layout draws it in
  * at a scale that leaves a typical segment of its own slack, and the harnesses are spread
  * apart by the scale of the middle one so they sit roughly where the canvas
  * has them.
@@ -122,8 +122,8 @@ export function extractAll(project: Project, topology: Topology): World3 {
   const parts = harnessNames(project, topology)
     .map((n) => extractHarness(project, topology, n))
     .filter((h): h is Harness3 => h !== undefined);
-  const canvas = project.topologyCanvases.get(topology.id)?.endpoints ?? {};
-  const p2 = (id: string) => canvas[id] ?? { x: 0, y: 0 };
+  const drawn = layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? { offsets: {}, pieces: {}, roots: [] }).endpoints;
+  const p2 = (id: string) => drawn.get(id)?.drawn ?? { x: 0, y: 0 };
   const centre = (ids: string[]) => ({ x: ids.reduce((t, id) => t + p2(id).x, 0) / Math.max(1, ids.length), y: ids.reduce((t, id) => t + p2(id).y, 0) / Math.max(1, ids.length) });
   const own = parts.map((h) => {
     // The middle ratio of segment length to drawn length: a typical segment starts a little slack, and a stub drawn long on the canvas does not shrink the whole harness.

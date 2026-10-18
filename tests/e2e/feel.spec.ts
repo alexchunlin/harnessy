@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
+import { canvasSettled, drawnLayout, freshExample, openProject, pointOnAnEdge, readJson, viewportTransform, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
@@ -309,41 +309,41 @@ test("reloading the page reopens the last project, and Close returns to the fold
 });
 
 /**
- * A topology endpoint carries a connect ring just outside its box. Before this,
- * the handle covered the whole endpoint, so every drag grew a segment and no
- * endpoint could be moved at all.
+ * A topology endpoint carries a connect ring just outside its box. A drag
+ * from the ring grows a segment. The endpoint itself sits at the home the
+ * layout derives and does not move by drag.
  */
 const TOPOLOGY = "topologies/top-222268.json";
+const TOPOLOGY_ID = "top-222268";
 const TOPOLOGY_CANVAS = "canvas/top-222268.json";
-type Topo = { endpoints: { id: string }[]; segments: { id: string }[] };
-type Placed = { endpoints: Record<string, { x: number; y: number }> };
+type Topo = { endpoints: { id: string }[]; segments: { id: string; ends: [string, string] }[] };
 
-test("dragging a topology endpoint moves it and grows no segment", async ({ page }) => {
+test("dragging a topology endpoint leaves it at its home and grows no segment", async ({ page }) => {
   const folder = await freshExample("feel-endpoint-move");
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
   await canvasSettled(page);
 
   const before = (await readJson(folder, TOPOLOGY)) as Topo;
+  const canvasBefore = await readJson(folder, TOPOLOGY_CANVAS);
   const node = page.locator(".react-flow__node-endpoint").first();
-  const id = (await node.getAttribute("data-id"))!;
-  const from = ((await readJson(folder, TOPOLOGY_CANVAS)) as Placed).endpoints[id];
   const b = (await node.boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down();
   for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 10, b.y + b.height / 2 + i * 8);
   await page.mouse.up();
+  await page.waitForTimeout(600);
 
-  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => {
-    const to = (v as Placed).endpoints[id];
-    return to.x !== from.x || to.y !== from.y;
-  });
+  const a = (await node.boundingBox())!;
+  expect(Math.abs(a.x - b.x)).toBeLessThan(1);
+  expect(Math.abs(a.y - b.y)).toBeLessThan(1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
   expect(after.segments).toHaveLength(before.segments.length);
   expect(after.endpoints).toHaveLength(before.endpoints.length);
+  expect(await readJson(folder, TOPOLOGY_CANVAS)).toEqual(canvasBefore);
 });
 
-test("dragging from the ring around an endpoint still grows a segment", async ({ page }) => {
+test("dragging from the ring into empty canvas grows a point that glides to its derived home, and the viewport stays put", async ({ page }) => {
   const folder = await freshExample("feel-endpoint-grow");
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
@@ -362,16 +362,34 @@ test("dragging from the ring around an endpoint still grows a segment", async ({
       break;
     }
   }
+  const from = (await node.getAttribute("data-id"))!;
   const b = (await node.boundingBox())!;
   const ring = (await node.locator(".ep-handle").boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, ring.y + 2);
   await page.mouse.down();
   for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, ring.y + 2 - i * 9);
+  // The canvas may pan while a line is drawn near its edge; from the drop on, the viewport must hold still.
+  const viewport = await viewportTransform(page);
   await page.mouse.up();
 
   await waitForFile(folder, TOPOLOGY, (v) => (v as Topo).segments.length === before.segments.length + 1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
   expect(after.endpoints).toHaveLength(before.endpoints.length + 1);
+  await page.waitForTimeout(600);
+  expect(await viewportTransform(page)).toBe(viewport);
+
+  // The new point ignores the drop and sits where core's layout puts it, measured from the endpoint it grew from.
+  const grown = after.segments.find((s) => !before.segments.some((x) => x.id === s.id))!;
+  const point = grown.ends[0] === from ? grown.ends[1] : grown.ends[0];
+  const homes = await drawnLayout(folder, TOPOLOGY_ID);
+  const scale = Number(/scale\(([\d.]+)\)/.exec(viewport)![1]);
+  const centre = async (id: string) => {
+    const r = (await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox())!;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  };
+  const [p, q] = [await centre(from), await centre(point)];
+  expect((q.x - p.x) / scale).toBeCloseTo(homes.get(point)!.x - homes.get(from)!.x, 0);
+  expect((q.y - p.y) / scale).toBeCloseTo(homes.get(point)!.y - homes.get(from)!.y, 0);
 });
 
 /**

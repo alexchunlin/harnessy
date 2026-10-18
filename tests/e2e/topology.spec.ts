@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, pointOnAnEdge, viewportTransform, waitForFile } from "./helpers";
 
 /** Topology round two: the ratsnest, layer filtering, and the side by side view. */
 
@@ -54,6 +54,7 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   const a = (await from.boundingBox())!;
   const ring = (await from.locator(".ep-handle").boundingBox())!;
   const b = (await page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[1]}"]`).boundingBox())!;
+  const viewport = await viewportTransform(page);
   await page.mouse.move(a.x + a.width / 2, ring.y + 2);
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
@@ -61,6 +62,11 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   await expect(lines).toHaveCount(0);
   await waitForFile(folder, TOPOLOGY, (v) => (v as { segments: unknown[] }).segments.length === SEGMENT_COUNT);
   await expect(page.locator(".netlist .mark.unrouted")).toHaveCount(0);
+  // The two connectors leave the row under the pieces for a home in their new piece, and the viewport stays where it was.
+  await page.waitForTimeout(600);
+  expect(await viewportTransform(page)).toBe(viewport);
+  const moved = (await from.boundingBox())!;
+  expect(Math.hypot(moved.x - a.x, moved.y - a.y)).toBeGreaterThan(1);
 });
 
 test("the layer control dims topology segments outside the layer, keeps shared bundles active, and hides their ratsnest", async ({ page }) => {
@@ -81,9 +87,7 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   expect(await page.locator(".react-flow__edge:not(.out-of-layer):not(.ratsnest)").count()).toBeGreaterThan(0);
   await expect(lines).toHaveCount(0);
 
-  // A dimmed endpoint cannot be dragged or selected.
-  type Positions = { endpoints: Record<string, { x: number; y: number }> };
-  const before = ((await readJson(folder, "canvas/top-222268.json")) as Positions).endpoints["end-22226c"];
+  // A dimmed endpoint cannot be moved or selected.
   const switchPort = page.locator('.react-flow__node[data-id="end-22226c"]');
   await expect(switchPort).toHaveClass(/out-of-layer/);
   const b = (await switchPort.boundingBox())!;
@@ -93,8 +97,8 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await page.mouse.up();
   await page.waitForTimeout(600);
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
-  const saved = (await readJson(folder, "canvas/top-222268.json")) as Positions;
-  expect(saved.endpoints["end-22226c"]).toEqual(before);
+  const a = (await switchPort.boundingBox())!;
+  expect([a.x, a.y]).toEqual([b.x, b.y]);
 
   await page.getByLabel("Layer").selectOption("all");
   await expect(dimmed).toHaveCount(0);

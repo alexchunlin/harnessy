@@ -104,11 +104,11 @@ describe("conductor identity", () => {
   it("routes over its net's segments and reaches the net's connector ends in connector order", () => {
     let { project: p, ids } = twoNetProject();
     // Route the sensor net too, through a point, so the route has two segments.
-    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+    const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
     p = s.project;
-    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 300, y: 100 });
+    const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = m.project;
-    const g = ops.growSegment(p, ids.top, m.id, { x: 150, y: 100 });
+    const g = ops.growSegment(p, ids.top, m.id);
     p = g.project;
     const last = ops.addSegment(p, ids.top, g.endpoint, s.id, 100);
     p = last.project;

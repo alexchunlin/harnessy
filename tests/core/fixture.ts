@@ -66,9 +66,9 @@ export function twoNetProject() {
   p = sig.project;
   const top = ops.createTopology(p, "Bench");
   p = top.project;
-  const a = ops.placeConnector(p, top.id, `${bat.id}/OUT`, { x: 0, y: 0 });
+  const a = ops.placeConnector(p, top.id, `${bat.id}/OUT`);
   p = a.project;
-  const b = ops.placeConnector(p, top.id, `${mib.id}/P1`, { x: 300, y: 0 });
+  const b = ops.placeConnector(p, top.id, `${mib.id}/P1`);
   p = b.project;
   const seg = ops.addSegment(p, top.id, a.id, b.id, 300);
   p = seg.project;

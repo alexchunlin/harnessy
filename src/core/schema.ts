@@ -315,8 +315,27 @@ export const ConnectivityCanvasSchema = z.object({
   pins: z.record(z.string(), PinLayoutSchema).default({}),
 });
 
+/**
+ * Offsets and choices only. Every endpoint's home is derived from the graph
+ * and never stored. An older file's `endpoints` map of absolute positions is
+ * dropped on load.
+ */
 export const TopologyCanvasSchema = z.object({
-  endpoints: z.record(z.string(), PositionSchema),
+  /** Endpoint id to its offset from home, in its harness's frame. */
+  offsets: z.record(projectId("end"), PositionSchema).default({}),
+  /** Piece id, the smallest segment id in the piece, to its harness box's choices. */
+  pieces: z
+    .record(
+      projectId("seg"),
+      z.object({
+        /** The harness box's offset from where the packer put it. */
+        offset: PositionSchema.optional(),
+        /** Quarter turns clockwise. */
+        turns: z.number().int().min(0).max(3).optional(),
+      }),
+    )
+    .default({}),
+  roots: z.array(projectId("end")).default([]),
 });
 
 export const DrcFileSchema = z.object({
