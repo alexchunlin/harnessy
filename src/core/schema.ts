@@ -228,6 +228,8 @@ export const NetSchema = z.object({
   conductor_specs: z.array(specRef).optional(),
   /** The name of the bus this net is on, anchored here. At most one member net of a bus carries it. */
   bus: z.string().optional(),
+  /** The pin each conductor lands on at a connector, in conductor order. Null where none is set; absent when the net has none. */
+  pins: z.record(connectorAddress, z.array(z.number().int().positive().nullable())).optional(),
 });
 
 export const NetsFileSchema = z.array(NetSchema);

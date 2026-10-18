@@ -37,6 +37,28 @@
       },
       "bus": {
         "type": "string"
+      },
+      "pins": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^cmp-[23456789abcdefghjkmnpqrstuvwxyz]{6}\\/[A-Za-z0-9_-]+$"
+        },
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       }
     },
     "required": [

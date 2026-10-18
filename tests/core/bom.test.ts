@@ -161,7 +161,7 @@ describe("BOM", () => {
     p = ops.renameNet(p, ids.power, 'battery, "main"');
     const bom = buildBom(p, p.topologies.get(ids.top)!);
     const csv = cutListCsv(bom);
-    expect(csv.split("\n")[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,from,to,net,domain,notes");
+    expect(csv.split("\n")[0]).toBe("harness,row,ref,part_number,description,color,qty,length_mm,from,from_pin,to,to_pin,net,domain,notes");
     expect(csv).toContain('"battery, ""main"""');
     const summary = summaryCsv(bom);
     expect(summary.startsWith("warning,connector-idle,")).toBe(true);

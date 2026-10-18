@@ -1,5 +1,6 @@
 import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setInlineConnectors, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
-import { allNets, netLabeller } from "../../core";
+import { allNets, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
+import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges } from "../../core";
 import { ConductorList } from "../shell/ConductorList";
@@ -293,11 +294,22 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
       <h3>Connectors</h3>
       <ul className="list">
         {net.connectors.map((a) => (
-          <li key={a} className="row" onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
-            <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
-            <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
-              x
-            </button>
+          <li key={a} className="net-connector" data-address={a} onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
+            <div className="row">
+              <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
+              <button onClick={() => edit((p) => numberPinsInOrder(p, id, a))} title="Set this connector's pins to 1, 2, 3 in conductor order">
+                Number in order
+              </button>
+              <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
+                x
+              </button>
+            </div>
+            <PinFields
+              label={connectorLabel(project, a)}
+              pins={netPins(project, net, domain, a)}
+              color={(i) => conductorColor(project.library, conductors.length > 1 ? conductors[i] : conductors[0], i, d?.color ?? "#888")}
+              onSet={(i, pin) => edit((p) => setPin(p, id, a, i, pin))}
+            />
           </li>
         ))}
       </ul>
@@ -316,6 +328,52 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
         <button onClick={() => edit((p) => removeNet(p, id))}>Delete net</button>
       </div>
     </div>
+  );
+}
+
+/** One small pin field per conductor at one connector, labelled by the conductor's number and colour. */
+function PinFields({ label, pins, color, onSet }: { label: string; pins: (number | null)[]; color: (i: number) => string; onSet: (i: number, pin: number | null) => void }) {
+  return (
+    <div className="pin-fields">
+      {pins.map((pin, i) => (
+        <PinField key={i} index={i} label={label} pin={pin} color={color(i)} onSet={(v) => onSet(i, v)} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A pin field takes a whole number from one up or empty. It commits on blur
+ * or Enter, so typing 12 is one undo step, and anything else reverts.
+ */
+function PinField({ index, label, pin, color, onSet }: { index: number; label: string; pin: number | null; color: string; onSet: (pin: number | null) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (pin === null ? "" : String(pin));
+  const valid = /^([1-9]\d*)?$/.test(shown);
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    if (!valid) return;
+    const next = draft === "" ? null : Number(draft);
+    if (next !== pin) onSet(next);
+  };
+  return (
+    <label className="pin-field" title={`Conductor ${index + 1}`}>
+      <span className="swatch" style={{ background: color }} />
+      <span className="muted">{index + 1}</span>
+      <input
+        aria-label={`${label} pin for conductor ${index + 1}`}
+        aria-invalid={!valid}
+        inputMode="numeric"
+        value={shown}
+        onChange={(e) => /^\d*$/.test(e.target.value) && setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setDraft(null);
+        }}
+      />
+    </label>
   );
 }
 

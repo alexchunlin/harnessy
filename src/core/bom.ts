@@ -1,11 +1,11 @@
 import type { Topology } from "./schema";
-import { allNets, componentConnectors, connectorLabel, netConductors, netSpec, type Project } from "./project";
+import { allNets, componentConnectors, connectorLabel, netConductors, netPins, netSpec, type Project } from "./project";
 import { resolveRef, resolveSpec } from "./library";
 import { parseAddress } from "./refs";
 import { assemblyLengthOf, hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
 import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, netLabeller, routeOf, PURCHASED, segmentLength, type Graph } from "./derive";
 
-export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "from", "to", "net", "domain", "notes"] as const;
+export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "from", "from_pin", "to", "to_pin", "net", "domain", "notes"] as const;
 export type CutListColumn = (typeof CUT_LIST_COLUMNS)[number];
 export type RowKind = "housing" | "contacts" | "wire" | "cable" | "sheath" | "tie" | "splice" | "breakout" | "assembly";
 
@@ -66,6 +66,11 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
     const conductors = netConductors(project, net, domain);
     const resolved = spec.ref ? resolveSpec(lib, spec.ref) : undefined;
     const netLabel = label(net);
+    // A leg end's pins: the net's pins at that connector, none at a splice.
+    const pinsAt = (endpoint: string) => {
+      const e = graph.endpoints.get(endpoint);
+      return e?.kind === "connector" ? netPins(project, net, domain, e.connector) : [];
+    };
     for (const c of net.connectors) {
       const e = graph.connectorEndpoint.get(c);
       if (e) contactsAt.set(e, (contactsAt.get(e) ?? 0) + spec.conductors);
@@ -87,6 +92,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
         to: ends[1] ? name(ends[1]) : undefined,
         net: netLabel,
         domain,
+        notes: ends[0] && ends[1] ? corePairs(pinsAt(ends[0]), pinsAt(ends[1])) : undefined,
       });
     } else {
       for (const leg of legsOf(graph, route, assemblyLength)) {
@@ -104,7 +110,9 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
             qty: 1,
             length_mm: leg.lengthMm,
             from: name(leg.from),
+            from_pin: pinsAt(leg.from)[i] ?? undefined,
             to: name(leg.to),
+            to_pin: pinsAt(leg.to)[i] ?? undefined,
             net: netLabel,
             domain,
             notes: conductors.length > 1 ? `conductor ${i + 1} of ${conductors.length}` : undefined,
@@ -226,6 +234,12 @@ function routeTotal(graph: Graph, segments: Set<string>, assemblyLength: (ref: s
   return total;
 }
 
+/** A cable's pinout as `1→4, 2→5`, first connector to second, `?` where unset. Undefined when no pin is set at either end. */
+function corePairs(from: (number | null)[], to: (number | null)[]): string | undefined {
+  if (![...from, ...to].some((x) => x !== null)) return undefined;
+  return from.map((a, i) => `${a ?? "?"}→${to[i] ?? "?"}`).join(", ");
+}
+
 function chainEnds(graph: Graph, segmentIds: string[]): [string, string] | undefined {
   if (segmentIds.length === 0) return undefined;
   const count = new Map<string, number>();
@@ -244,7 +258,7 @@ function resolveConnectorType(project: Project, address: string) {
 }
 
 function emptyRow(): CutListRow {
-  return { harness: "", row: "wire", ref: undefined, part_number: undefined, description: undefined, color: undefined, qty: undefined, length_mm: undefined, from: undefined, to: undefined, net: undefined, domain: undefined, notes: undefined };
+  return { harness: "", row: "wire", ref: undefined, part_number: undefined, description: undefined, color: undefined, qty: undefined, length_mm: undefined, from: undefined, from_pin: undefined, to: undefined, to_pin: undefined, net: undefined, domain: undefined, notes: undefined };
 }
 
 // CSV --------------------------------------------------------------------------

@@ -148,3 +148,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .conductor-row { align-items: center; }
 .conductor-row select { flex: 1; min-width: 0; }
 .conductor-row .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); flex: none; }
+
+/* A net's connector row: its pin fields, one per conductor, under the connector name. */
+.net-connector { display: flex; flex-direction: column; gap: 3px; }
+.pin-fields { display: flex; flex-wrap: wrap; gap: 4px 8px; padding-left: 4px; }
+.pin-field { display: inline-flex; align-items: center; gap: 3px; cursor: text; }
+.pin-field .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--border); flex: none; }
+.pin-field input { width: 3em; }
+.pin-field input[aria-invalid="true"] { outline: 1px solid var(--error); }
