@@ -28,6 +28,7 @@ import { NetEdge, NoteLinkEdge } from "./edges";
 import { DRAG_TYPE, LibraryPanel } from "./LibraryPanel";
 import { DomainPicker } from "./DomainPicker";
 import { Inspector } from "./Inspector";
+import { ConnectorDrawer } from "./ConnectorDrawer";
 import "./connectivity.css";
 
 const nodeTypes = { component: ComponentNode, hub: HubNode, group: GroupNode, note: NoteNode };
@@ -65,6 +66,7 @@ function Canvas() {
   const flow = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<PendingNet | undefined>();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const lastLocalSelection = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "connectivity" ? selection.ids : []), [selection]);
@@ -388,7 +390,7 @@ function Canvas() {
 
   return (
     <div className="view">
-      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} onArrange={arrange} onDistribute={distribute} canDistribute={selectedComponents.length >= 3} />
+      <LibraryPanel project={project} onBlank={newBlank} onGroup={groupSelection} canGroup={selectedComponents.length >= 2} onArrange={arrange} onDistribute={distribute} canDistribute={selectedComponents.length >= 3} onDrawer={() => setDrawerOpen(true)} />
       <div className={`canvas${activeLayer === ALL_LAYER_ID ? "" : " in-layer"}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDoubleClick={onDoubleClick} onPointerDownCapture={onPointerDownCapture} data-testid="connectivity-canvas">
         <ReactFlow
           nodes={nodes}
@@ -426,6 +428,7 @@ function Canvas() {
         {pending && <DomainPicker domains={project.file.domains} first={firstDomains} lastUsed={lastUsed} at={pending.at} onPick={pickDomain} onCancel={() => setPending(undefined)} />}
       </div>
       <Inspector project={project} selected={selection.view === "connectivity" ? selection.ids : []} edit={edit} />
+      {drawerOpen && <ConnectorDrawer project={project} edit={edit} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }
