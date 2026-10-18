@@ -2,7 +2,7 @@ import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { findNet, pinLayout, type Project } from "./project";
 import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
-import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, TopologyCanvas } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
 /**
@@ -574,6 +574,26 @@ export function removeEndpoint(project: Project, topologyId: string, endpointId:
   let p = project;
   for (const s of t.segments) if (s.ends.includes(endpointId)) p = removeSegment(p, topologyId, s.id);
   return updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => e.id !== endpointId) }));
+}
+
+function updateTopologyCanvas(project: Project, topologyId: string, fn: (c: TopologyCanvas) => TopologyCanvas): Project {
+  if (!project.topologies.has(topologyId)) throw new Error(`no topology ${topologyId}`);
+  const topologyCanvases = new Map(project.topologyCanvases);
+  topologyCanvases.set(topologyId, fn(project.topologyCanvases.get(topologyId) ?? { offsets: {}, pieces: {}, roots: [] }));
+  return next(project, { topologyCanvases });
+}
+
+/** Move an endpoint off its home. Only the offset is kept, in whole pixels in its harness's frame. */
+export function setEndpointOffset(project: Project, topologyId: string, endpointId: string, offset: Position): Project {
+  return updateTopologyCanvas(project, topologyId, (c) => ({ ...c, offsets: { ...c.offsets, [endpointId]: round(offset) } }));
+}
+
+/** Reset position: the endpoint goes back to its home. */
+export function resetEndpointOffset(project: Project, topologyId: string, endpointId: string): Project {
+  return updateTopologyCanvas(project, topologyId, (c) => {
+    const { [endpointId]: _, ...offsets } = c.offsets;
+    return { ...c, offsets };
+  });
 }
 
 // Segments -----------------------------------------------------------------------

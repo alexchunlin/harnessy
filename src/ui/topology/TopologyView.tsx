@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setEndpointOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
@@ -8,13 +8,13 @@ import { usePrefs } from "../prefs";
 import { deriveTopology, drawnFrom, topologyLayout, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
 import { EndpointNode, HarnessLabelNode, TieNode, WaitingGroupNode } from "./nodes";
-import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
+import { CalloutEdge, RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
 import { LeftPane } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
 const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode, waitingGroup: WaitingGroupNode };
-const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
+const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge, callout: CalloutEdge };
 
 export function TopologyView() {
   const activeTopology = useDoc((s) => s.activeTopology);
@@ -187,6 +187,18 @@ function Canvas({ topologyId }: { topologyId: string }) {
       edit((p) => {
         let next = p;
         for (const n of moved) {
+          const endpoint = n.type === "endpoint" ? topology.endpoints.find((e) => e.id === n.id) : undefined;
+          if (endpoint) {
+            // Only the offset from home is kept. The box starts its glide where it was dropped.
+            const size = ENDPOINT_SIZE[endpoint.kind];
+            const centre = { x: n.position.x + size.w / 2, y: n.position.y + size.h / 2 };
+            const home = layout.endpoints.get(n.id)?.home;
+            const was = drawn.get(n.id);
+            if (!home || (was && Math.round(was.x - centre.x) === 0 && Math.round(was.y - centre.y) === 0)) continue;
+            glideFrom.current.set(n.id, centre);
+            next = setEndpointOffset(next, topologyId, n.id, { x: centre.x - home.x, y: centre.y - home.y });
+            continue;
+          }
           if (n.type === "tie") {
             const t = topology.ties.find((t) => t.id === n.id);
             const seg = topology.segments.find((s) => s.id === t?.segment);
@@ -208,7 +220,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       });
       setDrafts(new Map());
     },
-    [edit, topologyId, topology, model],
+    [edit, topologyId, topology, model, layout, drawn],
   );
 
   /** A waiting connector placed by this edit starts its glide from where it waited in the grid. */

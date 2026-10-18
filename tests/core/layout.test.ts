@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
-import { ENDPOINT_SIZE, layoutTopology, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, layoutTopology, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
 import type { Position, TopologyCanvas } from "../../src/core/schema";
 import type { Project } from "../../src/core/project";
 import { freshProject, loadExample } from "./fixture";
@@ -205,6 +205,47 @@ describe("topology layout", () => {
         expect(r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h, `${out.pieces[i].id} and ${out.pieces[j].id}`).toBe(false);
       }
     }
+  });
+});
+
+describe("endpoint offsets", () => {
+  /** A connector, a breakout with two connector children, and the hub's id. */
+  function fan() {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    b.join(start, hub);
+    const kids = [b.connector(), b.connector(), b.connector()];
+    for (const k of kids) b.join(hub, k);
+    return { b, start, hub, kids };
+  }
+
+  it("an offset moves its endpoint only, and its children stay where the home put them", () => {
+    const { b, start, hub, kids } = fan();
+    const plain = b.layout({ ...EMPTY, roots: [start] });
+    const moved = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 10, y: -6 } } });
+
+    const before = plain.endpoints.get(hub)!;
+    const after = moved.endpoints.get(hub)!;
+    expect(after.home).toEqual(before.home);
+    expect(after.drawn).toEqual({ x: before.home.x + 10, y: before.home.y - 6 });
+    for (const id of [start, ...kids]) expect(moved.endpoints.get(id)).toEqual(plain.endpoints.get(id));
+  });
+
+  it("past the call-out distance its segments end at home and a call-out line runs from home to the box; within it, segments end at the box and there is no line", () => {
+    const { b, start, hub } = fan();
+    const seg = b.project.topologies.get(b.top)!.segments.find((s) => s.ends.includes(start))!;
+    const hubEnd = seg.ends.indexOf(hub);
+    expect(CALLOUT_DISTANCE).toBe(24);
+
+    const near = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 12, y: 16 } } });
+    expect(near.segments.get(seg.id)![hubEnd]).toEqual(near.endpoints.get(hub)!.drawn);
+    expect(near.callouts).toEqual([]);
+
+    const far = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 60, y: 80 } } });
+    const { home, drawn } = far.endpoints.get(hub)!;
+    expect(far.segments.get(seg.id)![hubEnd]).toEqual(home);
+    expect(far.callouts).toEqual([{ endpoint: hub, from: home, to: drawn }]);
   });
 });
 
