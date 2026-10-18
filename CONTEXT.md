@@ -63,7 +63,7 @@ One complete physical arrangement of segments that realizes every net in the pro
 _Avoid_: Routing, layout, plan
 
 **Segment**:
-A run of bundled conductors between two endpoints in a topology, with a length in millimetres typed by hand. Segments are undirected and never form a cycle. An endpoint is a connector, a breakout, a splice, or a point. A segment flagged as a purchased assembly (a USB, HDMI, or Ethernet patch cable) has a part number and a fixed length, and its two connector ends produce no mating-part BOM rows.
+A run of bundled conductors between two endpoints in a topology, with a length in millimetres. A placed segment's length is derived from its 3D placement; an unplaced one keeps the length typed by hand. Segments are undirected and never form a cycle. An endpoint is a connector, a breakout, a splice, or a point. A segment flagged as a purchased assembly (a USB, HDMI, or Ethernet patch cable) has a part number and a fixed length, and its two connector ends produce no mating-part BOM rows.
 _Avoid_: Branch, leg, cable run
 
 **Purchased assembly**:
@@ -123,7 +123,7 @@ A covering (braided sleeve, spiral wrap, heat shrink) applied over an ordered, c
 _Avoid_: Sleeving, wrap, jacket (jacket is the cable spec's own outer layer)
 
 **Tie point**:
-A location along a segment where the harness is fastened to the machine. Its position is a distance in millimetres from one named endpoint of the segment, and it references a tie spec. Each tie point is a BOM item. A tie point bounds a stretch, and it carries the slack of the stretch on its first-end side.
+A location along a segment where the harness is fastened to the machine. Its position is a distance in millimetres from one named endpoint of the segment, derived along the drawn curve when the tie point is placed in 3D and typed by hand otherwise, and it references a tie spec. Each tie point is a BOM item. A tie point bounds a stretch, and it carries the slack of the stretch on its first-end side.
 _Avoid_: Tie-down, anchor, mount
 
 **Stretch**:
@@ -137,6 +137,18 @@ _Avoid_: Buffer, allowance, margin, service loop (a service loop is one reason f
 **Minimum bend radius**:
 The tightest curve a conductor may be bent to without damage, in millimetres, declared on a wire spec, a cable spec, and optionally a sheath spec. A bundle's minimum bend radius is the largest of its conductors' and its sheaths', since a bundle bends no tighter than its stiffest member. The design rule check measures the curve the 3D view draws for a bundle, through its tie points and straight through any point endpoints, and warns where that curve bends tighter than the bundle allows. A breakout or splice ends the measured curve. A spec with no radius, or a bundle with no 3D placement, is not checked.
 _Avoid_: Bend limit, min radius, curvature (curvature is the measured value, not the declared one)
+
+**Placement**:
+An endpoint's saved position in 3D, in millimetres against the machine, with a rotation for a connector. An endpoint is placed once someone has dragged it or its harness in the 3D view; the sketch the view opens with is never saved. A segment is placed when both its endpoints are, and a tie point when it has a saved position on a placed segment. Placement lives in `canvas/<top>.3d.json`, one file per topology, and a placed thing's length or distance is derived from it. Clearing a harness's placement returns it to its typed numbers.
+_Avoid_: Position (for the saved record), 3D layout, pose
+
+**Lengths locked**:
+The 3D view's default drag mode: moving or turning any part moves its whole connected harness as one rigid body, so no length or distance changes. The other mode, Stretch, moves one part and stretches the segments at it. A browser preference.
+_Avoid_: Rigid mode, freeze
+
+**Reference model**:
+The machine's CAD file, copied into the project's `reference/` folder and listed once per project in `canvas/reference.json` with its units, position and rotation. The 3D view draws it at real scale behind the harnesses; nothing snaps to it yet. Dimness is a browser preference.
+_Avoid_: CAD, scenery, underlay
 
 **Strain relief**:
 The straight length a bundle must run out of a connector before it may bend, in millimetres, declared on the connector type. The 3D view draws it as a straight stub and the bend radius check begins where it ends. A connector type with none draws no stub.
@@ -159,6 +171,10 @@ _Avoid_: Document, workspace, file
 **Library**:
 The shared catalogue of component definitions, connector types, wire, cable, sheath, breakout, splice, and tie specs, and purchased assemblies that projects reference by id. A project's own copy of an entry, under the same id, replaces the shared one whole.
 _Avoid_: Catalogue, parts database
+
+**Library skill**:
+The agent skill that writes library entries for an engineer, from whatever they have: a datasheet, a product page, a part number, a photo, a sentence. Nobody edits a library entry by hand. The skill writes into the project's own library unless the engineer calls the entry common. A component it writes brings any missing connector types with it. It asks rather than guess a pin count or a designator, and each entry it writes names its source.
+_Avoid_: Library editor, part wizard
 
 **Connector drawer**:
 The table of every connector in the project whose type can change: one row per connector of each component definition the project uses, and one per inline connector of each one-off component, grouped by owner, filterable by type, with the whole library's types listed by count. The one thing a row edits is which connector type the connector carries. An edit to a definition row reaches every component that shares the definition. The name is a joke about a real drawer of a thousand connectors.
