@@ -62,6 +62,18 @@ async function onScreen(page: Page, data: Shown, at: Vec3): Promise<{ x: number;
   return { x: box.x + ((p.x + 1) / 2) * box.width, y: box.y + ((1 - p.y) / 2) * box.height };
 }
 
+/** Click a connector for its handles, then drag the handles' centre, which moves it in the view plane. */
+async function dragConnector(page: Page, data: Shown, position: Vec3): Promise<void> {
+  const at = await onScreen(page, data, position);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator(".h3d-panel .h3d-row span").first()).not.toHaveText("Nothing selected");
+  await page.mouse.move(at.x + 1, at.y + 1);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 90, at.y - 60, { steps: 12 });
+  await page.mouse.up();
+}
+
 test("a connector dragged in 3D is saved and comes back where it was left after a reload", async ({ page }) => {
   const folder = await freshExample("place-3d");
   await openProject(page, folder);
@@ -73,17 +85,11 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   await page.waitForTimeout(1000);
   expect(await snapshot(folder)).toEqual(opened);
 
+  // In Stretch the connector moves alone.
+  await page.getByRole("button", { name: "Stretch" }).click();
   const before = await shown(page);
   const [id, connector] = Object.entries(before.connectors)[0];
-  const at = await onScreen(page, before, connector.position);
-  // Clicking the connector gives it handles; dragging the handles' centre moves it in the view plane.
-  await page.mouse.click(at.x, at.y);
-  await expect(page.locator(".h3d-panel .h3d-row span").first()).not.toHaveText("Nothing selected");
-  await page.mouse.move(at.x + 1, at.y + 1);
-  await page.mouse.move(at.x, at.y);
-  await page.mouse.down();
-  await page.mouse.move(at.x + 90, at.y - 60, { steps: 12 });
-  await page.mouse.up();
+  await dragConnector(page, before, connector.position);
 
   const after = await shown(page);
   const moved = after.connectors[id];
@@ -104,4 +110,42 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   if (!(await page.locator(".h3d-workspace canvas").isVisible())) await open3d(page);
   await showTwoConnectorHarness(page);
   expect((await shown(page)).connectors[id]).toEqual(moved);
+});
+
+test("the view opens with lengths locked: a drag moves the whole harness as one undo step, and Stretch survives a reload", async ({ page }) => {
+  const folder = await freshExample("lock-3d");
+  await openProject(page, folder);
+  await open3d(page);
+  await showTwoConnectorHarness(page);
+  await expect(page.getByRole("button", { name: "Lengths locked" })).toHaveAttribute("aria-pressed", "true");
+  // Let the camera settle on the harness before aiming at it.
+  await page.waitForTimeout(1000);
+
+  const before = await shown(page);
+  const [[a, first], [b, second]] = Object.entries(before.connectors);
+  await dragConnector(page, before, first.position);
+
+  // Both connectors move by the same amount, so the length between them holds, and both are placed.
+  const after = await shown(page);
+  const shift = after.connectors[a].position.map((v, i) => v - first.position[i]);
+  expect(shift).not.toEqual([0, 0, 0]);
+  for (const [i, v] of after.connectors[b].position.entries()) expect(Math.abs(v - second.position[i] - shift[i])).toBeLessThanOrEqual(1);
+  await waitForFile(folder, PLACEMENT, (v) => Object.keys((v as { positions: Record<string, Vec3> }).positions).sort().join() === [a, b].sort().join());
+  const file = JSON.parse(await fs.readFile(path.join(folder, PLACEMENT), "utf8"));
+  expect(file.positions).toEqual({ [a]: after.connectors[a].position, [b]: after.connectors[b].position });
+
+  // One undo puts the whole harness back.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => fs.access(path.join(folder, PLACEMENT)).then(() => true, () => false)).toBe(false);
+  expect((await shown(page)).connectors).toEqual(before.connectors);
+
+  // Stretch is remembered by the browser, and choosing it touches nothing in the project.
+  const opened = await snapshot(folder);
+  await page.getByRole("button", { name: "Stretch" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Connectivity" }).waitFor();
+  if (!(await page.locator(".h3d-workspace canvas").isVisible())) await open3d(page);
+  await expect(page.getByRole("button", { name: "Stretch" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Lengths locked" })).toHaveAttribute("aria-pressed", "false");
+  expect(await snapshot(folder)).toEqual(opened);
 });
