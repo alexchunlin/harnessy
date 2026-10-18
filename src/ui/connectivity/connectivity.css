@@ -82,3 +82,10 @@ input.short { width: 5em; }
 /* The bus row in a net's inspector: the label is a button that selects the whole bus. */
 .bus-label { text-align: left; font-weight: 600; }
 .bus-members { max-height: 30vh; overflow: auto; font-size: 12px; }
+
+/* The connector drawer: every connector's type, grouped by owner. */
+.connector-drawer h2 { margin: 0; font-size: 15px; }
+.drawer-controls { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.drawer-bulk { display: flex; gap: 6px; align-items: center; }
+.drawer-missing { margin: 4px 0 8px; text-align: right; }
+.drawer-owner th { padding-top: 10px; font-weight: 600; }

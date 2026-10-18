@@ -22,6 +22,8 @@ import {
   setSegmentAssembly,
   setSegmentLength,
   setSpliceNets,
+  setStretchSlack,
+  stretchesOf,
   updateSheath,
   updateTiePoint,
   type Project,
@@ -234,6 +236,7 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
           )}
         </>
       )}
+      {!s.assembly && <StretchList project={project} topology={topology} segmentId={id} edit={edit} />}
       <h3>Nets on this segment</h3>
       <ul className="list insp-list">
         {nets.map((r) => (
@@ -285,6 +288,72 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
       </div>
       <button onClick={() => edit((p) => removeSegment(p, topology.id, id))}>Delete segment</button>
     </div>
+  );
+}
+
+/** A segment's stretches in order, each named by its two bounds, with its own slack field. */
+function StretchList({ project, topology, segmentId, edit }: { project: Project; topology: Topology; segmentId: string; edit: Edit }) {
+  const graph = buildGraph(topology);
+  const seg = graph.segments.get(segmentId)!;
+  const stretches = stretchesOf(project, graph, seg);
+  const boundName = (id: string) => {
+    const tie = topology.ties.find((t) => t.id === id);
+    if (!tie) return endpointName(project, graph.endpoints.get(id));
+    return `tie point ${tie.distance_mm} mm from ${endpointName(project, graph.endpoints.get(tie.from))}`;
+  };
+  return (
+    <>
+      <h3>Slack</h3>
+      <ul className="list insp-list" data-testid="stretches">
+        {stretches.map((st) => {
+          const name = `${boundName(st.from)} to ${boundName(st.to)}`;
+          return (
+            <li key={`${st.owner.kind}:${st.owner.id}`}>
+              <span>
+                {name}
+                {st.lengthMm !== undefined && <span className="muted"> ({st.lengthMm} mm)</span>}
+              </span>
+              <SlackInput
+                key={`${st.owner.id}:${st.slackMm ?? ""}`}
+                label={`Slack ${name}`}
+                value={st.slackMm}
+                placeholder={String(st.effectiveSlackMm)}
+                onCommit={(v) => edit((p) => setStretchSlack(p, topology.id, st.owner, v))}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+/** A millimetre field that commits on blur or Enter, so one edit is one undo step. Negative or non-numeric input reverts. */
+function SlackInput({ label, value, placeholder, onCommit }: { label: string; value: number | undefined; placeholder: string; onCommit: (v: number | undefined) => void }) {
+  const [text, setText] = useState(value === undefined ? "" : String(value));
+  const commit = () => {
+    const v = text.trim() === "" ? undefined : Number(text);
+    if (v !== undefined && !(v >= 0)) {
+      setText(value === undefined ? "" : String(value));
+      return;
+    }
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <input
+      type="number"
+      min={0}
+      style={{ width: 70 }}
+      aria-label={label}
+      value={text}
+      placeholder={placeholder}
+      onChange={(ev) => setText(ev.target.value)}
+      onBlur={commit}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter") ev.currentTarget.blur();
+        if (ev.key === "Escape") setText(value === undefined ? "" : String(value));
+      }}
+    />
   );
 }
 

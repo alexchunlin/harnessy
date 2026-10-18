@@ -11,6 +11,7 @@ export function LibraryPanel({
   onArrange,
   onDistribute,
   canDistribute,
+  onDrawer,
 }: {
   project: Project;
   onBlank: () => void;
@@ -19,6 +20,7 @@ export function LibraryPanel({
   onArrange: (how: "row" | "column") => void;
   onDistribute: () => void;
   canDistribute: boolean;
+  onDrawer: () => void;
 }) {
   const [q, setQ] = useState("");
   const entries = useMemo(() => {
@@ -37,6 +39,9 @@ export function LibraryPanel({
         ))}
         {entries.length === 0 && <li className="muted">No matches</li>}
       </ul>
+      <button onClick={onDrawer} title="Every connector's type in one table, set in bulk">
+        Connector drawer
+      </button>
       <h3>Actions</h3>
       <button onClick={onBlank}>New blank component</button>
       <button onClick={onGroup} disabled={!canGroup} title="Wrap the selected components in a labelled group">
