@@ -16,6 +16,8 @@ export const SIBLING_PITCH = 104;
 export const STEP_DEGREES = 15;
 /** Clear space between packed pieces, with room above each for its harness label. */
 export const PIECE_GAP = 80;
+/** How far an endpoint can move off its home before its segments stop following it and a call-out line takes over. */
+export const CALLOUT_DISTANCE = 24;
 /** Space between endpoints waiting in the row under the pieces. */
 const LONE_GAP = 40;
 
@@ -49,6 +51,15 @@ export interface TopologyLayout {
   segments: Map<string, [Position, Position]>;
   /** Built harnesses first, then purchased cables, each in piece id order. */
   pieces: PieceLayout[];
+  /** One per endpoint moved past the call-out distance, in endpoint id order. */
+  callouts: Callout[];
+}
+
+/** A thin line from an endpoint's home to its box, drawn when the box sits past the call-out distance. */
+export interface Callout {
+  endpoint: string;
+  from: Position;
+  to: Position;
 }
 
 type Positions = Map<string, Position>;
@@ -82,15 +93,46 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
     x += s.w + LONE_GAP;
   }
 
-  const endpoints = new Map<string, EndpointLayout>();
-  for (const [id, p] of home) endpoints.set(id, { home: p, drawn: p });
+  const { endpoints, segmentEnd, callouts } = applyOffsets(graph, home, canvas.offsets);
   const segments = new Map<string, [Position, Position]>();
   for (const s of topology.segments) {
-    const a = endpoints.get(s.ends[0]);
-    const b = endpoints.get(s.ends[1]);
-    if (a && b) segments.set(s.id, [a.drawn, b.drawn]);
+    const a = segmentEnd.get(s.ends[0]);
+    const b = segmentEnd.get(s.ends[1]);
+    if (a && b) segments.set(s.id, [a, b]);
   }
-  return { endpoints, segments, pieces: out };
+  return { endpoints, segments, pieces: out, callouts };
+}
+
+// Offsets -----------------------------------------------------------------------
+
+/**
+ * Add each designer offset to its endpoint's home. Children already laid
+ * out from their parent's home, so an offset moves only its own endpoint.
+ * Close by, the segments follow the box. Past the call-out distance they
+ * stay true at home and a call-out line points to the box. A waiting
+ * endpoint has no offset.
+ */
+function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["offsets"]) {
+  const endpoints = new Map<string, EndpointLayout>();
+  const segmentEnd: Positions = new Map();
+  const callouts: Callout[] = [];
+  for (const [id, p] of home) {
+    const offset = degree(graph, id) > 0 ? offsets[id] : undefined;
+    if (!offset) {
+      endpoints.set(id, { home: p, drawn: p });
+      segmentEnd.set(id, p);
+      continue;
+    }
+    // The offset is in its harness's frame. A turned harness rotates it here before it lands on the canvas.
+    const drawn = { x: p.x + offset.x, y: p.y + offset.y };
+    endpoints.set(id, { home: p, drawn });
+    if (Math.hypot(offset.x, offset.y) > CALLOUT_DISTANCE) {
+      callouts.push({ endpoint: id, from: p, to: drawn });
+      segmentEnd.set(id, p);
+    } else segmentEnd.set(id, drawn);
+  }
+  callouts.sort((a, b) => (a.endpoint < b.endpoint ? -1 : a.endpoint > b.endpoint ? 1 : 0));
+  return { endpoints, segmentEnd, callouts };
 }
 
 // One piece ---------------------------------------------------------------------
