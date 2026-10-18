@@ -110,6 +110,21 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   if (!(await page.locator(".h3d-workspace canvas").isVisible())) await open3d(page);
   await showTwoConnectorHarness(page);
   expect((await shown(page)).connectors[id]).toEqual(moved);
+
+  // Clearing the placement returns the connector to the sketch and drops the file; one undo brings both back.
+  const clear = page.getByRole("button", { name: "Clear placement" });
+  await clear.click();
+  await expect.poll(() => fs.access(path.join(folder, PLACEMENT)).then(() => true, () => false)).toBe(false);
+  expect((await shown(page)).connectors[id]).toEqual(connector);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await waitForFile(folder, PLACEMENT, (v) => JSON.stringify(v) === JSON.stringify(file));
+  expect((await shown(page)).connectors[id]).toEqual(moved);
+
+  // With every harness shown, the button needs a selected part to name the harness.
+  await page.locator(".h3d-bar select").selectOption("All harnesses");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".h3d-panel .h3d-row span").first()).toHaveText("Nothing selected");
+  await expect(clear).toBeDisabled();
 });
 
 test("the view opens with lengths locked: a drag moves the whole harness as one undo step, and Stretch survives a reload", async ({ page }) => {

@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePoint, buildGraph, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, setSegmentLength, updateTiePoint, type Placement, type RigidMove } from "../../core";
+import { addTiePoint, buildGraph, clearPlacement, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, setSegmentLength, updateTiePoint, type Placement, type RigidMove } from "../../core";
 import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
@@ -324,6 +324,12 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
     setSelected(id);
   }
 
+  /** The harness "Clear placement" acts on: the shown one, or with all shown, the one holding the selected part. */
+  const clearTarget = show !== ALL ? [...(world.members[show]?.nodes ?? [])][0] : (fresh.find((c) => c.id === selected)?.segment ?? (harness.nodes.some((n) => n.id === selected) || harness.ties.some((t) => t.id === selected) ? selected : undefined));
+  function clearShown() {
+    if (clearTarget) useDoc.getState().edit((p) => clearPlacement(p, topologyId, clearTarget), "Clear placement");
+  }
+
   function removeTie(id: string) {
     if (fresh.some((c) => c.id === id)) setFresh((cs) => cs.filter((c) => c.id !== id));
     else useDoc.getState().edit((p) => removeTiePoint(p, topologyId, id), "Remove tie point");
@@ -431,6 +437,9 @@ export function Workspace3D({ world, show, topologyId }: { world: World3; show: 
             Frame
           </button>
           {selectedTie && <button onClick={() => removeTie(selectedTie.id)}>Remove tie point</button>}
+          <button disabled={clearTarget === undefined} onClick={clearShown} title="Return the harness to its typed numbers and the sketch">
+            Clear placement
+          </button>
         </div>
         {/* Locked, a drag moves the whole harness and no length changes. Stretch moves one part and stretches the segments at it. */}
         <div className="h3d-row">
