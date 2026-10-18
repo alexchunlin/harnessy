@@ -71,7 +71,7 @@ A segment bought finished rather than built: a USB, HDMI, Ethernet, or CAN patch
 _Avoid_: Off-the-shelf cable, pre-made
 
 **Endpoint**:
-A node in a topology graph that segments end at. Each node has a drawn position on the topology canvas, kept with the canvas rather than the model. Degree rules: a connector ends exactly one segment, a point exactly two, a breakout three or more, a splice two or more.
+A node in a topology graph that segments end at. The layout derives each node's home on the topology canvas from the graph. A designer can drag a node off its home, and the canvas file keeps only that offset. Reset position drops it. Past a short call-out distance the node's segments stay at the home and a thin call-out line points to the box. Degree rules: a connector ends exactly one segment, a point exactly two, a breakout three or more, a splice two or more.
 _Avoid_: Vertex, junction
 
 **Point**:

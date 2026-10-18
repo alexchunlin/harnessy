@@ -26,6 +26,8 @@
 
 /* The ratsnest: what is left to route, drawn thin and faint under the segments. */
 .ratsnest-line { filter: var(--edge-lift); }
+.callout { fill: none; stroke: var(--muted, #888); stroke-width: 1; pointer-events: none; }
+.react-flow__edge.callout-edge { pointer-events: none; }
 
 .tie { width: 12px; height: 12px; background: var(--box); border: 2px solid #1a7f37; border-radius: 2px; cursor: ew-resize; }
 .tie.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.45); }

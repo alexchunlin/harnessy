@@ -318,29 +318,78 @@ const TOPOLOGY_ID = "top-222268";
 const TOPOLOGY_CANVAS = "canvas/top-222268.json";
 type Topo = { endpoints: { id: string }[]; segments: { id: string; ends: [string, string] }[] };
 
-test("dragging a topology endpoint leaves it at its home and grows no segment", async ({ page }) => {
-  const folder = await freshExample("feel-endpoint-move");
+type Offsets = { offsets: Record<string, { x: number; y: number }> };
+
+test("dragging a connector box far from home writes only an offset and draws a call-out line; Reset position takes both away, each one undo step", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-offset");
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
   await canvasSettled(page);
 
   const before = (await readJson(folder, TOPOLOGY)) as Topo;
-  const canvasBefore = await readJson(folder, TOPOLOGY_CANVAS);
-  const node = page.locator(".react-flow__node-endpoint").first();
-  const b = (await node.boundingBox())!;
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.mouse.down();
-  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 10, b.y + b.height / 2 + i * 8);
-  await page.mouse.up();
+  expect(((await readJson(folder, TOPOLOGY_CANVAS)) as Offsets).offsets).toEqual({});
+  for (let i = 0; i < 4; i++) await page.locator(".react-flow__controls-zoomin").click();
+  await page.waitForTimeout(400);
+  // A connector that ends a segment, sits in the clear away from the panes, and has no label lying over its middle.
+  const size = page.viewportSize()!;
+  const joined = new Set(before.segments.flatMap((s) => s.ends));
+  const all = page.locator(".react-flow__node-endpoint:has(.ep-connector)");
+  let id = "";
+  for (let i = 0; i < (await all.count()); i++) {
+    const box = await all.nth(i).boundingBox();
+    const candidate = (await all.nth(i).getAttribute("data-id"))!;
+    if (!joined.has(candidate) || !box || box.x < 260 || box.y < 120 || box.x + box.width > size.width - 420 || box.y + box.height > size.height - 160) continue;
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest(".react-flow__node")?.getAttribute("data-id"), [box.x + box.width / 2, box.y + box.height / 2]);
+    if (hit === candidate) {
+      id = candidate;
+      break;
+    }
+  }
+  expect(id).not.toBe("");
+  const node = page.locator(`.react-flow__node-endpoint[data-id="${id}"]`);
+  const callout = page.locator(`.callout[data-endpoint="${id}"]`);
+
+  const drag = async () => {
+    const b = (await node.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, b.y + b.height / 2 + i * 9);
+    await page.mouse.up();
+    return b;
+  };
+  const b = await drag();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
   await page.waitForTimeout(600);
 
   const a = (await node.boundingBox())!;
-  expect(Math.abs(a.x - b.x)).toBeLessThan(1);
-  expect(Math.abs(a.y - b.y)).toBeLessThan(1);
+  // React Flow starts the drag on the first step, so the box trails the pointer by up to one step.
+  expect(a.x - b.x).toBeGreaterThan(100);
+  expect(a.y - b.y).toBeGreaterThan(75);
+  await expect(callout).toHaveCount(1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
-  expect(after.segments).toHaveLength(before.segments.length);
-  expect(after.endpoints).toHaveLength(before.endpoints.length);
-  expect(await readJson(folder, TOPOLOGY_CANVAS)).toEqual(canvasBefore);
+  expect(after).toEqual(before);
+  expect(Object.keys(((await readJson(folder, TOPOLOGY_CANVAS)) as Offsets).offsets)).toEqual([id]);
+
+  // One undo takes the drag back whole.
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => !(id in (c as Offsets).offsets));
+  await expect(callout).toHaveCount(0);
+
+  await drag();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
+  // The drag selected the box, so the inspector is already its own.
+  await page.getByRole("button", { name: "Reset position" }).click();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => !(id in (c as Offsets).offsets));
+  await expect(callout).toHaveCount(0);
+  await page.waitForTimeout(600);
+  const home = (await node.boundingBox())!;
+  expect(Math.abs(home.x - b.x)).toBeLessThan(1);
+  expect(Math.abs(home.y - b.y)).toBeLessThan(1);
+
+  // One undo brings the reset offset back.
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
+  await expect(callout).toHaveCount(1);
 });
 
 test("dragging from the ring into empty canvas grows a point that glides to its derived home, and the viewport stays put", async ({ page }) => {

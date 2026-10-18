@@ -12,6 +12,7 @@ import {
   netsThrough,
   parseConductor,
   removeEndpoint,
+  resetEndpointOffset,
   removeSegment,
   removeSheath,
   removeTiePoint,
@@ -97,6 +98,7 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
   const graph = buildGraph(topology);
   const d = degree(graph, id);
   const through = netsThrough(routes, id);
+  const moved = project.topologyCanvases.get(topology.id)?.offsets[id] !== undefined;
   return (
     <div className="pane pane-right">
       <h3>{e.kind}</h3>
@@ -166,6 +168,11 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
           </div>
         </>
       )}
+      <div className="row">
+        <button disabled={!moved} title={moved ? "Back to where the layout puts it" : "At its home"} onClick={() => edit((p) => resetEndpointOffset(p, topology.id, id))}>
+          Reset position
+        </button>
+      </div>
       <button onClick={() => edit((p) => removeEndpoint(p, topology.id, id))}>Delete endpoint{d > 0 ? ` and ${d} segment${d === 1 ? "" : "s"}` : ""}</button>
     </div>
   );
