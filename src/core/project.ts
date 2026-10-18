@@ -156,11 +156,12 @@ export function saveProject(project: Project): Files {
   return files;
 }
 
-/** The canvas file as saved: `pieces` entries for pieces the topology no longer has are dropped. */
+/** The canvas file as saved: roots and `pieces` entries for endpoints and pieces the topology no longer has are dead weight, so they drop. */
 function liveCanvas(topology: Topology | undefined, canvas: TopologyCanvas): TopologyCanvas {
+  const ends = new Set(topology?.endpoints.map((e) => e.id));
   const live = new Set(topology ? pieces(buildGraph(topology)).map((p) => p.id) : []);
   const kept = Object.entries(canvas.pieces).filter(([id]) => live.has(id));
-  return { ...canvas, pieces: Object.fromEntries(kept) };
+  return { ...canvas, roots: canvas.roots.filter((r) => ends.has(r)), pieces: Object.fromEntries(kept) };
 }
 
 /** Paths that `saveProject` would write which `previous` has and `next` lacks. */
