@@ -465,7 +465,7 @@ export function createTopology(project: Project, name: string): { project: Proje
   const topologies = new Map(project.topologies);
   topologies.set(id, { id, name, endpoints: [], segments: [], sheaths: [], ties: [] });
   const topologyCanvases = new Map(project.topologyCanvases);
-  topologyCanvases.set(id, { endpoints: {} });
+  topologyCanvases.set(id, { offsets: {}, pieces: {}, roots: [] });
   return { project: next(project, { topologies, topologyCanvases }), id };
 }
 
@@ -489,39 +489,21 @@ function updateTopology(project: Project, id: string, fn: (t: Topology) => Topol
   return next(project, { topologies });
 }
 
-function setEndpointPosition(project: Project, topologyId: string, endpointId: string, position: Position | undefined): Project {
-  const canvas = project.topologyCanvases.get(topologyId) ?? { endpoints: {} };
-  const endpoints = { ...canvas.endpoints };
-  if (position) endpoints[endpointId] = round(position);
-  else delete endpoints[endpointId];
-  const topologyCanvases = new Map(project.topologyCanvases);
-  topologyCanvases.set(topologyId, { endpoints });
-  return next(project, { topologyCanvases });
-}
-
-/** Place a connector in the topology. A connector appears at most once per topology. */
-export function placeConnector(project: Project, topologyId: string, address: string, position: Position): { project: Project; id: string } {
+/** Place a connector in the topology. A connector appears at most once per topology. The layout gives it a home. */
+export function placeConnector(project: Project, topologyId: string, address: string): { project: Project; id: string } {
   const t = project.topologies.get(topologyId);
   if (!t) throw new Error(`no topology ${topologyId}`);
   const existing = t.endpoints.find((e) => e.kind === "connector" && e.connector === address);
-  if (existing) return { project: setEndpointPosition(project, topologyId, existing.id, position), id: existing.id };
+  if (existing) return { project, id: existing.id };
   const id = newId(project, "end");
   const endpoint: Endpoint = { id, kind: "connector", connector: address };
-  let p = updateTopology(project, topologyId, (t) => ({ ...t, endpoints: [...t.endpoints, endpoint] }));
-  p = setEndpointPosition(p, topologyId, id, position);
-  return { project: p, id };
+  return { project: updateTopology(project, topologyId, (t) => ({ ...t, endpoints: [...t.endpoints, endpoint] })), id };
 }
 
-export function addEndpoint(project: Project, topologyId: string, kind: "point" | "breakout" | "splice", position: Position): { project: Project; id: string } {
+export function addEndpoint(project: Project, topologyId: string, kind: "point" | "breakout" | "splice"): { project: Project; id: string } {
   const id = newId(project, "end");
   const endpoint: Endpoint = kind === "splice" ? { id, kind, nets: [] } : { id, kind };
-  let p = updateTopology(project, topologyId, (t) => ({ ...t, endpoints: [...t.endpoints, endpoint] }));
-  p = setEndpointPosition(p, topologyId, id, position);
-  return { project: p, id };
-}
-
-export function moveEndpoint(project: Project, topologyId: string, endpointId: string, position: Position): Project {
-  return setEndpointPosition(project, topologyId, endpointId, position);
+  return { project: updateTopology(project, topologyId, (t) => ({ ...t, endpoints: [...t.endpoints, endpoint] })), id };
 }
 
 /** Change a point, breakout, or splice into another of those kinds. Connectors stay connectors. */
@@ -554,8 +536,7 @@ export function removeEndpoint(project: Project, topologyId: string, endpointId:
   if (!t) return project;
   let p = project;
   for (const s of t.segments) if (s.ends.includes(endpointId)) p = removeSegment(p, topologyId, s.id);
-  p = updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => e.id !== endpointId) }));
-  return setEndpointPosition(p, topologyId, endpointId, undefined);
+  return updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => e.id !== endpointId) }));
 }
 
 // Segments -----------------------------------------------------------------------
@@ -585,9 +566,9 @@ function promotePoints(project: Project, topologyId: string, endpointIds: string
   return p;
 }
 
-/** Drag from an endpoint into empty canvas: a new point there and a segment to it. */
-export function growSegment(project: Project, topologyId: string, from: string, position: Position): { project: Project; segment: string; endpoint: string } {
-  const added = addEndpoint(project, topologyId, "point", position);
+/** Drag from an endpoint into empty canvas: a new point and a segment to it. The layout gives the point its home. */
+export function growSegment(project: Project, topologyId: string, from: string): { project: Project; segment: string; endpoint: string } {
+  const added = addEndpoint(project, topologyId, "point");
   const seg = addSegment(added.project, topologyId, from, added.id);
   return { project: seg.project, segment: seg.id, endpoint: added.id };
 }

@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -75,29 +75,30 @@ export interface TopologyOptions {
 
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
 
-export const ENDPOINT_SIZE: Record<Endpoint["kind"], { w: number; h: number }> = {
-  connector: { w: 88, h: 22 },
-  point: { w: 12, h: 12 },
-  breakout: { w: 20, h: 20 },
-  splice: { w: 22, h: 22 },
-};
-
-export function endpointCentre(kind: Endpoint["kind"], pos: Position): Position {
-  const s = ENDPOINT_SIZE[kind];
-  return { x: pos.x + s.w / 2, y: pos.y + s.h / 2 };
-}
-
 export interface TopologyModel {
   nodes: TopoNode[];
   edges: TopoEdge[];
   routes: Route[];
   harnesses: Harness[];
+  /** Endpoint centres as drawn. */
   positions: Map<string, Position>;
 }
 
-export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
+const EMPTY_CANVAS: TopologyCanvas = { offsets: {}, pieces: {}, roots: [] };
+
+/** Where the layout draws each endpoint's centre. Nothing here reads a stored position. */
+export function drawnPositions(project: Project, topology: Topology): Map<string, Position> {
+  const layout = layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_CANVAS);
+  return new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+}
+
+/**
+ * Derive React Flow nodes and edges for one topology. `drawn` holds each
+ * endpoint's centre, from `drawnPositions` or a glide towards it; `drafts`
+ * holds the top-left of a tie point mid-drag.
+ */
+export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drawn: Map<string, Position>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
   const graph = buildGraph(topology);
-  const canvas = project.topologyCanvases.get(topology.id) ?? { endpoints: {} };
   const assemblyLength = assemblyLengthOf(project);
   const routes = allRoutes(project, graph);
   const onSegments = netsOnSegments(routes);
@@ -118,7 +119,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const highlightSegments = new Set(selectedSheaths.flatMap((s) => s.segments));
 
   const positions = new Map<string, Position>();
-  for (const e of topology.endpoints) positions.set(e.id, drafts.get(e.id) ?? canvas.endpoints[e.id] ?? { x: 0, y: 0 });
+  for (const e of topology.endpoints) positions.set(e.id, drawn.get(e.id) ?? { x: 0, y: 0 });
 
   // A segment is in the layer when any net routed through it is, or when it
   // carries no net at all. An endpoint follows its segments; a lone connector
@@ -152,10 +153,12 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const outOfLayer = endpointOut(e);
     const lit = e.kind === "connector" && options.highlightComponents.has(e.connector.split("/")[0]);
     // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
+    // Endpoints sit at their derived homes and do not drag; a drag from the ring still grows a segment.
     const size = ENDPOINT_SIZE[e.kind];
+    const centre = positions.get(e.id)!;
     nodes.push({
-      id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
-      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer, connectable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined,
+      id: e.id, type: "endpoint", position: { x: centre.x - size.w / 2, y: centre.y - size.h / 2 }, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
+      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: false, connectable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined,
       zIndex: e.kind === "connector" ? 2 : 3, width: size.w, height: size.h, measured: { width: size.w, height: size.h },
     });
   }
@@ -213,11 +216,10 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   for (const t of topology.ties) {
     const seg = graph.segments.get(t.segment);
     if (!seg) continue;
-    const from = positions.get(t.from);
-    const to = positions.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
-    if (!from || !to) continue;
-    const a = endpointCentre(graph.endpoints.get(t.from)!.kind, from);
-    const b = endpointCentre(graph.endpoints.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0])!.kind, to);
+    // A tie point draws at its fraction of the way along the drawn segment.
+    const a = positions.get(t.from);
+    const b = positions.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
+    if (!a || !b) continue;
     const len = segmentLength(graph, seg, assemblyLength) ?? 0;
     const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;
     const pos = drafts.get(t.id) ?? { x: a.x + (b.x - a.x) * f - 6, y: a.y + (b.y - a.y) * f - 6 };
