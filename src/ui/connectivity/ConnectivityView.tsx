@@ -18,10 +18,11 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, turnComponent, updateGroup, type BoxSize, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
+import { isTyping, turnSelection } from "../keys";
 import { useTheme } from "../theme";
-import { deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
+import { boxSizeFor, deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
 import { GRID, snap } from "./orthogonal";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
@@ -334,11 +335,29 @@ function Canvas() {
   const arrange = useCallback((how: "row" | "column") => edit((p) => arrangeComponents(p, selectedComponents, how, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
   const distribute = useCallback(() => edit((p) => distributeComponents(p, selectedComponents, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
 
+  // R turns every selected component a quarter, each about its own centre, in one edit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const ids = turnSelection(e, useDoc.getState().selection, "connectivity").filter((id) => useDoc.getState().project?.components.has(id));
+      if (ids.length === 0) return;
+      e.preventDefault();
+      edit((p) => {
+        let next = p;
+        for (const id of ids) {
+          const data = flow.getNode(id)?.data as ComponentNodeData | undefined;
+          if (data) next = turnComponent(next, id, (sides) => boxSizeFor(data, sides));
+        }
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [edit, flow]);
+
   // Delete and Escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (isTyping(e.target)) return;
       const current = useDoc.getState().selection;
       if (current.view !== "connectivity") return;
       if (e.key === "Escape") {

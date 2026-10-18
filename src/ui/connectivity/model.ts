@@ -129,8 +129,16 @@ export function boxGeometry(sides: Record<Side, string[]>, width = NODE_WIDTH): 
   return { width: w, height, header: topBand, sides, pins };
 }
 
+/** The size a component's box would draw at with its pins arranged as `sides`, for an op that rearranges them. */
+export function boxSizeFor(data: ComponentNodeData, sides: Record<Side, string[]>): { w: number; h: number } {
+  const dots: Record<string, number> = {};
+  for (const [d, nets] of Object.entries(data.netsAt)) dots[d] = nets.length;
+  const g = boxGeometry(sides, fittedWidth(data.component.name, sides, dots, data.component.definition === undefined, data.types));
+  return { w: g.width, h: g.height };
+}
+
 /**
- * The line that draws a bridge inside a box: a stub from each bridged pin to
+ * The line that draws a bridge inside a box:a stub from each bridged pin to
  * a spine. The spine runs down the middle when the pins sit on both sides
  * and just inside the edge when they share one; a top or bottom pin reaches
  * the spine's nearest end with one bend.
