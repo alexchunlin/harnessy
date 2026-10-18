@@ -43,6 +43,29 @@ export class ApiError extends Error {
 }
 
 const PROJECT_FILE = "project.json";
+const REFERENCE_DIR = "reference";
+
+/** What upload accepts, photos then CAD, with the content type bytes answers for each. */
+const UPLOAD_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".step": "application/octet-stream",
+  ".stp": "application/octet-stream",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
+};
+
+/** Lower case letters, digits and single dashes. */
+function slug(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export function createApi(options: ApiOptions) {
   const home = path.resolve(options.home ?? os.homedir());
@@ -141,6 +164,41 @@ export function createApi(options: ApiOptions) {
         await fs.rename(tmp, abs);
       }
       for (const abs of removes) await fs.rm(abs, { force: true });
+    },
+
+    /**
+     * Copy a reference photo or CAD file into `reference/` of an opened
+     * folder. The name is reduced to a safe file name and gets `-2`, `-3`
+     * and so on when taken. Returns the path written, relative to the folder.
+     */
+    async upload(root: string, name: string, bytes: Uint8Array): Promise<string> {
+      const base = assertOpened(root);
+      const parsed = path.parse(path.basename(name.replace(/\\/g, "/")));
+      const ext = parsed.ext.toLowerCase();
+      if (ext === ".heic" || ext === ".heif") throw new ApiError(415, `${name} is HEIC. Open it in Photos or Preview and export it as JPEG.`);
+      if (!(ext in UPLOAD_TYPES)) throw new ApiError(415, `${name} is not a reference file. Use ${Object.keys(UPLOAD_TYPES).join(", ")}.`);
+      const stem = slug(parsed.name) || "file";
+      const dir = safeJoin(base, REFERENCE_DIR);
+      await fs.mkdir(dir, { recursive: true });
+      for (let n = 1; ; n++) {
+        const file = `${stem}${n === 1 ? "" : `-${n}`}${ext}`;
+        try {
+          await fs.writeFile(path.join(dir, file), bytes, { flag: "wx" });
+          return `${REFERENCE_DIR}/${file}`;
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        }
+      }
+    },
+
+    /** A file's bytes and a content type from its extension, inside an opened folder. */
+    async bytes(root: string, rel: string): Promise<{ bytes: Uint8Array; type: string }> {
+      const abs = safeJoin(assertOpened(root), rel);
+      try {
+        return { bytes: await fs.readFile(abs), type: UPLOAD_TYPES[path.extname(abs).toLowerCase()] ?? "application/octet-stream" };
+      } catch (e) {
+        throw new ApiError(404, `cannot read ${rel}: ${(e as Error).message}`);
+      }
     },
 
     /** Every JSON file under the repo library, read-only. */

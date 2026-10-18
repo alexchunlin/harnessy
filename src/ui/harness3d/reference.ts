@@ -2,17 +2,24 @@
  * Reads a CAD file into a three.js object so the 3D harness view can show
  * the machine at real scale behind the harnesses. STEP goes
  * through occt-import-js (OpenCascade in wasm); GLB, STL and OBJ use the
- * three.js loaders. The file stays in memory and is not saved with the project.
+ * three.js loaders. The project keeps the file in `reference/` and its
+ * entry in `canvas/reference.json`.
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import occtWasmUrl from "occt-import-js/dist/occt-import-js.wasm?url";
+import type { ReferenceUnits } from "../../core";
 import type { Vec3 } from "./model";
 
-export const UNITS = { mm: 1, cm: 10, m: 1000, in: 25.4 } as const;
-export type Units = keyof typeof UNITS;
+export const UNITS: Record<ReferenceUnits, number> = { mm: 1, cm: 10, m: 1000, in: 25.4 };
+export type Units = ReferenceUnits;
+
+/** The unit a file most likely uses, from its name. glTF is metres by its spec; the rest come out in millimetres. */
+export function guessUnits(name: string): Units {
+  return /\.(glb|gltf)$/i.test(name) ? "m" : "mm";
+}
 
 export interface Loaded {
   object: THREE.Object3D;
@@ -55,12 +62,10 @@ async function loadStep(buffer: ArrayBuffer): Promise<THREE.Object3D> {
 export async function loadReference(file: File): Promise<Loaded> {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
   let object: THREE.Object3D;
-  let units: Units = "mm";
+  const units = guessUnits(file.name);
   if (ext === "step" || ext === "stp") object = await loadStep(await file.arrayBuffer());
-  else if (ext === "glb" || ext === "gltf") {
-    object = (await new GLTFLoader().parseAsync(await file.arrayBuffer(), "")).scene;
-    units = "m";
-  } else if (ext === "stl") object = new THREE.Mesh(new STLLoader().parse(await file.arrayBuffer()), grey());
+  else if (ext === "glb" || ext === "gltf") object = (await new GLTFLoader().parseAsync(await file.arrayBuffer(), "")).scene;
+  else if (ext === "stl") object = new THREE.Mesh(new STLLoader().parse(await file.arrayBuffer()), grey());
   else if (ext === "obj") {
     object = new OBJLoader().parse(await file.text());
     object.traverse((o) => {

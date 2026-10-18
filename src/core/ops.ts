@@ -3,8 +3,8 @@ import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { placementOf } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
-import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
-import { ALL_LAYER_ID } from "./schema";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, ReferenceModel, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
+import { ALL_LAYER_ID, ReferenceModelSchema } from "./schema";
 
 /**
  * Operations over a project. Each returns a new Project sharing unchanged
@@ -730,6 +730,24 @@ export function placeParts(project: Project, topologyId: string, parts: Parts): 
     ties: merge(old.ties, parts.ties, ties),
   });
   return next(project, { placements });
+}
+
+// The reference model ------------------------------------------------------------
+
+/**
+ * Set the reference CAD model entry, replacing any there was. Values round
+ * to whole millimetres and degrees. The file in `reference/` is not touched.
+ */
+export function setReferenceModel(project: Project, model: ReferenceModel): Project {
+  const entry = ReferenceModelSchema.parse({ ...model, position: roundVec(model.position), rotation: roundVec(model.rotation) });
+  return next(project, { reference: { ...project.reference, model: entry } });
+}
+
+/** Drop the reference model entry. The file stays in `reference/`. */
+export function clearReferenceModel(project: Project): Project {
+  if (!project.reference.model) return project;
+  const { model: _, ...rest } = project.reference;
+  return next(project, { reference: rest });
 }
 
 // Design rule silences ---------------------------------------------------------
