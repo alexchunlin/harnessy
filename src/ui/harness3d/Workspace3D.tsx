@@ -11,7 +11,9 @@
  *
  * What is drawn is the project's saved placement laid over the sketch: a
  * part nobody placed sits where the sketch has it. A drag draws from local
- * state and, on release, places the one part it moved as one undoable edit.
+ * state and, on release, commits as one undoable edit. With lengths locked,
+ * the default, it moves the whole harness rigidly; in Stretch it places the
+ * one part it moved.
  * Opening the view changes nothing in the project. A segment with both ends
  * placed takes its length from the core bundle curve, so there is nothing
  * to write back.
@@ -23,7 +25,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { clearPlacement, lengthsOf, placementOf, placeParts, removeTiePoint, type Placement, type SegmentLength } from "../../core";
+import { buildGraph, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Placement, type RigidMove, type SegmentLength } from "../../core";
+import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
@@ -118,6 +121,44 @@ function poseOf(world: World3, placement: Placement, live: Live | undefined): Po
   return { positions, rotations, placed, chains };
 }
 
+/** The parts that move with one part when lengths are locked: every endpoint and tie point of its harness. */
+interface Members {
+  endpoints: Set<string>;
+  connectors: string[];
+  ties: string[];
+}
+
+/** The rigid move a locked drag makes: from where the part was drawn before the drag to where it is now, turned about itself. */
+function rigidMoveOf(base: Pose, l: Live): RigidMove {
+  const from = base.positions[l.id];
+  const translate = sub(l.at, from);
+  const start = base.rotations[l.id];
+  if (!l.rotation || !start) return { translate };
+  const q = (r: Vec3) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...r));
+  const d = q(l.rotation).multiply(q(start).invert());
+  return { translate, turn: { pivot: from, quaternion: [d.x, d.y, d.z, d.w] } };
+}
+
+/** A harness's part of the drawn pose, in the project's units: rotations in degrees, unrounded. */
+function coreOf(pose: Pose, m: Members) {
+  const at = (ids: Iterable<string>) => Object.fromEntries([...ids].map((id) => [id, pose.positions[id]]));
+  return {
+    positions: at(m.endpoints),
+    rotations: Object.fromEntries(m.connectors.map((id) => [id, pose.rotations[id].map((r) => THREE.MathUtils.radToDeg(r)) as Vec3])),
+    ties: at(m.ties),
+  };
+}
+
+/** The drawn pose with one harness moved rigidly. */
+function movedPose(base: Pose, m: Members, move: RigidMove): Pose {
+  const moved = moveRigidly(coreOf(base, m), move);
+  return {
+    ...base,
+    positions: { ...base.positions, ...moved.positions, ...moved.ties },
+    rotations: { ...base.rotations, ...Object.fromEntries(Object.entries(moved.rotations).map(([id, r]) => [id, rad(r)])) },
+  };
+}
+
 export function Workspace3D({ world, show, topologyId, referenceModel }: { world: World3; show: string; topologyId: string; referenceModel: ReferenceState }) {
   const harness = world.all;
   // What is drawn: one harness, or all of them.
@@ -142,7 +183,21 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     liveRef.current = l;
     setLiveState(l);
   };
-  const { positions, rotations, placed, chains } = useMemo(() => poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, live), [world, placement, live]);
+  const locked = usePrefs((s) => s.lengthsLocked);
+  const setLocked = usePrefs((s) => s.setLengthsLocked);
+  const topology = useDoc((d) => d.project?.topologies.get(topologyId));
+  const allPieces = useMemo(() => (topology ? pieces(buildGraph(topology)) : []), [topology]);
+  /** The harness that moves with a part when lengths are locked. */
+  const membersOf = (id: string): Members | undefined => {
+    const piece = pieceOf(allPieces, harness.ties.find((t) => t.id === id)?.segment ?? id);
+    if (!piece) return undefined;
+    return { endpoints: piece.endpoints, connectors: [...piece.endpoints].filter((e) => connectors.has(e)), ties: harness.ties.filter((t) => piece.segments.has(t.segment)).map((t) => t.id) };
+  };
+  // What is drawn before the live part moves, and what is drawn now: the live part alone in Stretch, its whole harness when locked.
+  const base = useMemo(() => poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, undefined), [world, placement]);
+  const liveMembers = useMemo(() => (live && locked ? membersOf(live.id) : undefined), [live?.id, locked, allPieces]);
+  const drawn = useMemo(() => (live && liveMembers ? movedPose(base, liveMembers, rigidMoveOf(base, live)) : poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, live)), [base, live, liveMembers, world, placement]);
+  const { positions, rotations, placed, chains } = drawn;
 
   const [selected, setSelected] = useState<string>();
   const [frame, setFrame] = useState(0);
@@ -198,9 +253,10 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   };
 
   /**
-   * Let go of the live part. A part the project has is placed as one edit; a
-   * connector saves the rotation it is drawn with, turned or not. A tie point
-   * made here only moves here.
+   * Let go of the live part, as one edit. With lengths locked its whole
+   * harness moves from where it was drawn; in Stretch only the part is
+   * placed. A connector saves the rotation it is drawn with, turned or not. A
+   * tie point made here only moves here.
    */
   function commit() {
     const l = liveRef.current;
@@ -208,6 +264,11 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     setLive(undefined);
     if (l.id === REFERENCE) {
       if (referenceModel.status !== "none") placeReference(referenceModel.model, l.at, l.rotation ?? rad(referenceModel.model.rotation));
+      return;
+    }
+    const members = usePrefs.getState().lengthsLocked ? membersOf(l.id) : undefined;
+    if (members) {
+      useDoc.getState().edit((p) => moveHarness(p, topologyId, l.id, coreOf(base, members), rigidMoveOf(base, l)), "Move harness in 3D");
       return;
     }
     const isTie = harness.ties.some((t) => t.id === l.id);
@@ -260,6 +321,15 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
           {selectedTie && <button onClick={() => removeTie(selectedTie.id)}>Remove tie point</button>}
           <button disabled={clearTarget === undefined} onClick={clearShown} title="Return the harness to its typed numbers and the sketch">
             Clear placement
+          </button>
+        </div>
+        {/* Locked, a drag moves the whole harness and no length changes. Stretch moves one part and stretches the segments at it. */}
+        <div className="h3d-row">
+          <button className={locked ? "active" : ""} aria-pressed={locked} onClick={() => setLocked(true)} title="Drag or turn any part to move its whole harness">
+            Lengths locked
+          </button>
+          <button className={locked ? "" : "active"} aria-pressed={!locked} onClick={() => setLocked(false)} title="Drag a part on its own and stretch the segments at it">
+            Stretch
           </button>
         </div>
         <ReferencePanel state={referenceModel} middle={middle} onHandles={() => setSelected(REFERENCE)} onRemoved={() => setSelected((id) => (id === REFERENCE ? undefined : id))} />

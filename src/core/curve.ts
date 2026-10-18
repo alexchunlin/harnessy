@@ -2,6 +2,7 @@ import { CatmullRomCurve3, Euler, MathUtils, Vector3 } from "three";
 import type { Segment, Topology, Vec3 } from "./schema";
 import { buildGraph, otherEnd, type Graph } from "./derive";
 import { resolveRef } from "./library";
+import type { Pose } from "./placement";
 import { resolveConnector, type Project } from "./project";
 
 /**
@@ -18,17 +19,6 @@ import { resolveConnector, type Project } from "./project";
  * still leaves along the exit.
  */
 
-
-/**
- * Where things are, by id: endpoint positions and tie point positions in
- * millimetres, connector rotations in degrees, Euler order XYZ. A saved
- * placement is a pose. The 3D view passes the placement laid over its sketch.
- */
-export interface Pose {
-  positions: Record<string, Vec3>;
-  rotations: Record<string, Vec3>;
-  ties: Record<string, Vec3>;
-}
 
 export interface SegmentCurve {
   segment: string;

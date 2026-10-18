@@ -2,12 +2,13 @@ import { create } from "zustand";
 
 /**
  * Viewing preferences that live in the browser with the theme, not in the
- * project: whether the ratsnest is drawn, and where the side by side
- * divider sits.
+ * project: whether the ratsnest is drawn, where the side by side divider
+ * sits, and whether the 3D view moves a harness whole or stretches it.
  */
 
 const RATSNEST_KEY = "harnessy.ratsnest";
 const DIVIDER_KEY = "harnessy.divider";
+const LENGTHS_KEY = "harnessy.lengths";
 
 export const DIVIDER_MIN = 20;
 export const DIVIDER_MAX = 80;
@@ -25,6 +26,9 @@ interface PrefsState {
   /** The share of the width the connectivity canvas gets in the side by side view, as a percentage. */
   divider: number;
   setDivider(pct: number): void;
+  /** Lengths locked: a drag in 3D moves the whole harness. Off is Stretch: one part moves alone. On by default. */
+  lengthsLocked: boolean;
+  setLengthsLocked(on: boolean): void;
   /** How far the reference model is faded so the harness shows through it, from 0 (solid) to 0.9. */
   referenceDimness: number;
   setReferenceDimness(d: number): void;
@@ -53,5 +57,10 @@ export const usePrefs = create<PrefsState>()((set) => ({
     const divider = clampDivider(pct);
     localStorage.setItem(DIVIDER_KEY, String(divider));
     set({ divider });
+  },
+  lengthsLocked: localStorage.getItem(LENGTHS_KEY) !== "stretch",
+  setLengthsLocked(on) {
+    localStorage.setItem(LENGTHS_KEY, on ? "locked" : "stretch");
+    set({ lengthsLocked: on });
   },
 }));

@@ -1,7 +1,7 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
-import { placementOf } from "./placement";
+import { moveRigidly, placementOf, type Pose, type RigidMove } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces, segmentLength } from "./derive";
 import { lengthsOf } from "./lengths";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, ReferenceModel, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
@@ -708,7 +708,8 @@ export interface Parts {
   ties?: Record<string, Vec3>;
 }
 
-const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]), Math.round(v[1]), Math.round(v[2])];
+// `|| 0` keeps a -0 from a turn out of the file.
+const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]) || 0, Math.round(v[1]) || 0, Math.round(v[2]) || 0];
 
 /**
  * Place some endpoints, connectors and tie points of one topology, as one
@@ -778,6 +779,33 @@ export function clearPlacement(project: Project, topologyId: string, memberId: s
   if (size(left) === 0) placements.delete(topologyId);
   else placements.set(topologyId, left);
   return next(project, { placements });
+}
+
+/**
+ * Move a whole harness as one rigid body, as one edit. The harness is the
+ * connected piece holding `member`, an endpoint, segment or tie point id, so a
+ * purchased cable moves the same way. Each part moves from where `pose` draws
+ * it, or from its saved placement when the pose leaves it out, so a sketched
+ * harness is placed whole. Nothing outside the harness changes.
+ */
+export function moveHarness(project: Project, topologyId: string, member: string, pose: Partial<Pose>, move: RigidMove): Project {
+  const t = project.topologies.get(topologyId);
+  if (!t) throw new Error(`no topology ${topologyId}`);
+  const piece = pieceOf(pieces(buildGraph(t)), t.ties.find((x) => x.id === member)?.segment ?? member);
+  if (!piece) throw new Error(`${member} is not part of a harness in ${topologyId}`);
+  const saved = placementOf(project, topologyId);
+  const pick = (ids: Iterable<string>, drawn: Record<string, Vec3> | undefined, old: Record<string, Vec3>) => {
+    const out: Record<string, Vec3> = {};
+    for (const id of ids) {
+      const v = drawn?.[id] ?? old[id];
+      if (v) out[id] = v;
+    }
+    return out;
+  };
+  const connectors = t.endpoints.filter((e) => e.kind === "connector" && piece.endpoints.has(e.id)).map((e) => e.id);
+  const ties = t.ties.filter((x) => piece.segments.has(x.segment)).map((x) => x.id);
+  const from: Pose = { positions: pick(piece.endpoints, pose.positions, saved.positions), rotations: pick(connectors, pose.rotations, saved.rotations), ties: pick(ties, pose.ties, saved.ties) };
+  return placeParts(project, topologyId, moveRigidly(from, move));
 }
 
 // The reference model ------------------------------------------------------------
