@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { useDoc, useProject } from "../store";
 import { ALL, extractAll } from "./model";
 import { Workspace3D } from "./Workspace3D";
+import { useReferenceModel } from "./ReferenceModel";
 import "./harness3d.css";
 
 export function Harness3DView() {
@@ -16,6 +17,8 @@ export function Harness3DView() {
   const topology = activeTopology ? project.topologies.get(activeTopology) : [...project.topologies.values()][0];
   const world = useMemo(() => (topology ? extractAll(project, topology) : undefined), [project, topology]);
   const [picked, setPicked] = useState(ALL);
+  // Read once for the view, so switching topology does not read the CAD file again.
+  const referenceModel = useReferenceModel();
   // A harness that was renamed or removed falls back to showing them all.
   const show = world && world.names.includes(picked) ? picked : ALL;
 
@@ -40,7 +43,7 @@ export function Harness3DView() {
         </span>
       </div>
       {/* One workspace per topology. The harness filter only changes what is drawn. */}
-      <Workspace3D key={topology.id} world={world} show={show} topologyId={topology.id} />
+      <Workspace3D key={topology.id} world={world} show={show} topologyId={topology.id} referenceModel={referenceModel} />
     </div>
   );
 }

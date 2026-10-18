@@ -3,8 +3,8 @@ import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { moveRigidly, placementOf, type Pose, type RigidMove } from "./placement";
 import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces } from "./derive";
-import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
-import { ALL_LAYER_ID } from "./schema";
+import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, ReferenceModel, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
+import { ALL_LAYER_ID, ReferenceModelSchema } from "./schema";
 
 /**
  * Operations over a project. Each returns a new Project sharing unchanged
@@ -805,6 +805,24 @@ export function moveHarness(project: Project, topologyId: string, member: string
   const ties = t.ties.filter((x) => piece.segments.has(x.segment)).map((x) => x.id);
   const from: Pose = { positions: pick(piece.endpoints, pose.positions, saved.positions), rotations: pick(connectors, pose.rotations, saved.rotations), ties: pick(ties, pose.ties, saved.ties) };
   return placeParts(project, topologyId, moveRigidly(from, move));
+}
+
+// The reference model ------------------------------------------------------------
+
+/**
+ * Set the reference CAD model entry, replacing any there was. Values round
+ * to whole millimetres and degrees. The file in `reference/` is not touched.
+ */
+export function setReferenceModel(project: Project, model: ReferenceModel): Project {
+  const entry = ReferenceModelSchema.parse({ ...model, position: roundVec(model.position), rotation: roundVec(model.rotation) });
+  return next(project, { reference: { ...project.reference, model: entry } });
+}
+
+/** Drop the reference model entry. The file stays in `reference/`. */
+export function clearReferenceModel(project: Project): Project {
+  if (!project.reference.model) return project;
+  const { model: _, ...rest } = project.reference;
+  return next(project, { reference: rest });
 }
 
 // Design rule silences ---------------------------------------------------------

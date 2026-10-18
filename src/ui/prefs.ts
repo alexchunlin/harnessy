@@ -29,6 +29,15 @@ interface PrefsState {
   /** Lengths locked: a drag in 3D moves the whole harness. Off is Stretch: one part moves alone. On by default. */
   lengthsLocked: boolean;
   setLengthsLocked(on: boolean): void;
+  /** How far the reference model is faded so the harness shows through it, from 0 (solid) to 0.9. */
+  referenceDimness: number;
+  setReferenceDimness(d: number): void;
+}
+
+const DIMNESS_KEY = "harnessy.referenceDimness";
+const DIMNESS_DEFAULT = 0.4;
+function clampDimness(d: number): number {
+  return Number.isFinite(d) ? Math.min(0.9, Math.max(0, d)) : DIMNESS_DEFAULT;
 }
 
 export const usePrefs = create<PrefsState>()((set) => ({
@@ -36,6 +45,12 @@ export const usePrefs = create<PrefsState>()((set) => ({
   setRatsnest(on) {
     localStorage.setItem(RATSNEST_KEY, on ? "on" : "off");
     set({ ratsnest: on });
+  },
+  referenceDimness: clampDimness(Number(localStorage.getItem(DIMNESS_KEY) ?? DIMNESS_DEFAULT)),
+  setReferenceDimness(d) {
+    const referenceDimness = clampDimness(d);
+    localStorage.setItem(DIMNESS_KEY, String(referenceDimness));
+    set({ referenceDimness });
   },
   divider: clampDivider(Number(localStorage.getItem(DIVIDER_KEY) ?? 50)),
   setDivider(pct) {
