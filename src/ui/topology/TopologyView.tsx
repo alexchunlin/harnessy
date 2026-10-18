@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
-import { deriveTopology, drawnPositions, type TopoEdge, type TopoNode } from "./model";
+import { deriveTopology, drawnFrom, topologyLayout, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
-import { EndpointNode, HarnessBoxNode, TieNode } from "./nodes";
+import { EndpointNode, HarnessBoxNode, TieNode, WaitingGroupNode } from "./nodes";
 import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
-import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
+import { LeftPane } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
-const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessBoxNode };
+const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessBoxNode, waitingGroup: WaitingGroupNode };
 const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
 
 export function TopologyView() {
@@ -58,9 +58,12 @@ function Canvas({ topologyId }: { topologyId: string }) {
     }
     return { nets, components };
   }, [selection, project]);
-  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components, hoverConductor: hoverConductor ?? undefined }), [ratsnest, layerDomains, highlight, hoverConductor]);
   // Homes come from the layout; after an edit the endpoints glide to them and the viewport stays where it is.
-  const homes = useMemo(() => drawnPositions(project, topology), [project, topology]);
+  const layout = useMemo(() => topologyLayout(project, topology), [project, topology]);
+  const homes = useMemo(() => drawnFrom(layout), [layout]);
+  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components, hoverConductor: hoverConductor ?? undefined, waiting: layout.waiting }), [ratsnest, layerDomains, highlight, hoverConductor, layout]);
+  // A waiting connector with no endpoint record is a node under its address. Drawing a segment from it places it.
+  const waitingAddresses = useMemo(() => new Set(layout.waiting.flatMap((g) => g.connectors.filter((c) => !c.endpoint).map((c) => c.address))), [layout]);
   const glideFrom = useRef(new Map<string, Position>());
   const glided = useGlide(homes, glideFrom);
   // A harness box mid-drag carries every endpoint of its piece by the same amount; the box redraws around them.
@@ -140,10 +143,10 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const selects = changes.filter((c) => c.type === "select");
       if (selects.length === 0) return;
       const current = useDoc.getState().selection;
-      const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id);
+      const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id) || waitingAddresses.has(id);
       const ids = new Set(current.view === "topology" ? current.ids.filter(native) : []);
       for (const c of selects) {
-        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:")) continue;
+        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:") || c.id.startsWith("waiting:")) continue;
         if (c.selected) ids.add(c.id);
         else ids.delete(c.id);
       }
@@ -151,7 +154,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const same = current.view === "topology" && current.ids.length === next.length && current.ids.every((id) => ids.has(id));
       if (!same) selectIds(next);
     },
-    [topology, selectIds],
+    [topology, selectIds, waitingAddresses],
   );
 
   const onNodesChange = useCallback(
@@ -248,20 +251,37 @@ function Canvas({ topologyId }: { topologyId: string }) {
     [edit, topologyId, topology, model, boxDrag, drawn],
   );
 
+  /** A waiting connector placed by this edit starts its glide from where it waited in the grid. */
+  const startFromGrid = useCallback(
+    (after: Project, ids: string[]) => {
+      const top = after.topologies.get(topologyId)!;
+      for (const address of ids) {
+        if (!waitingAddresses.has(address)) continue;
+        const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === address);
+        const at = drawn.get(address);
+        if (placed && at) glideFrom.current.set(placed.id, at);
+      }
+    },
+    [topologyId, waitingAddresses, drawn],
+  );
+
   const onConnect = useCallback(
     (c: Connection) => {
       if (!c.source || !c.target || c.source === c.target) return;
-      if (!topology.endpoints.some((e) => e.id === c.source) || !topology.endpoints.some((e) => e.id === c.target)) return;
+      const known = (id: string) => topology.endpoints.some((e) => e.id === id) || waitingAddresses.has(id);
+      if (!known(c.source) || !known(c.target)) return;
       if (topology.segments.some((s) => (s.ends[0] === c.source && s.ends[1] === c.target) || (s.ends[0] === c.target && s.ends[1] === c.source))) return;
       let id = "";
       edit((p) => {
+        // A waiting connector is placed and joined in this one edit.
         const r = addSegment(p, topologyId, c.source, c.target);
         id = r.id;
+        startFromGrid(r.project, [c.source, c.target]);
         return r.project;
       });
       selectIds([id]);
     },
-    [edit, topologyId, topology, selectIds],
+    [edit, topologyId, topology, selectIds, waitingAddresses, startFromGrid],
   );
 
   const onConnectEnd = useCallback(
@@ -277,28 +297,12 @@ function Canvas({ topologyId }: { topologyId: string }) {
         seg = r.segment;
         // The drop point is only where the new point starts its glide home.
         glideFrom.current.set(r.endpoint, pos);
+        startFromGrid(r.project, [from]);
         return r.project;
       });
       selectIds([seg]);
     },
-    [flow, edit, topologyId, selectIds],
-  );
-
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      const address = e.dataTransfer.getData(TRAY_DRAG_TYPE);
-      if (!address) return;
-      e.preventDefault();
-      let id = "";
-      edit((p) => {
-        // The connector waits in the row under the pieces until a segment joins it.
-        const r = placeConnector(p, topologyId, address);
-        id = r.id;
-        return r.project;
-      });
-      selectIds([id]);
-    },
-    [edit, topologyId, selectIds],
+    [flow, edit, topologyId, selectIds, startFromGrid],
   );
 
   useEffect(() => {
@@ -332,8 +336,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   return (
     <div className="view">
-      <LeftPane project={project} topologyId={topologyId} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
-      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
+      <LeftPane project={project} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
+      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} data-testid="topology-canvas">
         <ReactFlow
           nodes={flow_.nodes}
           edges={flow_.edges}

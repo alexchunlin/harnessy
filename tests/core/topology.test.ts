@@ -26,6 +26,14 @@ describe("routes and harnesses", () => {
     expect(f.map((x) => x.target)).toEqual([ids.sig]);
   });
 
+  it("the unrouted net error names the connectors with no segment yet, with or without an endpoint record", () => {
+    let { project: p, ids } = twoNetProject();
+    p = ops.placeConnector(p, ids.top, `${ids.mib}/J1`).project;
+    const [f] = checks(p, ids.top, "net-unrouted");
+    const name = (id: string) => p.components.get(id)!.name;
+    expect(f.message).toBe(`net sensor power: ${name(ids.mib)} J1, ${name(ids.sensor)} J1 have no segment yet`);
+  });
+
   it("a point that gains a third segment becomes a breakout, and drops back when one goes", () => {
     let { project: p, ids } = twoNetProject();
     const grow = ops.growSegment(p, ids.top, ids.mibEnd);
@@ -104,6 +112,14 @@ describe("ratsnest", () => {
     const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
     p = mib.project;
     expect(ratsnestPairs(route(p, ids.top, ids.sig), at([sensor.id, 600, 0], [mib.id, 300, 80]))).toEqual([[mib.id, sensor.id]]);
+  });
+
+  it("reaches a waiting connector with no endpoint record, drawn at its address", () => {
+    let { project: p, ids } = twoNetProject();
+    const mib = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
+    p = mib.project;
+    const sensor = `${ids.sensor}/J1`;
+    expect(ratsnestPairs(route(p, ids.top, ids.sig), at([sensor, 600, 0], [mib.id, 300, 80]))).toEqual([[mib.id, sensor]]);
   });
 
   it("a routed net has no ratsnest", () => {
@@ -270,11 +286,12 @@ describe("sheaths, ties, silences, keep apart", () => {
     p = p1.project;
     const p2 = ops.addEndpoint(p, ids.top, "breakout");
     p = p2.project;
-    p = ops.addSegment(p, ids.top, ids.batEnd, p1.id, 10).project;
+    // Removing the segment sent both its connectors back to the waiting grid; drawing from their addresses places them again.
+    p = ops.addSegment(p, ids.top, `${ids.bat}/OUT`, p1.id, 10).project;
     p = ops.addSegment(p, ids.top, s.id, p1.id, 10).project;
     const shared = ops.addSegment(p, ids.top, p1.id, p2.id, 100);
     p = shared.project;
-    p = ops.addSegment(p, ids.top, p2.id, ids.mibEnd, 10).project;
+    p = ops.addSegment(p, ids.top, p2.id, `${ids.mib}/P1`, 10).project;
     p = ops.addSegment(p, ids.top, p2.id, m.id, 10).project;
     expect(checks(p, ids.top, "keep-apart")).toHaveLength(0);
     p = ops.setKeepApart(p, [["48v", "24v"]]);
@@ -299,7 +316,8 @@ describe("connectivity checks", () => {
     expect(ops.netsOnlyOn(p, ids.bat).map((n) => n.id)).toEqual([ids.power]);
     p = ops.removeComponent(p, ids.bat);
     expect(findNet(p, ids.power)).toBeUndefined();
-    expect(p.topologies.get(ids.top)!.endpoints.map((e) => e.id)).toEqual([ids.mibEnd]);
+    // The MIB end lost its only segment, so it left the topology too.
+    expect(p.topologies.get(ids.top)!.endpoints.map((e) => e.id)).toEqual([]);
     expect(p.topologies.get(ids.top)!.segments).toEqual([]);
   });
 

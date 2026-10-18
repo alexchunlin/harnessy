@@ -136,14 +136,15 @@ describe("BOM", () => {
     const b = ops.placeConnector(p, ids.top, `${s2.id}/J1`);
     p = b.project;
     const sensorEnd = p.topologies.get(ids.top)!.endpoints.find((e) => e.kind === "connector" && e.connector === `${ids.sensor}/J1`)!.id;
-    const mibEnd = p.topologies.get(ids.top)!.endpoints.find((e) => e.kind === "connector" && e.connector === `${ids.mib}/J1`)!.id;
+    // The segment's removal sends both its connectors back to waiting, so they come back by address.
+    const mibEnd = `${ids.mib}/J1`;
     const seg = p.topologies.get(ids.top)!.segments.find((s) => s.ends.includes(sensorEnd))!;
     p = ops.removeSegment(p, ids.top, seg.id);
     const mid = ops.addEndpoint(p, ids.top, "splice");
     p = mid.project;
     const a1 = ops.addSegment(p, ids.top, mibEnd, mid.id, 100);
     p = ops.setHarnessAnchor(a1.project, ids.top, a1.id, { name: "Sensor harness" });
-    p = ops.addSegment(p, ids.top, mid.id, sensorEnd, 200).project;
+    p = ops.addSegment(p, ids.top, mid.id, `${ids.sensor}/J1`, 200).project;
     p = ops.addSegment(p, ids.top, mid.id, b.id, 250).project;
     p = ops.setSpliceNets(p, ids.top, mid.id, [ids.sig], "splices/solder-sleeve");
     const bom = buildBom(p, p.topologies.get(ids.top)!);
