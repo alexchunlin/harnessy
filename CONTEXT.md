@@ -162,6 +162,10 @@ _Avoid_: Lint, validation
 The list manufacturing builds a harness from: mating connectors, wire and cable by spec and cut length, purchased cables by part number, sheaths by spec and cut length, splices and breakout parts, and tie points by type. A cut length is the routed length plus the slack of every stretch the piece crosses, and the row says how much of it is slack.
 _Avoid_: Parts list, cut list (a cut list is one section of the BOM)
 
+**Build sheet**:
+The printed pages a builder makes one harness from at the bench: the branch diagram, a kit list of the harness's parts, the wire list, a pin map per connector, the sheaths, tie points, splices and breakouts, and a page for fitting notes. It shows the BOM's rows for that harness and nothing the BOM does not hold. Wires, tie points, splices and breakouts carry short labels such as W3 and T1, numbered per harness and shared with the cut list; they are derived and may renumber after an edit. A purchased cable has no build sheet.
+_Avoid_: Drawing, traveller, work order, formboard (a formboard is drawn to scale; a build sheet is not)
+
 ### Project and library
 
 **Project**:
