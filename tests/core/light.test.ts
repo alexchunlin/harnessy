@@ -22,7 +22,7 @@ describe("light from a topology selection", () => {
     p = ops.setInlineBridges(tb.project, tb.id, [["T1", "T2"]]);
     const a = ops.createNet(p, "48v", [`${ids.bat}/OUT`, `${tb.id}/T1`]);
     const b = ops.createNet(a.project, "48v", [`${tb.id}/T2`, `${ids.mib}/P1`]);
-    const end = ops.placeConnector(b.project, ids.top, `${tb.id}/T1`, { x: 0, y: 200 });
+    const end = ops.placeConnector(b.project, ids.top, `${tb.id}/T1`);
     const light = topologyLight(end.project, end.project.topologies.get(ids.top)!, [end.id]);
     expect([...light.components]).toEqual([tb.id]);
     expect([...light.nets]).toEqual([a.id]);
