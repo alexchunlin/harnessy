@@ -148,6 +148,11 @@
               },
               "part_number": {
                 "type": "string"
+              },
+              "slack_mm": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
