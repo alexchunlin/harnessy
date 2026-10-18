@@ -23,7 +23,7 @@ import {
   type Side,
   SIDES,
 } from "./schema";
-import { emptyLibrary, explain, loadLibrary, mergeLibraries, resolveRef, type FileProblem, type Files, type Library } from "./library";
+import { emptyLibrary, explain, loadLibrary, mergeLibraries, resolveRef, resolveSpec, type FileProblem, type Files, type Library } from "./library";
 import { serialize } from "./serialize";
 import { parseAddress } from "./refs";
 
@@ -280,6 +280,24 @@ export function netConductors(project: Project, net: Net, domain: string): (stri
   const out: (string | undefined)[] = [];
   for (let i = 0; i < count; i++) out.push(net.spec ?? d?.conductor_specs?.[i] ?? d?.spec);
   return out;
+}
+
+/**
+ * How many pins a net takes at each of its connectors: one per conductor,
+ * or one per core when the net is a cable. A cable domain names one cable,
+ * so its net resolves to one conductor while the cable has several cores.
+ */
+export function netPinCount(project: Project, net: Net, domain: string): number {
+  const specs = netConductors(project, net, domain);
+  const first = specs.find((s) => s !== undefined);
+  const resolved = first ? resolveSpec(project.library, first) : undefined;
+  return resolved?.kind === "cable" ? resolved.spec.conductors : specs.length;
+}
+
+/** The net's pins at one connector, one entry per pin slot, null where unset. Reads past the stored array as null. */
+export function netPins(project: Project, net: Net, domain: string, address: string): (number | null)[] {
+  const stored = net.pins?.[address] ?? [];
+  return Array.from({ length: netPinCount(project, net, domain) }, (_, i) => stored[i] ?? null);
 }
 
 /** The conductor count a domain hands a net that does not override it. */
