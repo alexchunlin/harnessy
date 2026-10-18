@@ -45,6 +45,8 @@ describe("loading", () => {
   it("a saved topology canvas drops roots for endpoints that no longer exist", () => {
     const { project, ids } = twoNetProject();
     let p = ops.markRoot(ops.markRoot(project, ids.top, ids.batEnd), ids.top, ids.mibEnd);
+    // A second segment keeps the battery end in the topology once the MIB end goes.
+    p = ops.growSegment(p, ids.top, ids.batEnd).project;
     p = ops.removeEndpoint(p, ids.top, ids.mibEnd);
     expect(JSON.parse(saveProject(p).get(`canvas/${ids.top}.json`)!).roots).toEqual([ids.batEnd]);
   });

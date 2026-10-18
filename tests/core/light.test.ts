@@ -28,6 +28,13 @@ describe("light from a topology selection", () => {
     expect([...light.nets]).toEqual([a.id]);
   });
 
+  it("lights a waiting connector with no endpoint record, selected by its address", () => {
+    const { project, ids } = twoNetProject();
+    const light = topologyLight(project, project.topologies.get(ids.top)!, [`${ids.sensor}/J1`]);
+    expect([...light.components]).toEqual([ids.sensor]);
+    expect([...light.nets]).toEqual([ids.sig]);
+  });
+
   it("still lights a net by itself and a segment by the nets routed through it", () => {
     const { project, ids } = twoNetProject();
     const top = project.topologies.get(ids.top)!;

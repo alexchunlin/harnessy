@@ -45,9 +45,9 @@
 .seg-length input:focus { outline: none; border-bottom-color: var(--accent); }
 .seg-harness { color: var(--text); font-weight: 600; }
 
-.tray { max-height: 40vh; overflow: auto; }
-.tray-cmp { font-weight: 600; margin-top: 4px; }
-.tray-item { cursor: grab; padding-left: 10px; }
+/* The waiting grid: connectors with nets and no segment, one column per component. */
+.waiting-group { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; pointer-events: none; }
+.react-flow__node.waiting .ep-connector { border-style: dashed; }
 .netlist { max-height: 40vh; overflow: auto; }
 .netlist li { display: flex; gap: 6px; align-items: center; }
 .netlist .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }

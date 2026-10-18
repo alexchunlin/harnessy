@@ -365,7 +365,8 @@ export function allRoutes(project: Project, graph: Graph): Route[] {
  */
 export function ratsnestPairs(route: Route, positions: Map<string, Position>): [string, string][] {
   if (isRouted(route)) return [];
-  const placed = route.placedEndpoints.filter((e) => positions.has(e));
+  // A waiting connector with no endpoint record draws at its address, and the ratsnest reaches it there too.
+  const placed = [...route.placedEndpoints, ...route.unplaced].filter((e) => positions.has(e));
   if (placed.length < 2) return [];
   const at = (e: string) => positions.get(e)!;
   const ordered = [...placed].sort((a, b) => at(a).x - at(b).x || at(a).y - at(b).y || (a < b ? -1 : 1));
@@ -406,6 +407,8 @@ export function topologyLight(project: Project, topology: Topology, ids: string[
     for (const r of onSegments.get(id) ?? []) nets.add(r.net.id);
     const end = graph.endpoints.get(id);
     if (end?.kind === "connector") lightConnector(end.connector);
+    // A waiting connector with no endpoint record is selected by its address.
+    else if (!end && project.components.has(id.split("/")[0])) lightConnector(id);
   }
   return { nets, components };
 }
