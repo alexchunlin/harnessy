@@ -4,7 +4,7 @@
  * imports, so the topology view, the 3D view's sketch and the build sheet
  * can all draw from the same picture.
  */
-import { buildGraph, degree, otherEnd, pieces, type Graph, type Piece } from "./derive";
+import { buildGraph, degree, harnesses, otherEnd, pieces, type Graph, type Piece } from "./derive";
 import type { Project } from "./project";
 import type { Endpoint, Position, Segment, Topology, TopologyCanvas } from "./schema";
 
@@ -16,6 +16,10 @@ export const SIBLING_PITCH = 104;
 export const STEP_DEGREES = 15;
 /** Clear space between packed pieces, with room above each for its harness label. */
 export const PIECE_GAP = 80;
+/** Air between a harness box's edge and the endpoint boxes inside it. Fits inside PIECE_GAP with the title band. */
+export const BOX_PAD = 12;
+/** The band on a harness box's top edge that holds its name and part number. */
+export const BOX_TITLE = 24;
 /** Space between endpoints waiting in the row under the pieces. */
 const LONE_GAP = 40;
 
@@ -38,8 +42,29 @@ export interface PieceLayout {
   /** The smallest segment id in the piece, as `pieces` derives it. */
   id: string;
   built: boolean;
-  /** Bounds of every endpoint box in the piece, after packing. */
-  rect: { x: number; y: number; w: number; h: number };
+  /** Bounds of every endpoint box in the piece, after packing and the box offset. */
+  rect: Rect;
+  /** The harness box. Purchased cables have none. */
+  box?: HarnessBox;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The rounded box a harness draws in, with its name and part number on the top edge. */
+export interface HarnessBox {
+  rect: Rect;
+  /** The harness name, or its fallback label when unnamed. Never a bus name. */
+  label: string;
+  partNumber?: string;
+  /** No segment of the piece carries a name, so the label is the fallback. */
+  unnamed: boolean;
+  /** The stored offset from the packed place, zero when the box has not been dragged. */
+  offset: Position;
 }
 
 export interface TopologyLayout {
@@ -54,11 +79,13 @@ export interface TopologyLayout {
 type Positions = Map<string, Position>;
 
 /** Lay out one topology from the graph and its canvas file. */
-export function layoutTopology(_project: Project, topology: Topology, canvas: TopologyCanvas): TopologyLayout {
+export function layoutTopology(project: Project, topology: Topology, canvas: TopologyCanvas): TopologyLayout {
   const graph = buildGraph(topology);
   const all = pieces(graph);
   const ordered = [...all.filter((p) => p.built), ...all.filter((p) => !p.built)];
   const roots = new Set(canvas.roots);
+  const named = new Map(harnesses(project, graph).map((h) => [h.piece.id, h]));
+  // Each piece in its own frame first. A turn about the piece's centre belongs here, before the bounds are taken.
   const laid = ordered.map((piece) => {
     const local = layoutPiece(graph, piece, roots);
     return { piece, local, rect: bounds(graph, local) };
@@ -69,8 +96,13 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
     laid.map((l) => l.rect),
     (i, x, y) => {
       const { piece, local, rect } = laid[i];
-      for (const [id, p] of local) home.set(id, { x: p.x - rect.x + x, y: p.y - rect.y + y });
-      out.push({ id: piece.id, built: piece.built, rect: { x, y, w: rect.w, h: rect.h } });
+      // The box offset is added after packing and moves the homes, so a dragged box carries every endpoint with it.
+      const offset = canvas.pieces[piece.id]?.offset ?? { x: 0, y: 0 };
+      const placed = { x: x + offset.x, y: y + offset.y, w: rect.w, h: rect.h };
+      for (const [id, p] of local) home.set(id, { x: p.x - rect.x + placed.x, y: p.y - rect.y + placed.y });
+      const h = named.get(piece.id);
+      const box = h && { rect: boxAround(placed), label: h.label, partNumber: h.partNumber, unnamed: h.anchors.length === 0, offset };
+      out.push({ id: piece.id, built: piece.built, rect: placed, ...(box ? { box } : {}) });
     },
   );
   // Endpoints that end no segment wait in a plain row under the pieces, in the order they joined the topology.
@@ -235,7 +267,12 @@ function pack(rects: { w: number; h: number }[], place: (index: number, x: numbe
   return rects.length ? y + rowHeight + PIECE_GAP : 0;
 }
 
-function bounds(graph: Graph, pos: Positions): PieceLayout["rect"] {
+/** A harness box: the endpoint bounds with air on every side and the title band on top. */
+function boxAround(r: Rect): Rect {
+  return { x: r.x - BOX_PAD, y: r.y - BOX_PAD - BOX_TITLE, w: r.w + 2 * BOX_PAD, h: r.h + 2 * BOX_PAD + BOX_TITLE };
+}
+
+function bounds(graph: Graph, pos: Positions): Rect {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [id, p] of pos) {
     const s = ENDPOINT_SIZE[graph.endpoints.get(id)?.kind ?? "point"];
