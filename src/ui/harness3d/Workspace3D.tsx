@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePoint, placementOf, placeParts, removeTiePoint, setSegmentLength, updateTiePoint, type Placement } from "../../core";
+import { addTiePoint, clearPlacement, placementOf, placeParts, removeTiePoint, setSegmentLength, updateTiePoint, type Placement } from "../../core";
 import { useDoc } from "../store";
 import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
@@ -243,6 +243,12 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     setSelected(id);
   }
 
+  /** The harness "Clear placement" acts on: the shown one, or with all shown, the one holding the selected part. */
+  const clearTarget = show !== ALL ? [...(world.members[show]?.nodes ?? [])][0] : (fresh.find((c) => c.id === selected)?.segment ?? (harness.nodes.some((n) => n.id === selected) || harness.ties.some((t) => t.id === selected) ? selected : undefined));
+  function clearShown() {
+    if (clearTarget) useDoc.getState().edit((p) => clearPlacement(p, topologyId, clearTarget), "Clear placement");
+  }
+
   function removeTie(id: string) {
     if (fresh.some((c) => c.id === id)) setFresh((cs) => cs.filter((c) => c.id !== id));
     else useDoc.getState().edit((p) => removeTiePoint(p, topologyId, id), "Remove tie point");
@@ -320,6 +326,9 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
             Frame
           </button>
           {selectedTie && <button onClick={() => removeTie(selectedTie.id)}>Remove tie point</button>}
+          <button disabled={clearTarget === undefined} onClick={clearShown} title="Return the harness to its typed numbers and the sketch">
+            Clear placement
+          </button>
         </div>
         <ReferencePanel state={referenceModel} middle={middle} onHandles={() => setSelected(REFERENCE)} onRemoved={() => setSelected((id) => (id === REFERENCE ? undefined : id))} />
         <button onClick={writeAll} disabled={diffs.length + tieChanges === 0}>

@@ -117,3 +117,89 @@ describe("placed", () => {
     expect(isTiePointPlaced(placed, ids.top, tie.id)).toBe(true);
   });
 });
+
+describe("topology edits keep the placement clean", () => {
+  const placedPair = () => {
+    const { project, ids } = twoNetProject();
+    const p = ops.placeParts(project, ids.top, {
+      positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [300, 0, 0] },
+      rotations: { [ids.batEnd]: [0, 0, 90], [ids.mibEnd]: [0, 0, -90] },
+    });
+    return { project: p, ids };
+  };
+
+  it("removing an endpoint removes its position and rotation in the same edit", () => {
+    const { project, ids } = placedPair();
+    const p = ops.removeEndpoint(project, ids.top, ids.mibEnd);
+    expect(p.topologies.get(ids.top)!.endpoints.map((e) => e.id)).toEqual([ids.batEnd]);
+    expect(p.placements.get(ids.top)).toEqual({ positions: { [ids.batEnd]: [0, 0, 0] }, rotations: { [ids.batEnd]: [0, 0, 90] }, ties: {} });
+    // The project before the edit keeps both, so one undo restores both.
+    expect(project.topologies.get(ids.top)!.endpoints).toHaveLength(2);
+    expect(project.placements.get(ids.top)!.positions[ids.mibEnd]).toEqual([300, 0, 0]);
+  });
+
+  it("removing a segment removes its tie points' positions and keeps its ends'", () => {
+    const { project: base, ids } = placedPair();
+    const tie = ops.addTiePoint(base, ids.top, ids.seg, "ties/zip-tie", 100, ids.batEnd);
+    const project = ops.placeParts(tie.project, ids.top, { ties: { [tie.id]: [100, 0, 0] } });
+    const p = ops.removeSegment(project, ids.top, ids.seg);
+    expect(p.topologies.get(ids.top)!.ties).toEqual([]);
+    expect(p.placements.get(ids.top)!.ties).toEqual({});
+    expect(p.placements.get(ids.top)!.positions).toEqual(base.placements.get(ids.top)!.positions);
+    expect(project.placements.get(ids.top)!.ties[tie.id]).toEqual([100, 0, 0]);
+  });
+
+  it("removing a tie point removes its position", () => {
+    const { project: base, ids } = placedPair();
+    const tie = ops.addTiePoint(base, ids.top, ids.seg, "ties/zip-tie", 100, ids.batEnd);
+    const project = ops.placeParts(tie.project, ids.top, { ties: { [tie.id]: [100, 0, 0] } });
+    const p = ops.removeTiePoint(project, ids.top, tie.id);
+    expect(p.placements.get(ids.top)).toEqual(base.placements.get(ids.top));
+    expect(project.placements.get(ids.top)!.ties[tie.id]).toEqual([100, 0, 0]);
+  });
+
+  it("removing a topology removes its placement, so its file goes", () => {
+    const { project, ids } = placedPair();
+    const p = ops.removeTopology(project, ids.top);
+    expect(p.placements.has(ids.top)).toBe(false);
+    expect(deletedPaths(saveProject(project), saveProject(p))).toContain(`canvas/${ids.top}.3d.json`);
+  });
+
+  it("removing a topology's last placed endpoint drops its file", () => {
+    const { project: base, ids } = twoNetProject();
+    const project = ops.placeParts(base, ids.top, { positions: { [ids.mibEnd]: [300, 0, 0] }, rotations: { [ids.mibEnd]: [0, 0, 90] } });
+    const p = ops.removeEndpoint(project, ids.top, ids.mibEnd);
+    expect(deletedPaths(saveProject(project), saveProject(p))).toEqual([`canvas/${ids.top}.3d.json`]);
+  });
+
+  it("removing a component removes the placement of its connectors", () => {
+    const { project, ids } = placedPair();
+    const p = ops.removeComponent(project, ids.mib);
+    expect(Object.keys(p.placements.get(ids.top)!.positions)).toEqual([ids.batEnd]);
+    expect(Object.keys(p.placements.get(ids.top)!.rotations)).toEqual([ids.batEnd]);
+  });
+
+  it("re-ending a segment leaves the placement exactly as it was", () => {
+    const { project: base, ids } = placedPair();
+    const point = ops.addEndpoint(base, ids.top, "point", { x: 600, y: 0 });
+    const project = ops.placeParts(point.project, ids.top, { positions: { [point.id]: [600, 0, 0] } });
+    const before = project.placements.get(ids.top);
+    const removed = ops.removeSegment(project, ids.top, ids.seg);
+    const reEnded = ops.addSegment(removed, ids.top, ids.batEnd, point.id, 300).project;
+    expect(reEnded.placements.get(ids.top)).toEqual(before);
+  });
+
+  it("an entry for a missing id counts for nothing and is gone after the next placement op", () => {
+    const { project: base, ids } = placedPair();
+    const old = base.placements.get(ids.top)!;
+    const merged = { ...old, positions: { ...old.positions, "end-gone00": [1, 2, 3] as [number, number, number] }, ties: { "tie-gone00": [4, 5, 6] as [number, number, number] } };
+    const project = { ...base, placements: new Map([[ids.top, merged]]) };
+    expect(isEndpointPlaced(project, ids.top, "end-gone00")).toBe(false);
+    expect(isTiePointPlaced(project, ids.top, "tie-gone00")).toBe(false);
+    expect(isSegmentPlaced(project, ids.top, ids.seg)).toBe(true);
+    const p = ops.placeParts(project, ids.top, { positions: { [ids.batEnd]: [5, 0, 0] } });
+    expect(p.placements.get(ids.top)).toEqual({ positions: { [ids.batEnd]: [5, 0, 0], [ids.mibEnd]: [300, 0, 0] }, rotations: old.rotations, ties: {} });
+    const q = ops.removeTiePoint(project, ids.top, "tie-none00");
+    expect(q.placements.get(ids.top)).toEqual(old);
+  });
+});
