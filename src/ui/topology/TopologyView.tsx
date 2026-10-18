@@ -11,6 +11,8 @@ import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, 
 import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
+// PROTOTYPE for issue #31: `?variant=A|B|C` swaps the canvas for one whose layout the app owns.
+import { PrototypeCanvas, readVariant } from "./prototype-derived-layout/PrototypeCanvas";
 
 const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode };
 const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
@@ -21,6 +23,8 @@ export function TopologyView() {
   if (!activeTopology || !project.topologies.has(activeTopology)) {
     return <div className="placeholder">No topology yet. Create one with "New topology" in the toolbar.</div>;
   }
+  const variant = readVariant();
+  if (variant) return <PrototypeCanvas topologyId={activeTopology} variant={variant} />;
   return (
     <ReactFlowProvider>
       <Canvas topologyId={activeTopology} />
