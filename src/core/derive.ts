@@ -1,5 +1,6 @@
 import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
 import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
+import { lengthsOf, type Lengths } from "./lengths";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
  * recomputed from the graph on demand.
@@ -305,7 +306,8 @@ function pathBetween(graph: Graph, from: string, to: string): Segment[] | undefi
   return path;
 }
 
-export function routeOf(graph: Graph, net: Net, domain: string): Route {
+/** A net's route through the graph, measured with the topology's lengths from `lengthsOf`. */
+export function routeOf(graph: Graph, net: Net, domain: string, lengths: Lengths): Route {
   const unplaced: string[] = [];
   const placed: string[] = [];
   for (const c of net.connectors) {
@@ -334,26 +336,24 @@ export function routeOf(graph: Graph, net: Net, domain: string): Route {
   let lengthMm = 0;
   let missingLength = false;
   for (const id of segments) {
-    const s = graph.segments.get(id)!;
-    const len = segmentLength(graph, s);
+    const len = segmentLength(lengths, id);
     if (len === undefined) missingLength = true;
     else lengthMm += len;
   }
   return { net, domain, unplaced, placedEndpoints: placed, split, segments, endpoints, branchPoints, lengthMm, missingLength };
 }
 
-export function segmentLength(graph: Graph, segment: Segment, assemblyLength?: (ref: string) => number | undefined): number | undefined {
-  void graph;
-  if (segment.assembly && assemblyLength) return assemblyLength(segment.assembly);
-  return segment.length_mm;
+/** A segment's routed length from the length function: from 3D, typed, or the purchased assembly's library length. */
+export function segmentLength(lengths: Lengths, segmentId: string): number | undefined {
+  return lengths.segments.get(segmentId)?.mm;
 }
 
 export function isRouted(route: Route): boolean {
   return route.unplaced.length === 0 && !route.split && route.net.connectors.length >= 2;
 }
 
-export function allRoutes(project: Project, graph: Graph): Route[] {
-  return allNets(project).map(({ net, domain }) => routeOf(graph, net, domain));
+export function allRoutes(project: Project, graph: Graph, lengths: Lengths = lengthsOf(project, graph.topology)): Route[] {
+  return allNets(project).map(({ net, domain }) => routeOf(graph, net, domain, lengths));
 }
 
 /**
@@ -435,7 +435,7 @@ export interface Leg {
  * Split a net's route into legs. A leg runs from a connector or a splice
  * listing the net to the next such node. A two-connector net is one leg.
  */
-export function legsOf(graph: Graph, route: Route, assemblyLength?: (ref: string) => number | undefined): Leg[] {
+export function legsOf(graph: Graph, route: Route, lengths: Lengths): Leg[] {
   const stops = new Set<string>();
   for (const e of route.endpoints) {
     const ep = graph.endpoints.get(e);
@@ -460,7 +460,7 @@ export function legsOf(graph: Graph, route: Route, assemblyLength?: (ref: string
       }
       let lengthMm: number | undefined = 0;
       for (const seg of segs) {
-        const len = segmentLength(graph, seg, assemblyLength);
+        const len = segmentLength(lengths, seg.id);
         if (len === undefined) {
           lengthMm = undefined;
           break;

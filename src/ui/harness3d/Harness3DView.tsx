@@ -1,8 +1,7 @@
 /**
  * The 3D harness view: the harnesses of the active topology placed in space
- * against a CAD model of the machine. It draws the saved placement, places
- * a part when it is dragged, and writes segment lengths and tie points back
- * when asked.
+ * against a CAD model of the machine. It draws the saved placement and places
+ * a part when it is dragged. A placed segment takes its length from there.
  */
 import { useMemo, useState } from "react";
 import { useDoc, useProject } from "../store";

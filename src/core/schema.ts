@@ -43,6 +43,8 @@ export const ConnectorTypeSchema = z.object({
   short: z.string().optional(),
   pins: z.number().int().positive(),
   mating: z.object({ part_number: z.string(), contacts_part_number: z.string().optional() }),
+  /** The straight run a bundle needs out of the housing before it may bend. Unset means none. */
+  strain_relief_mm: mm.optional(),
   manufacturer: z.string().optional(),
   datasheet: z.string().optional(),
 });

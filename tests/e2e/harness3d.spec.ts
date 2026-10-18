@@ -2,11 +2,12 @@ import { expect, test, type Page } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import * as THREE from "three";
-import { freshExample, openProject, waitForFile } from "./helpers";
+import { canvasSettled, freshExample, openProject, readJson, waitForFile } from "./helpers";
 
 /** The 3D view: a part dragged there is saved to the topology's placement file and comes back on reload. */
 
 const PLACEMENT = "canvas/top-222268.3d.json";
+const TOPOLOGY = "topologies/top-222268.json";
 type Vec3 = [number, number, number];
 interface Shown {
   connectors: Record<string, { position: Vec3; rotation_deg: Vec3 }>;
@@ -73,17 +74,12 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   await page.waitForTimeout(1000);
   expect(await snapshot(folder)).toEqual(opened);
 
+  // Lengths come from the placement, so the view has nothing to write back.
+  await expect(page.getByRole("button", { name: /Write to the harness/ })).toHaveCount(0);
+
   const before = await shown(page);
   const [id, connector] = Object.entries(before.connectors)[0];
-  const at = await onScreen(page, before, connector.position);
-  // Clicking the connector gives it handles; dragging the handles' centre moves it in the view plane.
-  await page.mouse.click(at.x, at.y);
-  await expect(page.locator(".h3d-panel .h3d-row span").first()).not.toHaveText("Nothing selected");
-  await page.mouse.move(at.x + 1, at.y + 1);
-  await page.mouse.move(at.x, at.y);
-  await page.mouse.down();
-  await page.mouse.move(at.x + 90, at.y - 60, { steps: 12 });
-  await page.mouse.up();
+  await dragConnector(page, before, id);
 
   const after = await shown(page);
   const moved = after.connectors[id];
@@ -103,5 +99,34 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   await page.getByRole("button", { name: "Connectivity" }).waitFor();
   if (!(await page.locator(".h3d-workspace canvas").isVisible())) await open3d(page);
   await showTwoConnectorHarness(page);
-  expect((await shown(page)).connectors[id]).toEqual(moved);
+  const reloaded = await shown(page);
+  expect(reloaded.connectors[id]).toEqual(moved);
+
+  // Placing the other end too places the segment, and the topology inspector shows its length as from 3D.
+  const other = Object.keys(reloaded.connectors).find((c) => c !== id)!;
+  await dragConnector(page, reloaded, other);
+  await waitForFile(folder, PLACEMENT, (v) => Object.keys((v as { positions: Record<string, Vec3> }).positions).length === 2);
+  const top = (await readJson(folder, TOPOLOGY)) as { segments: { id: string; ends: string[]; length_mm?: number }[] };
+  const segment = top.segments.find((s) => s.ends.includes(id) && s.ends.includes(other))!;
+  await page.reload();
+  await page.getByRole("button", { name: "Topology", exact: true }).click();
+  await canvasSettled(page);
+  await page.locator(`.seg-label[data-segment="${segment.id}"]`).click();
+  const inspector = page.locator(".pane-right");
+  await expect(inspector.locator(".segment-length")).toContainText("from 3D");
+  await expect(inspector.getByPlaceholder("not measured")).toHaveCount(0);
+  // The typed length stays in the file for when the segment is unplaced.
+  expect(((await readJson(folder, TOPOLOGY)) as typeof top).segments.find((s) => s.id === segment.id)!.length_mm).toBe(segment.length_mm);
 });
+
+/** Click a connector to give it handles, then drag the handles' centre, which moves it in the view plane. */
+async function dragConnector(page: Page, data: Shown, id: string): Promise<void> {
+  const at = await onScreen(page, data, data.connectors[id].position);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator(".h3d-panel .h3d-row span").first()).not.toHaveText("Nothing selected");
+  await page.mouse.move(at.x + 1, at.y + 1);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 90, at.y - 60, { steps: 12 });
+  await page.mouse.up();
+}

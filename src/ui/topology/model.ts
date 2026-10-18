@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { allRoutes, buildGraph, lengthsOf, tieDistance, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -27,6 +27,8 @@ export const MAX_FAN = 12;
 export interface SegmentEdgeData {
   segment: Segment;
   lengthMm: number | undefined;
+  /** true when the length comes from the 3D placement, so it cannot be typed here */
+  fromPlacement: boolean;
   assemblyName: string | undefined;
   nets: { id: string; label: string; domain: string; color: string; conductors: number }[];
   /** domain colour when a selected net routes through this segment */
@@ -98,8 +100,8 @@ export interface TopologyModel {
 export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
   const graph = buildGraph(topology);
   const canvas = project.topologyCanvases.get(topology.id) ?? { endpoints: {} };
-  const assemblyLength = assemblyLengthOf(project);
-  const routes = allRoutes(project, graph);
+  const lengths = lengthsOf(project, topology);
+  const routes = allRoutes(project, graph, lengths);
   const onSegments = netsOnSegments(routes);
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const hs = harnesses(project, graph);
@@ -184,7 +186,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
       data: {
-        segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor,
+        segment: s, lengthMm: segmentLength(lengths, s.id), fromPlacement: lengths.segments.get(s.id)?.source === "3d", assemblyName: assembly?.name, nets, routeColor,
         faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [],
         strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], anyLit: litConductors.size > 0,
       },
@@ -218,13 +220,14 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     if (!from || !to) continue;
     const a = endpointCentre(graph.endpoints.get(t.from)!.kind, from);
     const b = endpointCentre(graph.endpoints.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0])!.kind, to);
-    const len = segmentLength(graph, seg, assemblyLength) ?? 0;
-    const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;
+    const len = segmentLength(lengths, seg.id) ?? 0;
+    const distance = tieDistance(lengths, t.id) ?? 0;
+    const f = len > 0 ? Math.min(1, Math.max(0, distance / len)) : 0.5;
     const pos = drafts.get(t.id) ?? { x: a.x + (b.x - a.x) * f - 6, y: a.y + (b.y - a.y) * f - 6 };
     const spec = resolveRef(project.library, t.spec, "ties");
     const outOfLayer = segmentOut.has(seg.id);
     nodes.push({
-      id: t.id, type: "tie", position: pos, data: { tie: t, label: `${spec?.name ?? t.spec}, ${t.distance_mm} mm from ${endpointName(project, graph.endpoints.get(t.from))}`, outOfLayer },
+      id: t.id, type: "tie", position: pos, data: { tie: t, label: `${spec?.name ?? t.spec}, ${distance} mm from ${endpointName(project, graph.endpoints.get(t.from))}`, outOfLayer },
       selected: selected.has(t.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined, zIndex: 5, width: 12, height: 12, measured: { width: 12, height: 12 },
     });
   }

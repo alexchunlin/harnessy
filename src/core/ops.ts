@@ -2,7 +2,8 @@ import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { placementOf } from "./placement";
-import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
+import { buildGraph, buses, busOf, degree, otherEnd, segmentLength } from "./derive";
+import { lengthsOf } from "./lengths";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
@@ -679,7 +680,7 @@ export function addTiePoint(project: Project, topologyId: string, segmentId: str
   const seg = t?.segments.find((s) => s.id === segmentId);
   if (!t || !seg) throw new Error(`no segment ${segmentId}`);
   const id = newId(project, "tie");
-  const length = seg.length_mm ?? (seg.assembly ? resolveRef(project.library, seg.assembly, "assemblies")?.length_mm : undefined) ?? 0;
+  const length = segmentLength(lengthsOf(project, t), segmentId) ?? 0;
   const tie: TiePoint = { id, segment: segmentId, from: from ?? seg.ends[0], distance_mm: Math.round(distanceMm ?? length / 2), spec };
   return { project: updateTopology(project, topologyId, (t) => ({ ...t, ties: [...t.ties, tie] })), id };
 }

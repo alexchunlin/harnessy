@@ -8,5 +8,7 @@ export * from "./derive";
 export * from "./drc";
 export * from "./bom";
 export * from "./placement";
+export * from "./curve";
+export * from "./lengths";
 export * from "./ops";
 export * from "./starter";

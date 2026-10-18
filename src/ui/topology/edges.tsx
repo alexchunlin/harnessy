@@ -95,7 +95,7 @@ export function SegmentEdge({ id, sourceX, sourceY, targetX, targetY, data, sele
           data-segment={id}
           onDoubleClick={(e) => {
             e.stopPropagation();
-            if (!purchased) setOpen(id);
+            if (!purchased && !d.fromPlacement) setOpen(id);
           }}
         >
           {purchased ? (

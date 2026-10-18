@@ -2,6 +2,7 @@ import type { Topology } from "./schema";
 import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
 import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { lengthsOf, tieDistance } from "./lengths";
 
 export type Severity = "error" | "warning";
 
@@ -62,10 +63,6 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "keep-apart": "warning",
   "net-no-spec": "warning",
 };
-
-export function assemblyLengthOf(project: Project): (ref: string) => number | undefined {
-  return (ref) => resolveRef(project.library, ref, "assemblies")?.length_mm;
-}
 
 const silenceKey = (check: string, target: string) => `${check}|${target}`;
 
@@ -190,8 +187,8 @@ const DEGREE_RULES = {
 
 function checkTopology(project: Project, topology: Topology, add: Add): void {
   const graph = buildGraph(topology);
-  const assemblyLength = assemblyLengthOf(project);
-  const routes = allRoutes(project, graph);
+  const lengths = lengthsOf(project, topology);
+  const routes = allRoutes(project, graph, lengths);
   const allPieces = pieces(graph);
   const allHarnesses = harnesses(project, graph);
   const label = netLabeller(project);
@@ -225,7 +222,7 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       if (!resolveRef(project.library, s.assembly, "assemblies")) add("dangling-reference", s.id, "topology", `segment ${s.id} references ${s.assembly}, which has no library file`);
       const ends = s.ends.map((e) => graph.endpoints.get(e)?.kind);
       if (!ends.every((k) => k === "connector")) add("assembly-ends-not-connectors", s.id, "topology", `purchased assembly ${s.id} must run connector to connector`);
-    } else if (segmentLength(graph, s) === undefined) {
+    } else if (segmentLength(lengths, s.id) === undefined) {
       add("segment-no-length", s.id, "topology", `segment ${s.id} has no length`);
     }
     for (const e of s.ends) if (!graph.endpoints.has(e)) add("dangling-reference", s.id, "topology", `segment ${s.id} ends at ${e}, which is not an endpoint`);
@@ -256,8 +253,9 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       continue;
     }
     if (!seg.ends.includes(t.from)) add("dangling-reference", t.id, "topology", `tie point ${t.id} measures from ${t.from}, which is not an end of ${seg.id}`);
-    const len = segmentLength(graph, seg, assemblyLength);
-    if (len !== undefined && t.distance_mm > len) add("tie-beyond-segment", t.id, "topology", `tie point ${t.id} is ${t.distance_mm} mm along a ${len} mm segment`);
+    const len = segmentLength(lengths, seg.id);
+    const at = tieDistance(lengths, t.id);
+    if (len !== undefined && at !== undefined && at > len) add("tie-beyond-segment", t.id, "topology", `tie point ${t.id} is ${at} mm along a ${len} mm segment`);
   }
 
   for (const h of allHarnesses) {

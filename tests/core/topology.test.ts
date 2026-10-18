@@ -3,6 +3,7 @@ import * as ops from "../../src/core/ops";
 import { buildGraph, harnesses, legsOf, ratsnestPairs, routeOf } from "../../src/core/derive";
 import { runChecks } from "../../src/core/drc";
 import { findNet } from "../../src/core/project";
+import { lengthsOf } from "../../src/core/lengths";
 import { twoNetProject } from "./fixture";
 import type { Project } from "../../src/core/project";
 
@@ -14,7 +15,7 @@ describe("routes and harnesses", () => {
     const { project, ids } = twoNetProject();
     const graph = buildGraph(project.topologies.get(ids.top)!);
     const { net } = findNet(project, ids.power)!;
-    const route = routeOf(graph, net, "48v");
+    const route = routeOf(graph, net, "48v", lengthsOf(project, project.topologies.get(ids.top)!));
     expect([...route.segments]).toEqual([ids.seg]);
     expect(route.lengthMm).toBe(300);
     expect(route.unplaced).toEqual([]);
@@ -93,7 +94,7 @@ describe("ratsnest", () => {
   const positions = (p: Project, top: string) => new Map(Object.entries(p.topologyCanvases.get(top)!.endpoints));
   const route = (p: Project, top: string, netId: string) => {
     const { net, domain } = findNet(p, netId)!;
-    return routeOf(buildGraph(p.topologies.get(top)!), net, domain);
+    return routeOf(buildGraph(p.topologies.get(top)!), net, domain, lengthsOf(p, p.topologies.get(top)!));
   };
 
   it("an unrouted net with both connectors placed is one pair, left end first", () => {
@@ -176,7 +177,8 @@ describe("splices and legs", () => {
     p = ops.setSpliceNets(p, ids.top, mid, [ids.sig]);
     const graph = buildGraph(p.topologies.get(ids.top)!);
     const { net } = findNet(p, ids.sig)!;
-    const legs = legsOf(graph, routeOf(graph, net, "24v"));
+    const l = lengthsOf(p, p.topologies.get(ids.top)!);
+    const legs = legsOf(graph, routeOf(graph, net, "24v", l), l);
     const byFrom = Object.fromEntries(legs.map((l) => [l.from === mid ? l.to : l.from, l.lengthMm]));
     expect(byFrom).toEqual({ [m]: 100, [a]: 200, [b]: 250 });
   });
@@ -208,7 +210,8 @@ describe("degree, cycles, lengths, assemblies", () => {
     p = ops.setSegmentAssembly(s.project, ids.top, s.id, "assemblies/rj45-patch-500");
     expect(checks(p, ids.top, "segment-no-length").map((f) => f.target)).toEqual([ids.seg]);
     const graph = buildGraph(p.topologies.get(ids.top)!);
-    expect(legsOf(graph, routeOf(graph, findNet(p, eth.id)!.net, "ethernet"), () => 500)[0].lengthMm).toBe(500);
+    const l = lengthsOf(p, p.topologies.get(ids.top)!);
+    expect(legsOf(graph, routeOf(graph, findNet(p, eth.id)!.net, "ethernet", l), l)[0].lengthMm).toBe(500);
     // a lone patch cable is not a harness
     expect(harnesses(p, graph).map((h) => h.label)).toEqual(["Power harness"]);
   });
@@ -218,6 +221,33 @@ describe("degree, cycles, lengths, assemblies", () => {
     const g = ops.growSegment(p, ids.top, ids.mibEnd, { x: 500, y: 0 });
     p = ops.setSegmentAssembly(g.project, ids.top, g.segment, "assemblies/rj45-patch-500");
     expect(checks(p, ids.top, "assembly-ends-not-connectors").map((f) => f.target)).toEqual([g.segment]);
+  });
+
+  it("a placed segment with no typed length raises no segment-no-length", () => {
+    let { project: p, ids } = twoNetProject();
+    p = ops.setSegmentLength(p, ids.top, ids.seg, undefined);
+    p = ops.placeParts(p, ids.top, { positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [250, 0, 0] } });
+    expect(checks(p, ids.top, "segment-no-length")).toEqual([]);
+  });
+
+  it("a route's length and its legs read the placed length", () => {
+    let { project: p, ids } = twoNetProject();
+    p = ops.placeParts(p, ids.top, { positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [250, 0, 0] } });
+    const topology = p.topologies.get(ids.top)!;
+    const graph = buildGraph(topology);
+    const l = lengthsOf(p, topology);
+    const route = routeOf(graph, findNet(p, ids.power)!.net, "48v", l);
+    expect(route.lengthMm).toBe(250);
+    expect(legsOf(graph, route, l)[0].lengthMm).toBe(250);
+  });
+
+  it("tie-beyond-segment reads the derived length", () => {
+    let { project: p, ids } = twoNetProject();
+    const t = ops.addTiePoint(p, ids.top, ids.seg, "ties/zip-tie", 250, ids.batEnd);
+    p = t.project;
+    expect(checks(p, ids.top, "tie-beyond-segment")).toEqual([]);
+    p = ops.placeParts(p, ids.top, { positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [200, 0, 0] } });
+    expect(checks(p, ids.top, "tie-beyond-segment").map((f) => f.message)).toEqual([`tie point ${t.id} is 250 mm along a 200 mm segment`]);
   });
 });
 

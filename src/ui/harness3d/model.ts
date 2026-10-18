@@ -13,6 +13,8 @@ export interface Node3 {
   label: string;
   /** For connectors: the connector type as manufacturing names it, with its pin count and mating part. */
   type?: { name: string; pins: number; mating: string };
+  /** For connectors: the straight run its type asks for before the bundle may bend, zero when none. */
+  strainReliefMm?: number;
 }
 
 export interface Seg3 {
@@ -74,7 +76,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
     if (e.kind === "connector") {
       const found = resolveConnector(project, e.connector);
       const type = "error" in found ? undefined : resolveRef(project.library, found.connector.connector, "connectors");
-      return { id, kind: "connector", label: connectorLabel(project, e.connector), type: type && { name: type.short ?? type.name, pins: type.pins, mating: type.mating.part_number } };
+      return { id, kind: "connector", label: connectorLabel(project, e.connector), type: type && { name: type.short ?? type.name, pins: type.pins, mating: type.mating.part_number }, strainReliefMm: type?.strain_relief_mm ?? 0 };
     }
     return { id, kind: e.kind, label: e.kind };
   });
