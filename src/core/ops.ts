@@ -1,6 +1,6 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
-import { componentConnectors, findNet, pinLayout, type Project } from "./project";
+import { findNet, pinLayout, type Project } from "./project";
 import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, TopologyCanvas } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
@@ -599,13 +599,29 @@ export function resetEndpointOffset(project: Project, topologyId: string, endpoi
 // Segments -----------------------------------------------------------------------
 
 /**
- * Join two endpoints. A point that gains a third segment becomes a
- * breakout, so the common gesture never asks for a node kind.
+ * An endpoint id as it is, or a waiting connector's address placed in the
+ * topology. Drawing the first segment from a connector is the whole act of
+ * placing it.
  */
-export function addSegment(project: Project, topologyId: string, a: string, b: string, lengthMm?: number): { project: Project; id: string } {
-  if (a === b) throw new Error("a segment needs two different endpoints");
+function endpointFor(project: Project, topologyId: string, idOrAddress: string): { project: Project; id: string } {
   const t = project.topologies.get(topologyId);
   if (!t) throw new Error(`no topology ${topologyId}`);
+  if (t.endpoints.some((e) => e.id === idOrAddress) || !project.components.has(idOrAddress.split("/")[0])) return { project, id: idOrAddress };
+  return placeConnector(project, topologyId, idOrAddress);
+}
+
+/**
+ * Join two endpoints. Either end may be a waiting connector's address,
+ * which places it in the same edit. A point that gains a third segment
+ * becomes a breakout, so the common gesture never asks for a node kind.
+ */
+export function addSegment(project: Project, topologyId: string, from: string, to: string, lengthMm?: number): { project: Project; id: string } {
+  if (from === to) throw new Error("a segment needs two different endpoints");
+  const start = endpointFor(project, topologyId, from);
+  const end = endpointFor(start.project, topologyId, to);
+  const [a, b] = [start.id, end.id];
+  if (a === b) throw new Error("a segment needs two different endpoints");
+  project = end.project;
   const id = newId(project, "seg");
   const segment: Segment = { id, ends: [a, b], length_mm: lengthMm === undefined ? undefined : Math.round(lengthMm) };
   const p = updateTopology(project, topologyId, (t) => ({ ...t, segments: [...t.segments, segment] }));
@@ -623,10 +639,11 @@ function promotePoints(project: Project, topologyId: string, endpointIds: string
   return p;
 }
 
-/** Drag from an endpoint into empty canvas: a new point and a segment to it. The layout gives the point its home. */
+/** Drag from an endpoint, or a waiting connector's address, into empty canvas: a new point and a segment to it. The layout gives the point its home. */
 export function growSegment(project: Project, topologyId: string, from: string): { project: Project; segment: string; endpoint: string } {
-  const added = addEndpoint(project, topologyId, "point");
-  const seg = addSegment(added.project, topologyId, from, added.id);
+  const start = endpointFor(project, topologyId, from);
+  const added = addEndpoint(start.project, topologyId, "point");
+  const seg = addSegment(added.project, topologyId, start.id, added.id);
   return { project: seg.project, segment: seg.id, endpoint: added.id };
 }
 
@@ -653,7 +670,10 @@ export function setHarnessAnchor(project: Project, topologyId: string, segmentId
 
 /**
  * Remove a segment and any sheath or tie point on it. A breakout left with
- * two segments becomes a point again; nothing else changes kind.
+ * two segments becomes a point again; nothing else changes kind. An end
+ * left with no segment leaves the topology in the same edit, so a connector
+ * with nets goes back to the waiting grid and a bare point does not linger
+ * where nothing draws it.
  */
 export function removeSegment(project: Project, topologyId: string, segmentId: string): Project {
   const t = project.topologies.get(topologyId);
@@ -670,6 +690,8 @@ export function removeSegment(project: Project, topologyId: string, segmentId: s
     const ep = graph.endpoints.get(e);
     if (ep?.kind === "breakout" && degree(graph, e) === 2 && !ep.spec) p = setEndpointKind(p, topologyId, e, "point");
   }
+  const lone = new Set(seg.ends.filter((e) => degree(graph, e) === 0));
+  if (lone.size) p = updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => !lone.has(e.id)) }));
   return p;
 }
 
@@ -741,20 +763,4 @@ export function silence(project: Project, check: string, target: string): Projec
 
 export function unsilence(project: Project, check: string, target: string): Project {
   return next(project, { drc: { silences: project.drc.silences.filter((s) => !(s.check === check && s.target === target)) } });
-}
-
-// Helpers the UI needs -------------------------------------------------------------
-
-/** Connectors in the project not yet placed in this topology, the tray's contents. */
-export function unplacedConnectors(project: Project, topologyId: string): string[] {
-  const t = project.topologies.get(topologyId);
-  const placed = new Set(t?.endpoints.flatMap((e) => (e.kind === "connector" ? [e.connector] : [])) ?? []);
-  const out: string[] = [];
-  for (const c of [...project.components.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-    for (const con of componentConnectors(project, c) ?? []) {
-      const address = `${c.id}/${con.designator}`;
-      if (!placed.has(address)) out.push(address);
-    }
-  }
-  return out;
 }

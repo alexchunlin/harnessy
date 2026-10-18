@@ -66,18 +66,16 @@ test("place two components, draw a 48 V net, then route it on a topology", async
   await expect(page.locator(".react-flow__edge.inactive")).toHaveCount(0);
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
 
-  // Topology: create one, place both connectors from the tray, join them, type a length, name the harness.
+  // Topology: create one. Both connectors of the net wait in the grid; drawing a segment between them places them. Then type a length and name the harness.
   await page.getByRole("button", { name: "Topology" }).click();
   page.once("dialog", (d) => d.accept("Bench"));
   await page.getByRole("button", { name: "New topology" }).click();
-  const topo = page.getByTestId("topology-canvas");
-  const [c1, c2] = net.connectors.map((c) => c.split("/")[1]);
-  await page.locator(".tray-item", { hasText: new RegExp(`^${c1}$`) }).first().dragTo(topo, { targetPosition: { x: 150, y: 200 } });
-  await page.locator(".tray-item", { hasText: new RegExp(`^${c2}$`) }).first().dragTo(topo, { targetPosition: { x: 500, y: 200 } });
-  await expect(page.locator(".ep-connector")).toHaveCount(2);
-  // Joining starts on the ring around an endpoint; the endpoint itself drags to move it.
-  const r1 = (await page.locator(".react-flow__node-endpoint").nth(0).locator(".ep-handle").boundingBox())!;
-  const e2 = (await page.locator(".ep-connector").nth(1).boundingBox())!;
+  await expect(page.locator(".tray-item")).toHaveCount(0);
+  const [c1, c2] = net.connectors;
+  await expect(page.locator(".react-flow__node.waiting")).toHaveCount(2);
+  // Joining starts on the ring around an endpoint.
+  const r1 = (await page.locator(`.react-flow__node[data-id="${c1}"] .ep-handle`).boundingBox())!;
+  const e2 = (await page.locator(`.react-flow__node[data-id="${c2}"] .ep-connector`).boundingBox())!;
   await page.mouse.move(r1.x + r1.width / 2, r1.y + 2);
   await page.mouse.down();
   await page.mouse.move(e2.x + e2.width / 2, e2.y + e2.height / 2, { steps: 10 });

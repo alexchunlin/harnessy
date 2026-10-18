@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
-import { CALLOUT_DISTANCE, layoutTopology, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, layoutTopology, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
 import type { Position, TopologyCanvas } from "../../src/core/schema";
 import type { Project } from "../../src/core/project";
 import { freshProject, loadExample } from "./fixture";
@@ -246,6 +246,108 @@ describe("endpoint offsets", () => {
     const { home, drawn } = far.endpoints.get(hub)!;
     expect(far.segments.get(seg.id)![hubEnd]).toEqual(home);
     expect(far.callouts).toEqual([{ endpoint: hub, from: home, to: drawn }]);
+  });
+});
+
+describe("the waiting grid", () => {
+  /** Three named components with nets on some connectors, one segment drawn, and some connectors left waiting. */
+  function waitingBench() {
+    let p: Project = freshProject();
+    const t = ops.createTopology(p, "Bench");
+    p = t.project;
+    const top = t.id;
+    const zeta = ops.placeComponent(p, "components/mib", { x: 0, y: 0 }, "Zeta");
+    p = zeta.project;
+    const alpha = ops.placeComponent(p, "components/mib", { x: 0, y: 0 }, "Alpha");
+    p = alpha.project;
+    const battery = ops.placeComponent(p, "components/battery", { x: 0, y: 0 }, "Mid");
+    p = battery.project;
+    const at = (c: { id: string }, d: string) => `${c.id}/${d}`;
+    // Routed: Zeta P1 to Mid OUT, with a segment.
+    p = ops.createNet(p, "48v", [at(zeta, "P1"), at(battery, "OUT")]).project;
+    // Unrouted: Alpha J2, Alpha J1 and Zeta J1 share a net. Alpha J1 has an endpoint record but no segment.
+    p = ops.createNet(p, "can", [at(alpha, "J2"), at(alpha, "J1"), at(zeta, "J1")]).project;
+    const a = ops.placeConnector(p, top, at(zeta, "P1"));
+    const z = ops.placeConnector(a.project, top, at(battery, "OUT"));
+    p = ops.addSegment(z.project, top, a.id, z.id, 100).project;
+    const lone = ops.placeConnector(p, top, at(alpha, "J1"));
+    p = lone.project;
+    return { project: p, top, zeta, alpha, battery, at, loneEndpoint: lone.id };
+  }
+
+  it("holds netted connectors with no segment, grouped and ordered by component name then designator, and leaves out connectors with no nets", () => {
+    const b = waitingBench();
+    const out = layoutTopology(b.project, b.project.topologies.get(b.top)!, EMPTY);
+    expect(out.waiting.map((g) => g.name)).toEqual(["Alpha", "Zeta"]);
+    expect(out.waiting.map((g) => g.connectors.map((c) => c.address))).toEqual([
+      [b.at(b.alpha, "J1"), b.at(b.alpha, "J2")],
+      [b.at(b.zeta, "J1")],
+    ]);
+    // A connector with an endpoint record keeps its id, and the endpoint draws where the grid puts it.
+    const j1 = out.waiting[0].connectors[0];
+    expect(j1.endpoint).toBe(b.loneEndpoint);
+    expect(out.endpoints.get(b.loneEndpoint)!.drawn).toEqual(j1.position);
+    expect(out.waiting[0].connectors[1].endpoint).toBeUndefined();
+  });
+
+  it("drawing a segment from a waiting connector places it and joins it in one edit, and the project before the edit still has it waiting", () => {
+    const b = waitingBench();
+    const j2 = b.at(b.alpha, "J2");
+    const before = b.project;
+    const r = ops.addSegment(before, b.top, j2, b.loneEndpoint);
+    const top = r.project.topologies.get(b.top)!;
+    const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === j2);
+    expect(placed).toBeDefined();
+    expect(top.segments.find((s) => s.id === r.id)!.ends).toEqual([placed!.id, b.loneEndpoint]);
+    const waitingAddresses = (p: Project) => layoutTopology(p, p.topologies.get(b.top)!, EMPTY).waiting.flatMap((g) => g.connectors.map((c) => c.address));
+    expect(waitingAddresses(r.project)).toEqual([b.at(b.zeta, "J1")]);
+    // Undo puts back the project from before the edit, where both still wait.
+    expect(waitingAddresses(before)).toContain(j2);
+  });
+
+  it("growing a segment from a waiting connector into empty canvas places it and adds a point", () => {
+    const b = waitingBench();
+    const j2 = b.at(b.alpha, "J2");
+    const r = ops.growSegment(b.project, b.top, j2);
+    const top = r.project.topologies.get(b.top)!;
+    const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === j2)!;
+    expect(top.segments.find((s) => s.id === r.segment)!.ends).toEqual([placed.id, r.endpoint]);
+  });
+
+  it("deleting a connector's last segment removes its endpoint record in the same edit, and it waits again", () => {
+    const b = waitingBench();
+    const before = b.project.topologies.get(b.top)!;
+    const seg = before.segments[0];
+    const p = ops.removeSegment(b.project, b.top, seg.id);
+    const top = p.topologies.get(b.top)!;
+    for (const end of seg.ends) expect(top.endpoints.some((e) => e.id === end)).toBe(false);
+    const waiting = layoutTopology(p, top, EMPTY).waiting.flatMap((g) => g.connectors.map((c) => c.address));
+    expect(waiting).toContain(b.at(b.zeta, "P1"));
+    expect(waiting).toContain(b.at(b.battery, "OUT"));
+  });
+
+  it("deleting one of several segments at a connector keeps its endpoint record", () => {
+    const b = waitingBench();
+    const seg = b.project.topologies.get(b.top)!.segments[0];
+    const hub = seg.ends[0];
+    const r = ops.growSegment(b.project, b.top, hub);
+    const p = ops.removeSegment(r.project, b.top, seg.id);
+    expect(p.topologies.get(b.top)!.endpoints.some((e) => e.id === hub)).toBe(true);
+  });
+
+  it("sits under the packed pieces with no two waiting connectors overlapping", () => {
+    const b = waitingBench();
+    const out = layoutTopology(b.project, b.project.topologies.get(b.top)!, EMPTY);
+    const bottom = Math.max(...out.pieces.map((p) => p.rect.y + p.rect.h));
+    const all = out.waiting.flatMap((g) => g.connectors);
+    const { w, h } = ENDPOINT_SIZE.connector;
+    for (const c of all) expect(c.position.y - h / 2).toBeGreaterThan(bottom);
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const [a, z] = [all[i].position, all[j].position];
+        expect(Math.abs(a.x - z.x) >= w || Math.abs(a.y - z.y) >= h).toBe(true);
+      }
+    }
   });
 });
 
