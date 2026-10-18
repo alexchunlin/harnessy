@@ -73,7 +73,7 @@ function Overview({ project, topology, onSelect }: Props) {
       <p>
         {topology.name}: {topology.endpoints.length} endpoints, {topology.segments.length} segments.
       </p>
-      <p className="muted">Drag a connector from the tray to place it. Drag from an endpoint to another to join them, or into empty space to grow a point. Shift-click segments, then apply a sheath.</p>
+      <p className="muted">Connectors with nets and no segment wait in the grid under the harnesses. Drag from a ring to another endpoint to join them, or into empty space to grow a point. Shift-click segments, then apply a sheath.</p>
       <h3>Sheaths</h3>
       <ul className="list insp-list">
         {topology.sheaths.map((s, i) => (
@@ -429,7 +429,7 @@ function NetInspector({ project, routes, id, onSelect }: Props & { id: string })
         <div className="field">
           <label>Route</label>
           <span>
-            {route.unplaced.length ? `${route.unplaced.length} connector${route.unplaced.length === 1 ? "" : "s"} not placed` : route.split ? "connectors in different pieces" : `${route.segments.size} segments, ${route.missingLength ? "length incomplete" : `${route.lengthMm} mm`}`}
+            {route.unplaced.length ? `${route.unplaced.length} connector${route.unplaced.length === 1 ? "" : "s"} with no segment yet` : route.split ? "connectors in different pieces" : `${route.segments.size} segments, ${route.missingLength ? "length incomplete" : `${route.lengthMm} mm`}`}
           </span>
         </div>
       )}
@@ -474,7 +474,7 @@ function ConductorInspector({ project, topology, routes, id, onSelect }: Props &
           ))}
           {route?.route.unplaced.map((a) => (
             <li key={a} className="muted">
-              {connectorLabel(project, a)} (not placed)
+              {connectorLabel(project, a)} (no segment yet)
             </li>
           ))}
         </ul>

@@ -1,5 +1,5 @@
 import type { Topology } from "./schema";
-import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
+import { allNets, componentConnectors, connectorLabel, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
 import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
 
@@ -233,7 +233,9 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
 
   for (const r of routes) {
     if (r.net.connectors.length < 2) continue;
-    if (r.unplaced.length > 0) add("net-unrouted", r.net.id, "topology", `net ${label(r.net)}: ${r.unplaced.join(", ")} not placed in this topology`);
+    // A connector with no segment waits in the grid, endpoint record or not.
+    const waiting = r.net.connectors.filter((c) => degree(graph, graph.connectorEndpoint.get(c) ?? "") === 0);
+    if (waiting.length > 0) add("net-unrouted", r.net.id, "topology", `net ${label(r.net)}: ${waiting.map((c) => connectorLabel(project, c)).join(", ")} ${waiting.length === 1 ? "has" : "have"} no segment yet`);
     else if (r.split) add("net-unrouted", r.net.id, "topology", `net ${label(r.net)}: its connectors sit in different pieces of the topology`);
     for (const b of r.branchPoints) {
       const e = graph.endpoints.get(b);

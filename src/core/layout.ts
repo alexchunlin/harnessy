@@ -5,7 +5,7 @@
  * can all draw from the same picture.
  */
 import { buildGraph, degree, otherEnd, pieces, type Graph, type Piece } from "./derive";
-import type { Project } from "./project";
+import { allNets, type Project } from "./project";
 import type { Endpoint, Position, Segment, Topology, TopologyCanvas } from "./schema";
 
 /** The drawn length of every logical edge, in canvas pixels. */
@@ -16,8 +16,10 @@ export const SIBLING_PITCH = 104;
 export const STEP_DEGREES = 15;
 /** Clear space between packed pieces, with room above each for its harness label. */
 export const PIECE_GAP = 80;
-/** Space between endpoints waiting in the row under the pieces. */
-const LONE_GAP = 40;
+/** Space between connectors in the waiting grid, down a column and between columns. */
+export const WAITING_GAP = 16;
+/** Room over each waiting column for its component's name. */
+export const WAITING_LABEL = 22;
 
 /** The box each endpoint kind draws as, centred on its position. */
 export const ENDPOINT_SIZE: Record<Endpoint["kind"], { w: number; h: number }> = {
@@ -49,12 +51,34 @@ export interface TopologyLayout {
   segments: Map<string, [Position, Position]>;
   /** Built harnesses first, then purchased cables, each in piece id order. */
   pieces: PieceLayout[];
+  /** Connectors with nets and no segment, under the pieces, by component name. */
+  waiting: WaitingGroup[];
+}
+
+/** One component's connectors in the waiting grid. */
+export interface WaitingGroup {
+  component: string;
+  /** The component's name, drawn over its column. */
+  name: string;
+  /** The column, name included. */
+  rect: { x: number; y: number; w: number; h: number };
+  /** By designator. */
+  connectors: WaitingConnector[];
+}
+
+export interface WaitingConnector {
+  /** `<component id>/<designator>` */
+  address: string;
+  /** The endpoint record, when the topology file holds one for this connector. */
+  endpoint?: string;
+  /** Where the connector box's centre draws. Waiting connectors have no offset. */
+  position: Position;
 }
 
 type Positions = Map<string, Position>;
 
 /** Lay out one topology from the graph and its canvas file. */
-export function layoutTopology(_project: Project, topology: Topology, canvas: TopologyCanvas): TopologyLayout {
+export function layoutTopology(project: Project, topology: Topology, canvas: TopologyCanvas): TopologyLayout {
   const graph = buildGraph(topology);
   const all = pieces(graph);
   const ordered = [...all.filter((p) => p.built), ...all.filter((p) => !p.built)];
@@ -73,14 +97,10 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
       out.push({ id: piece.id, built: piece.built, rect: { x, y, w: rect.w, h: rect.h } });
     },
   );
-  // Endpoints that end no segment wait in a plain row under the pieces, in the order they joined the topology.
-  let x = 0;
-  for (const e of topology.endpoints) {
-    if (degree(graph, e.id) > 0) continue;
-    const s = ENDPOINT_SIZE[e.kind];
-    home.set(e.id, { x: x + s.w / 2, y: bottom + ENDPOINT_SIZE.connector.h / 2 });
-    x += s.w + LONE_GAP;
-  }
+  const width = Math.max(0, ...out.map((p) => p.rect.x + p.rect.w));
+  const waiting = waitingGrid(project, graph, bottom, width);
+  // A waiting connector with an endpoint record draws where the grid puts it. Other endpoints with no segment have no home.
+  for (const g of waiting) for (const c of g.connectors) if (c.endpoint) home.set(c.endpoint, c.position);
 
   const endpoints = new Map<string, EndpointLayout>();
   for (const [id, p] of home) endpoints.set(id, { home: p, drawn: p });
@@ -90,7 +110,58 @@ export function layoutTopology(_project: Project, topology: Topology, canvas: To
     const b = endpoints.get(s.ends[1]);
     if (a && b) segments.set(s.id, [a.drawn, b.drawn]);
   }
-  return { endpoints, segments, pieces: out };
+  return { endpoints, segments, pieces: out, waiting };
+}
+
+// The waiting grid ------------------------------------------------------------------
+
+/**
+ * Every connector that ends a net and no segment, grouped by component and
+ * ordered by component name then designator. Each group is a column under
+ * its name; columns run left to right under the pieces and wrap at their width.
+ */
+function waitingGrid(project: Project, graph: Graph, top: number, width: number): WaitingGroup[] {
+  const routed = new Set<string>();
+  for (const [address, id] of graph.connectorEndpoint) if (degree(graph, id) > 0) routed.add(address);
+  const byComponent = new Map<string, Set<string>>();
+  for (const { net } of allNets(project)) {
+    for (const address of net.connectors) {
+      const component = address.split("/")[0];
+      if (routed.has(address) || !project.components.has(component)) continue;
+      if (!byComponent.has(component)) byComponent.set(component, new Set());
+      byComponent.get(component)!.add(address);
+    }
+  }
+  const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+  const groups = [...byComponent].map(([component, addresses]) => ({ component, name: project.components.get(component)!.name ?? component, addresses: [...addresses] }));
+  groups.sort((a, b) => byName(a.name, b.name) || byName(a.component, b.component));
+
+  const { w, h } = ENDPOINT_SIZE.connector;
+  const rowWidth = Math.max(width, 6 * (w + 2 * WAITING_GAP));
+  const out: WaitingGroup[] = [];
+  let x = 0;
+  let y = top;
+  let rowHeight = 0;
+  for (const g of groups) {
+    const designator = (a: string) => a.split("/")[1];
+    g.addresses.sort((a, b) => byName(designator(a), designator(b)));
+    const rect = { x, y, w, h: WAITING_LABEL + g.addresses.length * (h + WAITING_GAP) - WAITING_GAP };
+    if (x > 0 && x + w > rowWidth) {
+      x = 0;
+      y += rowHeight + WAITING_GAP * 2;
+      rowHeight = 0;
+      Object.assign(rect, { x, y });
+    }
+    const connectors = g.addresses.map((address, i) => ({
+      address,
+      endpoint: graph.connectorEndpoint.get(address),
+      position: { x: x + w / 2, y: y + WAITING_LABEL + i * (h + WAITING_GAP) + h / 2 },
+    }));
+    out.push({ component: g.component, name: g.name, rect, connectors });
+    x += w + 2 * WAITING_GAP;
+    rowHeight = Math.max(rowHeight, rect.h);
+  }
+  return out;
 }
 
 // One piece ---------------------------------------------------------------------

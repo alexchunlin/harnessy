@@ -69,6 +69,32 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   expect(Math.hypot(moved.x - a.x, moved.y - a.y)).toBeGreaterThan(1);
 });
 
+test("connectors with no segment wait in the grid with a ratsnest line, drawing the segment back takes them out, and the left pane has no tray", async ({ page }) => {
+  const folder = await exampleWithoutSegment("waiting", BATTERY_SEGMENT);
+  await openTopology(page, folder);
+  await expect(page.locator(".tray, .tray-item")).toHaveCount(0);
+  await expect(page.getByText("Unplaced connectors")).toHaveCount(0);
+  const waiting = (id: string) => page.locator(`.react-flow__node.waiting[data-id="${id}"]`);
+  for (const id of BATTERY_ENDS) await expect(waiting(id)).toHaveCount(1);
+  // Each waiting column is labelled with its component's name.
+  await expect(page.locator(".waiting-group", { hasText: "48 V battery + BMS" })).toHaveCount(1);
+  await expect(page.locator(".react-flow__edge.ratsnest")).toHaveCount(1);
+
+  await page.locator(".netlist li", { hasText: "48 V battery + BMS MAIN to In-line switch / fuse IN" }).click();
+  await page.waitForTimeout(500);
+  const from = page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[0]}"]`);
+  const a = (await from.boundingBox())!;
+  const ring = (await from.locator(".ep-handle").boundingBox())!;
+  const b = (await page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[1]}"]`).boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, ring.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await waitForFile(folder, TOPOLOGY, (v) => (v as { segments: unknown[] }).segments.length === SEGMENT_COUNT);
+  for (const id of BATTERY_ENDS) await expect(waiting(id)).toHaveCount(0);
+  await expect(page.locator(".react-flow__edge.ratsnest")).toHaveCount(0);
+});
+
 test("the layer control dims topology segments outside the layer, keeps shared bundles active, and hides their ratsnest", async ({ page }) => {
   // The Jetson's Ethernet patch cable is taken out, so its net is unrouted and draws a ratsnest line in the All layer.
   const folder = await exampleWithoutSegment("topology-layers", "seg-22226b");
