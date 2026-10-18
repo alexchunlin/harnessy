@@ -2,7 +2,7 @@ import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
 import { placementOf } from "./placement";
-import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
+import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
@@ -729,6 +729,30 @@ export function placeParts(project: Project, topologyId: string, parts: Parts): 
     rotations: merge(old.rotations, parts.rotations, connectors),
     ties: merge(old.ties, parts.ties, ties),
   });
+  return next(project, { placements });
+}
+
+/**
+ * Return a harness to its typed numbers and the sketch, as one edit. Any
+ * endpoint, segment or tie point of the harness names it. Every position and
+ * rotation of its endpoints and tie points goes; other harnesses keep theirs.
+ * A topology left with nothing placed has no placement, so its file drops.
+ */
+export function clearPlacement(project: Project, topologyId: string, memberId: string): Project {
+  const t = project.topologies.get(topologyId);
+  if (!t) throw new Error(`no topology ${topologyId}`);
+  const tie = t.ties.find((x) => x.id === memberId);
+  const piece = pieceOf(pieces(buildGraph(t)), tie ? tie.segment : memberId);
+  if (!piece) throw new Error(`${memberId} is in no harness of ${topologyId}`);
+  const ties = new Set(t.ties.filter((x) => piece.segments.has(x.segment)).map((x) => x.id));
+  const keep = (r: Record<string, Vec3>, drop: Set<string>) => Object.fromEntries(Object.entries(r).filter(([id]) => !drop.has(id)));
+  const old = placementOf(project, topologyId);
+  const left = { positions: keep(old.positions, piece.endpoints), rotations: keep(old.rotations, piece.endpoints), ties: keep(old.ties, ties) };
+  const size = (p: typeof left) => Object.values(p).reduce((n, r) => n + Object.keys(r).length, 0);
+  if (size(left) === size(old)) return project;
+  const placements = new Map(project.placements);
+  if (size(left) === 0) placements.delete(topologyId);
+  else placements.set(topologyId, left);
   return next(project, { placements });
 }
 
