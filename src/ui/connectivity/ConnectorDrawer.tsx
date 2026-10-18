@@ -120,7 +120,7 @@ export function ConnectorDrawer({ project, edit, onClose }: { project: Project; 
 }
 
 /** Library connector types only. A value the library lacks shows as such and cannot be picked again. */
-function TypePicker({ label, inventory, value, onChange, placeholder }: { label: string; inventory: ConnectorTypeUse[]; value: string; onChange: (type: string) => void; placeholder?: string }) {
+export function TypePicker({ label, inventory, value, onChange, placeholder }: { label: string; inventory: ConnectorTypeUse[]; value: string; onChange: (type: string) => void; placeholder?: string }) {
   const known = inventory.some((t) => t.type === value);
   return (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
@@ -144,6 +144,6 @@ function TypePicker({ label, inventory, value, onChange, placeholder }: { label:
 }
 
 /** The picker's closing line. #44 replaces it with a control that copies a prompt for the library skill. */
-function MissingTypeLine() {
+export function MissingTypeLine() {
   return <p className="muted drawer-missing">A type that is not in the list is a job for the library skill.</p>;
 }

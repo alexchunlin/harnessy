@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ComponentDefinition, Project } from "../../core";
+import { definitionStanding, ShadowMark } from "./ConnectorEditor";
 
 export const DRAG_TYPE = "application/x-harnessy-definition";
 
@@ -35,7 +36,7 @@ export function LibraryPanel({
       <input placeholder="Search components" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search components" />
       <ul className="list lib-list">
         {entries.map((d) => (
-          <LibraryEntry key={d.id} def={d} shadowed={project.projectLibrary.components.has(d.id)} />
+          <LibraryEntry key={d.id} def={d} standing={definitionStanding(project, d.id)} />
         ))}
         {entries.length === 0 && <li className="muted">No matches</li>}
       </ul>
@@ -63,7 +64,7 @@ export function LibraryPanel({
   );
 }
 
-function LibraryEntry({ def, shadowed }: { def: ComponentDefinition; shadowed: boolean }) {
+function LibraryEntry({ def, standing }: { def: ComponentDefinition; standing: ReturnType<typeof definitionStanding> }) {
   return (
     <li
       className="lib-entry"
@@ -76,7 +77,8 @@ function LibraryEntry({ def, shadowed }: { def: ComponentDefinition; shadowed: b
     >
       <span>{def.name}</span>
       <span className="muted">
-        {def.connectors.length} conn{shadowed ? ", project copy" : ""}
+        {standing === "shadowed" && <ShadowMark />} {standing === "project" && "project's own, "}
+        {def.connectors.length} conn
       </span>
     </li>
   );

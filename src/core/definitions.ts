@@ -1,6 +1,6 @@
 import { mergeLibraries, resolveRef } from "./library";
 import type { Project } from "./project";
-import type { Component, ComponentDefinition, DefinitionConnector } from "./schema";
+import { designator, type Component, type ComponentDefinition, type DefinitionConnector } from "./schema";
 import type { DrawerOwner } from "./drawer";
 
 /**
@@ -27,6 +27,23 @@ function putDefinition(project: Project, def: ComponentDefinition): Project {
   return { ...project, projectLibrary, library: mergeLibraries(project.repoLibrary, projectLibrary) };
 }
 
+/**
+ * Give a project copy back: delete it so the shared entry stands again, and
+ * the file goes on save. A definition the project authored has no shared
+ * entry to fall back to, so it is refused while components use it.
+ */
+export function revertDefinition(project: Project, id: string): Project {
+  if (!project.projectLibrary.components.has(id)) throw new Error(`the project has no project copy of ${id} to give back`);
+  if (!project.repoLibrary.components.has(id)) {
+    const users = definitionUsers(project, id).length;
+    if (users > 0) throw new Error(`${id} has no shared entry to fall back to, and ${users} component${users === 1 ? " uses" : "s use"} it`);
+  }
+  const components = new Map(project.projectLibrary.components);
+  components.delete(id);
+  const projectLibrary = { ...project.projectLibrary, components };
+  return { ...project, projectLibrary, library: mergeLibraries(project.repoLibrary, projectLibrary) };
+}
+
 function inlineOrThrow(project: Project, id: string): { component: Component; connectors: DefinitionConnector[] } {
   const component = project.components.get(id);
   if (!component) throw new Error(`no component ${id}`);
@@ -42,6 +59,29 @@ function patchAt(connectors: DefinitionConnector[], designator: string, patch: C
 
 function checkType(project: Project, patch: ConnectorPatch): void {
   if (patch.connector !== undefined && !resolveRef(project.library, patch.connector, "connectors")) throw new Error(`no connector type ${patch.connector} in the library`);
+}
+
+/** Check a connector about to join `connectors`: a valid designator not already taken, and a type the library has. */
+function checkNew(project: Project, connectors: DefinitionConnector[], connector: DefinitionConnector, where: string): void {
+  if (!designator.safeParse(connector.designator).success) throw new Error(`designator ${JSON.stringify(connector.designator)}: use letters, digits, hyphen, underscore`);
+  if (connectors.some((c) => c.designator === connector.designator)) throw new Error(`${where} already has a connector ${connector.designator}`);
+  checkType(project, { connector: connector.connector });
+}
+
+/** Add a connector to a definition. Reaches every component sharing it. Shadows a shared definition. */
+export function addDefinitionConnector(project: Project, id: string, connector: DefinitionConnector): Project {
+  const def = definitionOrThrow(project, id);
+  checkNew(project, def.connectors, connector, `definition ${id}`);
+  return putDefinition(project, { ...def, connectors: [...def.connectors, connector] });
+}
+
+/** Add an inline connector to a one-off component. */
+export function addInlineConnector(project: Project, componentId: string, connector: DefinitionConnector): Project {
+  const { component, connectors } = inlineOrThrow(project, componentId);
+  checkNew(project, connectors, connector, `component ${componentId}`);
+  const components = new Map(project.components);
+  components.set(componentId, { ...component, connectors: [...connectors, connector] });
+  return { ...project, components };
 }
 
 /** What an edit may change on one connector. The designator is renamed by its own op. */
@@ -77,8 +117,21 @@ export interface ConnectorTypeChange {
  */
 export function setConnectorTypes(project: Project, changes: ConnectorTypeChange[]): Project {
   let p = project;
-  for (const { owner, designator, type } of changes) {
-    p = owner.kind === "definition" ? updateDefinitionConnector(p, owner.id, designator, { connector: type }) : updateInlineConnector(p, owner.id, designator, { connector: type });
-  }
+  for (const { owner, designator, type } of changes) p = updateConnector(p, owner, designator, { connector: type });
   return p;
+}
+
+/** Who owns a component's connectors: its definition, or the component itself when it is a one-off. */
+export function connectorOwner(component: Component): DrawerOwner {
+  return component.definition ? { kind: "definition", id: component.definition.slice(component.definition.indexOf("/") + 1) } : { kind: "component", id: component.id };
+}
+
+/** Add a connector to whichever owns it, a definition or a one-off. */
+export function addConnector(project: Project, owner: DrawerOwner, connector: DefinitionConnector): Project {
+  return owner.kind === "definition" ? addDefinitionConnector(project, owner.id, connector) : addInlineConnector(project, owner.id, connector);
+}
+
+/** Change one connector of whichever owns it, a definition or a one-off. */
+export function updateConnector(project: Project, owner: DrawerOwner, designator: string, patch: ConnectorPatch): Project {
+  return owner.kind === "definition" ? updateDefinitionConnector(project, owner.id, designator, patch) : updateInlineConnector(project, owner.id, designator, patch);
 }

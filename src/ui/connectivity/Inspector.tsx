@@ -2,7 +2,8 @@ import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, c
 import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
 import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
-import { componentBridges } from "../../core";
+import { componentBridges, connectorTypeInventory } from "../../core";
+import { AddConnector, ConnectorRow, DefinitionStatus, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
@@ -112,7 +113,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
   const connectors = componentConnectors(project, c);
   const nets = allNets(project);
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
-  const connectorTypes = [...project.library.connectors.keys()].sort();
+  const inventory = connectorTypeInventory(project);
   const allBuses = buses(project);
   const label = (net: { id: string } & Parameters<typeof netLabel>[1]) => netLabel(project, net, busOf(allBuses, net.id)?.label);
   const through = busesThrough(allBuses, id);
@@ -128,6 +129,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
         <label>Definition</label>
         <span>{c.definition ?? <span className="muted">one-off, connectors declared inline</span>}</span>
       </div>
+      <DefinitionStatus project={project} component={c} edit={edit} />
       <div className="field">
         <label>Id</label>
         <code>{c.id}</code>
@@ -150,25 +152,25 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
           const attached = nets.filter((n) => n.net.connectors.includes(address));
           return (
             <li key={con.designator} className="insp-connector" onMouseEnter={() => hover({ nets: attached.map((n) => n.net.id) })} onMouseLeave={unhover}>
-              {c.connectors ? (
-                <div className="row">
-                  <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
-                  <select value={con.connector} onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, connector: e.target.value } : x))))}>
-                    {connectorTypes.map((t) => (
-                      <option key={t} value={`connectors/${t}`}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+              <ConnectorRow
+                ownerName={c.name}
+                connector={con}
+                inventory={inventory}
+                onType={(type) => retype(edit, c, con.designator, type)}
+                designator={
+                  c.connectors && (
+                    // #56 replaces this with a rename that commits on blur and carries the wiring.
+                    <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
+                  )
+                }
+              >
+                {c.connectors && (
+                  // #58 replaces this with a removal that detaches the nets.
                   <button onClick={() => edit((p) => setInlineConnectors(p, id, c.connectors!.filter((_, j) => j !== i)))} title="Remove connector">
                     x
                   </button>
-                </div>
-              ) : (
-                <div className="row">
-                  <strong>{con.designator}</strong> <span className="muted">{con.connector.split("/")[1]}</span>
-                </div>
-              )}
+                )}
+              </ConnectorRow>
               <div className="insp-nets">
                 {attached.length === 0 && <span className="muted">no nets</span>}
                 {attached.map(({ net, domain }) => (
@@ -196,18 +198,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
           <BusList project={project} buses={through} />
         </>
       )}
-      {c.connectors && (
-        <button
-          onClick={() => {
-            const first = connectorTypes[0];
-            if (!first) return window.alert("The library has no connector types.");
-            const n = c.connectors!.length + 1;
-            edit((p) => setInlineConnectors(p, id, [...c.connectors!, { designator: `J${n}`, connector: `connectors/${first}` }]));
-          }}
-        >
-          Add connector
-        </button>
-      )}
+      {connectors && <AddConnector component={c} taken={connectors.map((x) => x.designator)} inventory={inventory} edit={edit} />}
       <button
         onClick={() => {
           const lost = netsOnlyOn(project, id);
