@@ -145,7 +145,11 @@ export function saveProject(project: Project): Files {
   for (const [domain, nets] of project.nets) files.set(`nets/${domain}.json`, serialize(NetsFileSchema, nets));
   for (const t of project.topologies.values()) files.set(`topologies/${t.id}.json`, serialize(TopologySchema, t));
   files.set("canvas/connectivity.json", serialize(ConnectivityCanvasSchema, project.connectivityCanvas));
-  for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, c));
+  for (const [id, c] of project.topologyCanvases) {
+    // Roots for endpoints that no longer exist are dead weight in the file.
+    const ends = new Set(project.topologies.get(id)?.endpoints.map((e) => e.id));
+    files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, { ...c, roots: c.roots.filter((r) => ends.has(r)) }));
+  }
   files.set("drc.json", serialize(DrcFileSchema, project.drc));
   for (const folder of LIBRARY_FOLDERS) {
     for (const entry of project.projectLibrary[folder].values()) {
