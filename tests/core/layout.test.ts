@@ -207,3 +207,66 @@ describe("topology layout", () => {
     }
   });
 });
+
+describe("roots", () => {
+  /** c1 - h1 - h2 - h3 - c2, with one leaf connector on each breakout. */
+  function spine() {
+    const b = bench();
+    const c1 = b.connector();
+    const [h1, h2, h3] = [b.point(), b.point(), b.point()];
+    const c2 = b.connector();
+    b.join(c1, h1);
+    b.join(h1, h2);
+    b.join(h2, h3);
+    b.join(h3, c2);
+    const leaves = [h1, h2, h3].map((h) => {
+      const l = b.connector();
+      b.join(h, l);
+      return l;
+    });
+    return { b, c1, c2, hubs: [h1, h2, h3], leaves };
+  }
+  const canvasOf = (p: Project, top: string) => p.topologyCanvases.get(top)!;
+
+  it("one marked root lays its piece out as a radial tree from that root", () => {
+    const { b, c1, hubs, leaves } = spine();
+    const p = ops.markRoot(b.project, b.top, c1);
+    expect(canvasOf(p, b.top).roots).toEqual([c1]);
+    const out = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    // The root has one child; every breakout after it fans its two children 7.5 degrees either side of the way in.
+    expect(dist(at(c1), at(hubs[0]))).toBeCloseTo(UNIFORM_LENGTH);
+    const away = angle(at(c1), at(hubs[0]));
+    const fan = [hubs[1], leaves[0]].map((k) => turn(angle(at(hubs[0]), at(k)), away)).sort((x, y) => x - y);
+    expect(fan[0]).toBeCloseTo(-STEP_DEGREES / 2);
+    expect(fan[1]).toBeCloseTo(STEP_DEGREES / 2);
+  });
+  it("two marked roots put the path between them on one straight line, and other branches hang off it on alternating sides", () => {
+    const { b, c1, c2, hubs, leaves } = spine();
+    const p = ops.markRoot(ops.markRoot(b.project, b.top, c1), b.top, c2);
+    const out = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    const line = angle(at(c1), at(c2));
+    // Every trunk node lies on the line from c1 to c2, in order, one uniform length apart.
+    const trunk = [c1, ...hubs, c2];
+    trunk.slice(1).forEach((id, i) => {
+      expect(dist(at(trunk[i]), at(id))).toBeCloseTo(UNIFORM_LENGTH);
+      expect(turn(angle(at(trunk[i]), at(id)), line)).toBeCloseTo(0);
+    });
+    // Each leaf hangs square off its breakout, and the sides alternate along the trunk.
+    const sides = leaves.map((l, i) => turn(angle(at(hubs[i]), at(l)), line));
+    for (const s of sides) expect(Math.abs(s)).toBeCloseTo(90);
+    expect(Math.sign(sides[0])).toBe(-Math.sign(sides[1]));
+    expect(Math.sign(sides[1])).toBe(-Math.sign(sides[2]));
+  });
+
+  it("unmarking the last root gives back the default layout", () => {
+    const { b, c1, c2 } = spine();
+    const before = b.layout();
+    let p = ops.markRoot(ops.markRoot(b.project, b.top, c1), b.top, c2);
+    p = ops.unmarkRoot(ops.unmarkRoot(p, b.top, c2), b.top, c1);
+    expect(canvasOf(p, b.top).roots).toEqual([]);
+    const after = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    expect(after.endpoints).toEqual(before.endpoints);
+  });
+});

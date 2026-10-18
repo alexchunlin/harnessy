@@ -112,8 +112,9 @@ interface LogicalTree {
  * The piece as a tree of logical nodes. A chain of degree-two points becomes
  * one edge, so a corner marker never bends a tree that has no geometry.
  */
-function logicalTree(graph: Graph, piece: Piece): LogicalTree {
-  const collapses = (id: string) => graph.endpoints.get(id)!.kind === "point" && degree(graph, id) === 2;
+function logicalTree(graph: Graph, piece: Piece, roots: Set<string>): LogicalTree {
+  // A marked root stays a node even when it is a point of degree two.
+  const collapses = (id: string) => graph.endpoints.get(id)!.kind === "point" && degree(graph, id) === 2 && !roots.has(id);
   let nodes = [...piece.endpoints].filter((id) => !collapses(id)).sort();
   // Only a ring of points has no node left; keep every endpoint so the walk still reaches it.
   const isNode = nodes.length > 0 ? (id: string) => !collapses(id) : () => true;
@@ -145,13 +146,16 @@ function logicalTree(graph: Graph, piece: Piece): LogicalTree {
 
 /** Homes for one piece, relative to its root at the origin. */
 function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions {
-  const tree = logicalTree(graph, piece);
-  const root = tree.nodes.find((n) => roots.has(n)) ?? middleOfLongestPath(tree);
+  const tree = logicalTree(graph, piece, roots);
+  const marked = tree.nodes.filter((n) => roots.has(n));
+  const trunk = marked.length >= 2 ? longestPathBetween(tree, marked) : [marked[0] ?? middleOfLongestPath(tree)];
+  const root = trunk[0];
   const pos: Positions = new Map([[root, { x: 0, y: 0 }]]);
   const visited = new Set<string>();
-  const grow = (node: string, parent: string | undefined, away: number) => {
+  /** Lay out a node's children, or only the ones in `only` when the trunk splits them between its two sides. */
+  const grow = (node: string, parent: string | undefined, away: number, only?: LogicalEdge[]) => {
     visited.add(node);
-    const kids = tree.edges.get(node)!.filter((e) => e.b !== parent && !visited.has(e.b));
+    const kids = only ?? tree.edges.get(node)!.filter((e) => e.b !== parent && !visited.has(e.b));
     const k = kids.length;
     // A root spreads its children evenly over the whole circle; every other node fans them around the direction away from its parent.
     const angles = parent === undefined ? kids.map((_, i) => (i * 360) / k) : kids.map((_, i) => away + (i - (k - 1) / 2) * STEP_DEGREES);
@@ -162,10 +166,42 @@ function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions 
       grow(e.b, node, angles[i]);
     });
   };
-  grow(root, undefined, 0);
+  if (trunk.length === 1) grow(root, undefined, 0);
+  else layTrunk(tree, trunk, pos, visited, grow);
   // A cycle is a design rule error; anything the walk could not reach sits on the root so it stays visible.
   for (const id of piece.endpoints) if (!pos.has(id)) pos.set(id, { x: 0, y: 0 });
   return pos;
+}
+
+/**
+ * Two or more roots: the trunk lies flat along the x axis from its first
+ * node. Its ends fan the rest of their children onward along the line.
+ * Every branch off a trunk node between them hangs square off the trunk,
+ * and the sides take turns in trunk order.
+ */
+function layTrunk(
+  tree: LogicalTree,
+  trunk: string[],
+  pos: Positions,
+  visited: Set<string>,
+  grow: (node: string, parent: string | undefined, away: number, only?: LogicalEdge[]) => void,
+) {
+  const along = (a: string, b: string) => tree.edges.get(a)!.find((e) => e.b === b)!;
+  for (const n of trunk) visited.add(n);
+  trunk.slice(1).forEach((n, i) => {
+    pos.set(n, step(pos.get(trunk[i])!, 0, UNIFORM_LENGTH));
+    spaceEvenly(pos, along(trunk[i], n));
+  });
+  let side = 0;
+  trunk.forEach((n, i) => {
+    if (i === 0) return grow(n, trunk[1], 180);
+    if (i === trunk.length - 1) return grow(n, trunk[i - 1], 0);
+    const kids = tree.edges.get(n)!.filter((e) => !visited.has(e.b));
+    const sides: [LogicalEdge[], LogicalEdge[]] = [[], []];
+    for (const e of kids) sides[side++ % 2].push(e);
+    grow(n, trunk[i - 1], 90, sides[0]);
+    grow(n, trunk[i - 1], -90, sides[1]);
+  });
 }
 
 /** Collapsed points sit evenly on the straight line between their edge's ends. */
@@ -193,6 +229,21 @@ function farthest(tree: LogicalTree, from: string): { far: string; parent: Map<s
     }
   }
   return { far, parent };
+}
+
+/** The longest path between two marked nodes, starting from the one that sorts first. */
+function longestPathBetween(tree: LogicalTree, marked: string[]): string[] {
+  let best: string[] = [marked[0]];
+  for (const a of marked) {
+    const { parent } = farthest(tree, a);
+    for (const b of marked) {
+      if (b <= a || !parent.has(b)) continue;
+      const path: string[] = [];
+      for (let n: string | undefined = b; n !== undefined; n = parent.get(n)) path.unshift(n);
+      if (path.length > best.length) best = path;
+    }
+  }
+  return best;
 }
 
 /** Two walks find the longest path through a tree; its middle node balances the picture. */
