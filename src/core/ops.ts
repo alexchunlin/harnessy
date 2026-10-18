@@ -256,6 +256,26 @@ export function flipComponent(project: Project, id: string, axis: "horizontal" |
   return setPinLayout(project, id, flipped);
 }
 
+/**
+ * Turn a component a quarter clockwise, pins and outline together: left goes
+ * to top reversed, top to right, right to bottom reversed, bottom to left.
+ * The box keeps its centre on the same grid point. `sizeOf` gives the box a
+ * pin arrangement draws, which only the canvas knows.
+ */
+export function turnComponent(project: Project, id: string, sizeOf: (sides: Record<Side, string[]>) => BoxSize): Project {
+  const c = project.components.get(id);
+  if (!c) throw new Error(`no component ${id}`);
+  const l = pinLayout(project, c);
+  const turned: Record<Side, string[]> = { left: l.bottom, top: [...l.left].reverse(), right: l.top, bottom: [...l.right].reverse() };
+  const p = setPinLayout(project, id, turned);
+  const pos = project.connectivityCanvas.components[id];
+  if (!pos) return p;
+  const before = sizeOf(l);
+  const after = sizeOf(turned);
+  const centre = { x: snapTo(pos.x + before.w / 2), y: snapTo(pos.y + before.h / 2) };
+  return moveComponent(p, id, { x: centre.x - snapTo(after.w / 2), y: centre.y - snapTo(after.h / 2) });
+}
+
 /** Nets that would lose their last other connector if this component went. */
 export function netsOnlyOn(project: Project, componentId: string): Net[] {
   const out: Net[] = [];

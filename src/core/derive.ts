@@ -384,6 +384,32 @@ export function netsOnSegments(routes: Route[]): Map<string, Route[]> {
   return out;
 }
 
+/**
+ * What a topology selection lights on the connectivity canvas, read-only.
+ * A net lights itself and a segment lights the nets routed through it. A
+ * connector endpoint lights its component and the nets that end on that
+ * connector. On a bus that means its own nets, never the whole bus (ADR 0004).
+ */
+export function topologyLight(project: Project, topology: Topology, ids: string[]): { nets: Set<string>; components: Set<string> } {
+  const nets = new Set<string>();
+  const components = new Set<string>();
+  if (ids.length === 0) return { nets, components };
+  const graph = buildGraph(topology);
+  const routes = allRoutes(project, graph);
+  const onSegments = netsOnSegments(routes);
+  const lightConnector = (address: string) => {
+    components.add(address.split("/")[0]);
+    for (const r of routes) if (r.net.connectors.includes(address)) nets.add(r.net.id);
+  };
+  for (const id of ids) {
+    if (routes.some((r) => r.net.id === id)) nets.add(id);
+    for (const r of onSegments.get(id) ?? []) nets.add(r.net.id);
+    const end = graph.endpoints.get(id);
+    if (end?.kind === "connector") lightConnector(end.connector);
+  }
+  return { nets, components };
+}
+
 /** Nets whose route passes through an endpoint. */
 export function netsThrough(routes: Route[], endpoint: string): Route[] {
   return routes.filter((r) => r.endpoints.has(endpoint));

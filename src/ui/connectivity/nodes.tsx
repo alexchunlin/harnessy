@@ -5,7 +5,7 @@ import { useDoc } from "../store";
 import { bridgePath, HANDLE_ROW, NODE_HEADER, PIN_BAND, pinSlotAt, slotMarker, type ComponentNodeData, type GroupNodeData, type HubNodeData, type NoteNodeData } from "./model";
 
 export function ComponentNode({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<Node<ComponentNodeData>>) {
-  const { component, connectors, types, geometry, dimmed, netsAt, litPins, busNets, bridges } = data;
+  const { component, connectors, types, geometry, dimmed, lit: boxLit, netsAt, litPins, busNets, bridges } = data;
   // Render count, exposed so a browser test can prove a drag repaints only the dragged box.
   const renders = useRef(0);
   renders.current += 1;
@@ -71,7 +71,7 @@ export function ComponentNode({ id, data, selected, positionAbsoluteX, positionA
   const marker = slot ? slotMarker(geometry, slot.side, slot.index) : undefined;
   const byDesignator = new Map(connectors.map((c) => [c.designator, c]));
   return (
-    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${labelsHidden ? " labels-hidden" : ""}${typesHidden ? " types-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
+    <div className={`cmp-node${dimmed ? " dimmed" : ""}${selected ? " selected" : ""}${hovered && !dimmed ? " hovered" : ""}${boxLit && !dimmed ? " lit" : ""}${labelsHidden ? " labels-hidden" : ""}${typesHidden ? " types-hidden" : ""}`} style={{ width: geometry.width, height: geometry.height }} data-renders={renders.current}>
       {bridges.length > 0 && (
         <svg className="cmp-bridges" width={geometry.width} height={geometry.height} aria-hidden>
           {bridges.map((b, i) => (
