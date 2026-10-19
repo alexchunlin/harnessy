@@ -406,8 +406,15 @@ export function addConnectorToNet(project: Project, id: string, address: string)
   return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: [...n.connectors, address] })), (key) => keyNet(key) === id);
 }
 
+/**
+ * Take a connector off a net. Its spoke's bends go. The other spokes keep
+ * theirs while the net is still a star; under three connectors it is drawn as
+ * one straight line, so every bend on it goes.
+ */
 export function removeConnectorFromNet(project: Project, id: string, address: string): Project {
-  return dropBends(fitNetPins(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), id), (key) => keyNet(key) === id);
+  const p = fitNetPins(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), id);
+  const star = (findNet(p, id)?.net.connectors.length ?? 0) >= 3;
+  return dropBends(p, (key) => (star ? key === bendsKey(id, address) : keyNet(key) === id));
 }
 
 // Bends -------------------------------------------------------------------------

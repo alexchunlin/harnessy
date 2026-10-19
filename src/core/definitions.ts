@@ -3,6 +3,7 @@ import { removeConnectorFromNet, removeEndpoint, removeNet } from "./ops";
 import { allNets, findNet, type Project } from "./project";
 import { designator, type Bridges, type Component, type ComponentDefinition, type DefinitionConnector, type Net, type PinLayout, type Topology, SIDES } from "./schema";
 import type { DrawerOwner } from "./drawer";
+import { formatNetAddress, parseRef, parseTarget } from "./refs";
 
 /**
  * Edits to component definitions and one-off connectors (ADR 0003). An edit
@@ -134,8 +135,9 @@ function renameInBridges(bridges: Bridges | undefined, from: string, to: string)
 
 /** A bend key or silence target names an address, or `<net>:<address>` for one net at one connector. */
 function renameTarget(target: string, was: string, now: string): string {
-  if (target === was) return now;
-  return target.endsWith(`:${was}`) ? `${target.slice(0, -was.length)}${now}` : target;
+  const { net, address } = parseTarget(target);
+  if (address !== was) return target;
+  return net === undefined ? now : formatNetAddress(net, now);
 }
 
 function renameOnNet(net: Net, was: string, now: string): Net {
@@ -190,7 +192,7 @@ export function setConnectorTypes(project: Project, changes: ConnectorTypeChange
 
 /** Who owns a component's connectors: its definition, or the component itself when it is a one-off. */
 export function connectorOwner(component: Component): DrawerOwner {
-  return component.definition ? { kind: "definition", id: component.definition.slice(component.definition.indexOf("/") + 1) } : { kind: "component", id: component.id };
+  return component.definition ? { kind: "definition", id: parseRef(component.definition).id } : { kind: "component", id: component.id };
 }
 
 /** Add a connector to whichever owns it, a definition or a one-off. */
@@ -248,8 +250,8 @@ export function publishDefinition(project: Project, componentId: string): { proj
 /**
  * Take the wiring off one designator on each of these components: the nets
  * that used it lose it and its pins, a net left under two connectors goes,
- * its topology endpoints go with their segments, and the canvas forgets
- * where its pin was drawn.
+ * its topology endpoints go with their segments, the design rule silences
+ * on it go, and the canvas forgets where its pin was drawn.
  */
 function detachConnectorRefs(project: Project, componentIds: string[], designator: string): Project {
   let p = project;
@@ -264,6 +266,9 @@ function detachConnectorRefs(project: Project, componentIds: string[], designato
     for (const t of [...p.topologies.values()]) {
       for (const e of t.endpoints) if (e.kind === "connector" && e.connector === address) p = removeEndpoint(p, t.id, e.id);
     }
+    // A connector added back under this name is checked afresh.
+    const silences = p.drc.silences.filter((x) => parseTarget(x.target).address !== address);
+    if (silences.length !== p.drc.silences.length) p = { ...p, drc: { ...p.drc, silences } };
     const layout = p.connectivityCanvas.pins[componentId];
     if (layout) {
       const kept = Object.fromEntries(Object.entries(layout).map(([side, ds]) => [side, ds?.filter((d) => d !== designator)]));
