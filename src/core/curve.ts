@@ -66,7 +66,7 @@ export function exitDirection(rotationDeg: Vec3): Vec3 {
  * the pose holds their position.
  *
  * `minimums` gives a bundle's minimum bend radius by segment id. A segment
- * with one gets its measured radius and the stretches under it. The stubs are
+ * with one gets its measured radius and the runs under it. The stubs are
  * straight and are not measured.
  */
 export function bundleCurves(project: Project, topology: Topology, pose: Pose, minimums: ReadonlyMap<string, number> = new Map()): Map<string, SegmentCurve> {
@@ -162,7 +162,7 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
     arc.push(arc[j] + d);
   }
 
-  const bends = bendsOf(spline, n, segments.map((s, i) => ({ from: starts[i], to: ends[i], min: minimums.get(s.id) })));
+  const radii = measureRadius(spline, n, segments.map((s, i) => ({ from: starts[i], to: ends[i], min: minimums.get(s.id) })));
 
   const vec = (p: Vector3): Vec3 => [p.x, p.y, p.z];
   const chain = segments.map((s) => s.id);
@@ -182,17 +182,17 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
       const d = lead + arc[t.index] - arc[starts[i]];
       ties[id] = forward ? d : lengthMm - d;
     }
-    // Bend ranges run from the start of this segment's part of the spline: shift them past the lead stub, and flip them if the segment runs the other way.
-    const bend = bends[i];
-    const tight = bend.tight.map(([a, b]): [number, number] => (forward ? [lead + a, lead + b] : [lengthMm - lead - b, lengthMm - lead - a]));
+    // Tight ranges run from the start of this segment's part of the spline: shift them past the lead stub, and flip them if the segment runs the other way.
+    const radius = radii[i];
+    const tight = radius.tight.map(([a, b]): [number, number] => (forward ? [lead + a, lead + b] : [lengthMm - lead - b, lengthMm - lead - a]));
     if (!forward) tight.reverse();
     const out: SegmentCurve = { segment: s.id, lengthMm, points: (forward ? points : points.reverse()).map(vec), ties, chain, tight };
-    if (bend.minRadiusMm !== undefined) out.minRadiusMm = bend.minRadiusMm;
+    if (radius.minRadiusMm !== undefined) out.minRadiusMm = radius.minRadiusMm;
     return out;
   });
 }
 
-interface Bend {
+interface RadiusCheck {
   minRadiusMm?: number;
   /** Arc ranges from the start of the segment's part of the spline. */
   tight: [number, number][];
@@ -204,8 +204,8 @@ interface Bend {
  * is resampled at an even arc spacing well under the smallest minimum, and
  * the radius at each sample is the circumradius of it and its two neighbours.
  */
-function bendsOf(spline: Spline, n: number, parts: { from: number; to: number; min: number | undefined }[]): Bend[] {
-  const out: Bend[] = parts.map(() => ({ tight: [] }));
+function measureRadius(spline: Spline, n: number, parts: { from: number; to: number; min: number | undefined }[]): RadiusCheck[] {
+  const out: RadiusCheck[] = parts.map(() => ({ tight: [] }));
   const mins = parts.map((p) => p.min).filter((m): m is number => m !== undefined && m > 0);
   if (mins.length === 0 || n < 2) return out;
 
@@ -254,14 +254,14 @@ function bendsOf(spline: Spline, n: number, parts: { from: number; to: number; m
     const min = parts[i]?.min;
     if (min === undefined) continue;
     const r = circumradius(samples[k - 1], samples[k], samples[k + 1]);
-    const bend = out[i];
-    if (bend.minRadiusMm === undefined || r < bend.minRadiusMm) bend.minRadiusMm = r;
+    const check = out[i];
+    if (check.minRadiusMm === undefined || r < check.minRadiusMm) check.minRadiusMm = r;
     if (r >= min) continue;
     const from = Math.max(bounds[i][0], s - h) - bounds[i][0];
     const to = Math.min(bounds[i][1], s + h) - bounds[i][0];
-    const last = bend.tight[bend.tight.length - 1];
+    const last = check.tight[check.tight.length - 1];
     if (last && from <= last[1]) last[1] = to;
-    else bend.tight.push([from, to]);
+    else check.tight.push([from, to]);
   }
   return out;
 }

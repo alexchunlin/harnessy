@@ -6,7 +6,8 @@ import type { Placement, Vec3 } from "./schema";
  * What is placed in 3D. An endpoint is placed when the placement holds its
  * position. A segment is placed when both its ends are. A tie point is placed
  * when the placement holds its position and its segment is placed. A rotation
- * without a position counts for nothing.
+ * without a position counts for nothing. The bundle curve and the lengths
+ * read these rules from the placement directly.
  */
 
 export const EMPTY_PLACEMENT: Placement = { positions: {}, rotations: {}, ties: {} };
@@ -16,20 +17,12 @@ export function placementOf(project: Project, topologyId: string): Placement {
   return project.placements.get(topologyId) ?? EMPTY_PLACEMENT;
 }
 
-export function isEndpointPlaced(project: Project, topologyId: string, endpointId: string): boolean {
-  const t = project.topologies.get(topologyId);
-  if (!t?.endpoints.some((e) => e.id === endpointId)) return false;
-  return placementOf(project, topologyId).positions[endpointId] !== undefined;
-}
+/** A vector rounded to whole numbers. `|| 0` keeps a -0 from a turn out of the file. */
+export const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]) || 0, Math.round(v[1]) || 0, Math.round(v[2]) || 0];
 
-export function isSegmentPlaced(project: Project, topologyId: string, segmentId: string): boolean {
-  const s = project.topologies.get(topologyId)?.segments.find((x) => x.id === segmentId);
-  return !!s && s.ends.every((e) => isEndpointPlaced(project, topologyId, e));
-}
-
-export function isTiePointPlaced(project: Project, topologyId: string, tieId: string): boolean {
-  const tie = project.topologies.get(topologyId)?.ties.find((x) => x.id === tieId);
-  return !!tie && placementOf(project, topologyId).ties[tieId] !== undefined && isSegmentPlaced(project, topologyId, tie.segment);
+/** True when a placement holds no position, rotation or tie point, so it has no file. */
+export function isEmptyPlacement(p: Placement): boolean {
+  return Object.values(p).every((r) => Object.keys(r).length === 0);
 }
 
 /**
@@ -42,8 +35,8 @@ export interface RigidMove {
 }
 
 /**
- * Positions, connector rotations in degrees (Euler XYZ) and tie point positions, as drawn. Values need not be whole.
- * A saved placement is a pose. The bundle curve takes one, so the view can pass the placement laid over its sketch.
+ * A pose: positions, connector rotations in degrees (Euler XYZ) and tie point positions, as drawn. Values need not be whole.
+ * The placement is the saved record; the view draws a pose of it laid over its sketch, and the bundle curve takes that pose.
  */
 export interface Pose {
   positions: Record<string, Vec3>;

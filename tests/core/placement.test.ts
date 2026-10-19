@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
 import { deletedPaths, loadProject, saveProject } from "../../src/core/project";
-import { isEndpointPlaced, isSegmentPlaced, isTiePointPlaced } from "../../src/core/placement";
 import { testLibrary, twoNetProject } from "./fixture";
 
 describe("the placement file", () => {
@@ -90,34 +89,6 @@ describe("place parts", () => {
   });
 });
 
-describe("placed", () => {
-  it("an endpoint with a position is placed, and a rotation alone counts for nothing", () => {
-    const { project, ids } = twoNetProject();
-    expect(isEndpointPlaced(project, ids.top, ids.batEnd)).toBe(false);
-    const turned = ops.placeParts(project, ids.top, { rotations: { [ids.batEnd]: [0, 90, 0] } });
-    expect(isEndpointPlaced(turned, ids.top, ids.batEnd)).toBe(false);
-    const p = ops.placeParts(project, ids.top, { positions: { [ids.batEnd]: [0, 0, 0] } });
-    expect(isEndpointPlaced(p, ids.top, ids.batEnd)).toBe(true);
-  });
-
-  it("a segment with one placed end is not placed, and with both it is", () => {
-    const { project, ids } = twoNetProject();
-    const one = ops.placeParts(project, ids.top, { positions: { [ids.batEnd]: [0, 0, 0] } });
-    expect(isSegmentPlaced(one, ids.top, ids.seg)).toBe(false);
-    const both = ops.placeParts(one, ids.top, { positions: { [ids.mibEnd]: [300, 0, 0] } });
-    expect(isSegmentPlaced(both, ids.top, ids.seg)).toBe(true);
-  });
-
-  it("a tie point with a position on an unplaced segment is not placed", () => {
-    const { project, ids } = twoNetProject();
-    const tie = ops.addTiePoint(project, ids.top, ids.seg, "ties/zip-tie", 100, ids.batEnd);
-    const p = ops.placeParts(tie.project, ids.top, { positions: { [ids.batEnd]: [0, 0, 0] }, ties: { [tie.id]: [100, 0, 0] } });
-    expect(isTiePointPlaced(p, ids.top, tie.id)).toBe(false);
-    const placed = ops.placeParts(p, ids.top, { positions: { [ids.mibEnd]: [300, 0, 0] } });
-    expect(isTiePointPlaced(placed, ids.top, tie.id)).toBe(true);
-  });
-});
-
 describe("topology edits keep the placement clean", () => {
   const placedPair = () => {
     const { project, ids } = twoNetProject();
@@ -189,14 +160,11 @@ describe("topology edits keep the placement clean", () => {
     expect(reEnded.placements.get(ids.top)).toEqual(before);
   });
 
-  it("an entry for a missing id counts for nothing and is gone after the next placement op", () => {
+  it("an entry for a missing id is gone after the next placement op", () => {
     const { project: base, ids } = placedPair();
     const old = base.placements.get(ids.top)!;
     const merged = { ...old, positions: { ...old.positions, "end-gone00": [1, 2, 3] as [number, number, number] }, ties: { "tie-gone00": [4, 5, 6] as [number, number, number] } };
     const project = { ...base, placements: new Map([[ids.top, merged]]) };
-    expect(isEndpointPlaced(project, ids.top, "end-gone00")).toBe(false);
-    expect(isTiePointPlaced(project, ids.top, "tie-gone00")).toBe(false);
-    expect(isSegmentPlaced(project, ids.top, ids.seg)).toBe(true);
     const p = ops.placeParts(project, ids.top, { positions: { [ids.batEnd]: [5, 0, 0] } });
     expect(p.placements.get(ids.top)).toEqual({ positions: { [ids.batEnd]: [5, 0, 0], [ids.mibEnd]: [300, 0, 0] }, rotations: old.rotations, ties: {} });
     const q = ops.removeTiePoint(project, ids.top, "tie-none00");

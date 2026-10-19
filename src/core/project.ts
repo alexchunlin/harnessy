@@ -29,6 +29,7 @@ import {
 } from "./schema";
 import { emptyLibrary, explain, loadLibrary, mergeLibraries, resolveRef, type FileProblem, type Files, type Library } from "./library";
 import { serialize } from "./serialize";
+import { isEmptyPlacement } from "./placement";
 import { parseAddress } from "./refs";
 
 /** A loaded project. Nets are keyed by domain id, matching the file split. */
@@ -172,10 +173,6 @@ export function saveProject(project: Project): Files {
     }
   }
   return files;
-}
-
-function isEmptyPlacement(p: Placement): boolean {
-  return Object.keys(p.positions).length === 0 && Object.keys(p.rotations).length === 0 && Object.keys(p.ties).length === 0;
 }
 
 /** Paths that `saveProject` would write which `previous` has and `next` lacks. */

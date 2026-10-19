@@ -1,8 +1,8 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { componentConnectors, findNet, pinLayout, type Project } from "./project";
-import { moveRigidly, placementOf, type Pose, type RigidMove } from "./placement";
-import { buildGraph, buses, busOf, degree, otherEnd, pieceOf, pieces, segmentLength } from "./derive";
+import { isEmptyPlacement, moveRigidly, placementOf, roundVec, type Pose, type RigidMove } from "./placement";
+import { buildGraph, buses, busOf, degree, otherEnd, pieceHolding, segmentLength } from "./derive";
 import { bundleCurves } from "./curve";
 import { lengthsOf } from "./lengths";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Placement, Position, ReferenceModel, Segment, Sheath, Side, TiePoint, Topology, Vec3 } from "./schema";
@@ -738,9 +738,6 @@ export interface Parts {
   ties?: Record<string, Vec3>;
 }
 
-// `|| 0` keeps a -0 from a turn out of the file.
-const roundVec = (v: Vec3): Vec3 => [Math.round(v[0]) || 0, Math.round(v[1]) || 0, Math.round(v[2]) || 0];
-
 /**
  * Place some endpoints, connectors and tie points of one topology, as one
  * edit. Values round to whole millimetres and degrees. Only connectors keep a
@@ -782,7 +779,7 @@ function prunePlacement(project: Project, topologyId: string): Project {
   if (!t || !old) return project;
   const placement = kept(t, old);
   const placements = new Map(project.placements);
-  if (Object.values(placement).every((r) => Object.keys(r).length === 0)) placements.delete(topologyId);
+  if (isEmptyPlacement(placement)) placements.delete(topologyId);
   else placements.set(topologyId, placement);
   return next(project, { placements });
 }
@@ -796,17 +793,17 @@ function prunePlacement(project: Project, topologyId: string): Project {
 export function clearPlacement(project: Project, topologyId: string, memberId: string): Project {
   const t = project.topologies.get(topologyId);
   if (!t) throw new Error(`no topology ${topologyId}`);
-  const tie = t.ties.find((x) => x.id === memberId);
-  const piece = pieceOf(pieces(buildGraph(t)), tie ? tie.segment : memberId);
-  if (!piece) throw new Error(`${memberId} is in no harness of ${topologyId}`);
-  const ties = new Set(t.ties.filter((x) => piece.segments.has(x.segment)).map((x) => x.id));
-  const keep = (r: Record<string, Vec3>, drop: Set<string>) => Object.fromEntries(Object.entries(r).filter(([id]) => !drop.has(id)));
+  const held = pieceHolding(t, memberId);
+  if (!held) throw new Error(`${memberId} is in no harness of ${topologyId}`);
+  const { endpoints } = held.piece;
+  const ties = new Set(held.ties);
   const old = placementOf(project, topologyId);
-  const left = { positions: keep(old.positions, piece.endpoints), rotations: keep(old.rotations, piece.endpoints), ties: keep(old.ties, ties) };
-  const size = (p: typeof left) => Object.values(p).reduce((n, r) => n + Object.keys(r).length, 0);
-  if (size(left) === size(old)) return project;
+  const has = (r: Record<string, Vec3>, ids: Set<string>) => Object.keys(r).some((id) => ids.has(id));
+  if (!has(old.positions, endpoints) && !has(old.rotations, endpoints) && !has(old.ties, ties)) return project;
+  const keep = (r: Record<string, Vec3>, drop: Set<string>) => Object.fromEntries(Object.entries(r).filter(([id]) => !drop.has(id)));
+  const left = { positions: keep(old.positions, endpoints), rotations: keep(old.rotations, endpoints), ties: keep(old.ties, ties) };
   const placements = new Map(project.placements);
-  if (size(left) === 0) placements.delete(topologyId);
+  if (isEmptyPlacement(left)) placements.delete(topologyId);
   else placements.set(topologyId, left);
   return next(project, { placements });
 }
@@ -821,8 +818,9 @@ export function clearPlacement(project: Project, topologyId: string, memberId: s
 export function moveHarness(project: Project, topologyId: string, member: string, pose: Partial<Pose>, move: RigidMove): Project {
   const t = project.topologies.get(topologyId);
   if (!t) throw new Error(`no topology ${topologyId}`);
-  const piece = pieceOf(pieces(buildGraph(t)), t.ties.find((x) => x.id === member)?.segment ?? member);
-  if (!piece) throw new Error(`${member} is not part of a harness in ${topologyId}`);
+  const held = pieceHolding(t, member);
+  if (!held) throw new Error(`${member} is not part of a harness in ${topologyId}`);
+  const { piece, ties } = held;
   const saved = placementOf(project, topologyId);
   const pick = (ids: Iterable<string>, drawn: Record<string, Vec3> | undefined, old: Record<string, Vec3>) => {
     const out: Record<string, Vec3> = {};
@@ -833,7 +831,6 @@ export function moveHarness(project: Project, topologyId: string, member: string
     return out;
   };
   const connectors = t.endpoints.filter((e) => e.kind === "connector" && piece.endpoints.has(e.id)).map((e) => e.id);
-  const ties = t.ties.filter((x) => piece.segments.has(x.segment)).map((x) => x.id);
   const from: Pose = { positions: pick(piece.endpoints, pose.positions, saved.positions), rotations: pick(connectors, pose.rotations, saved.rotations), ties: pick(ties, pose.ties, saved.ties) };
   return placeParts(project, topologyId, moveRigidly(from, move));
 }

@@ -87,6 +87,17 @@ export function pieceOf(all: Piece[], endpointOrSegment: string): Piece | undefi
   return all.find((p) => p.endpoints.has(endpointOrSegment) || p.segments.has(endpointOrSegment));
 }
 
+/**
+ * The connected piece an endpoint, segment or tie point belongs to, with the
+ * ids of the tie points on its segments. A tie point belongs to its segment's
+ * piece.
+ */
+export function pieceHolding(topology: Topology, memberId: string): { piece: Piece; ties: string[] } | undefined {
+  const tie = topology.ties.find((t) => t.id === memberId);
+  const piece = pieceOf(pieces(buildGraph(topology)), tie ? tie.segment : memberId);
+  return piece && { piece, ties: topology.ties.filter((t) => piece.segments.has(t.segment)).map((t) => t.id) };
+}
+
 /** True when some piece contains a cycle (segments >= endpoints within a connected piece). */
 export function hasCycle(piece: Piece): boolean {
   return piece.segments.size >= piece.endpoints.size;

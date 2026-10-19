@@ -190,10 +190,10 @@ export function tubeLabel(length: SegmentLength, drawnMm: number, dragging = fal
 
 /**
  * The parts of a drawn tube that fall in arc ranges measured from its first
- * point, such as the stretches a bend radius finding draws red. Each part
+ * point, such as the runs a bend radius finding draws red. Each part
  * starts and ends where its range does and keeps the corners between.
  */
-export function stretches(points: Vec3[], ranges: [number, number][]): Vec3[][] {
+export function tightRuns(points: Vec3[], ranges: [number, number][]): Vec3[][] {
   const at: number[] = [0];
   for (let i = 1; i < points.length; i++) at.push(at[i - 1] + dist(points[i - 1], points[i]));
   // The point at an arc distance along the polyline.
@@ -220,4 +220,3 @@ export const dist = (a: Vec3, b: Vec3) => len(sub(a, b));
 export const lerp = (a: Vec3, b: Vec3, t: number): Vec3 => add(a, scale(sub(b, a), t));
 
 export const round = (n: number) => Math.round(n);
-export const roundVec = (v: Vec3): Vec3 => [round(v[0]), round(v[1]), round(v[2])];

@@ -8,8 +8,8 @@
  * tube along the core bundle curve, so a chain through point endpoints runs
  * smooth, and each tube is labelled with its routed length. A tie point is
  * a position in space; its distance along the segment is derived. Where a
- * placed bundle bends tighter than its minimum bend radius, that stretch of
- * tube draws red, the stretch the design rule check warns about.
+ * placed bundle bends tighter than its minimum bend radius, that run of
+ * tube draws red, the run the design rule check warns about.
  *
  * What is drawn is the project's saved placement laid over the sketch: a
  * part nobody placed sits where the sketch has it. A drag draws from local
@@ -27,10 +27,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePointAt, buildGraph, bundleCurves, bundleMinimums, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Lengths, type Placement, type Pose as CorePose, type RigidMove, type SegmentCurve } from "../../core";
+import { addTiePointAt, bundleCurves, bundleMinimums, clearPlacement, EMPTY_PLACEMENT, lengthsOf, moveHarness, moveRigidly, pieceHolding, placementOf, placeParts, removeTiePoint, roundVec, type Lengths, type Placement, type Pose as CorePose, type RigidMove, type SegmentCurve } from "../../core";
 import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
-import { ALL, add, dist, lerp, round, roundVec, scale, stretches, sub, tubeLabel, type Harness3, type Vec3, type World3 } from "./model";
+import { ALL, add, dist, lerp, round, scale, sub, tightRuns, tubeLabel, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
 import { placeReference, rad, ReferenceObject, ReferencePanel, type ReferenceState } from "./ReferenceModel";
 
@@ -167,17 +167,16 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   const locked = usePrefs((s) => s.lengthsLocked);
   const setLocked = usePrefs((s) => s.setLengthsLocked);
   const topology = useDoc((d) => d.project?.topologies.get(topologyId));
-  const allPieces = useMemo(() => (topology ? pieces(buildGraph(topology)) : []), [topology]);
   /** The harness that moves with a part when lengths are locked. */
   const membersOf = (id: string): Members | undefined => {
-    const piece = pieceOf(allPieces, harness.ties.find((t) => t.id === id)?.segment ?? id);
-    if (!piece) return undefined;
-    return { endpoints: piece.endpoints, connectors: [...piece.endpoints].filter((e) => connectors.has(e)), ties: harness.ties.filter((t) => piece.segments.has(t.segment)).map((t) => t.id) };
+    const held = topology && pieceHolding(topology, id);
+    if (!held) return undefined;
+    return { endpoints: held.piece.endpoints, connectors: [...held.piece.endpoints].filter((e) => connectors.has(e)), ties: held.ties };
   };
   // What is drawn before the live part moves, and what is drawn now: the live part alone in Stretch, its whole harness when locked.
-  const base = useMemo(() => poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, undefined), [world, placement]);
-  const liveMembers = useMemo(() => (live && locked ? membersOf(live.id) : undefined), [live?.id, locked, allPieces]);
-  const drawn = useMemo(() => (live && liveMembers ? movedPose(base, liveMembers, rigidMoveOf(base, live)) : poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, live)), [base, live, liveMembers, world, placement]);
+  const base = useMemo(() => poseOf(world, placement ?? EMPTY_PLACEMENT, undefined), [world, placement]);
+  const liveMembers = useMemo(() => (live && locked ? membersOf(live.id) : undefined), [live?.id, locked, topology]);
+  const drawn = useMemo(() => (live && liveMembers ? movedPose(base, liveMembers, rigidMoveOf(base, live)) : poseOf(world, placement ?? EMPTY_PLACEMENT, live)), [base, live, liveMembers, world, placement]);
   const { positions, rotations, placed } = drawn;
   // The bundle curve through what is drawn. A tie point bends it once it is saved, or while it moves.
   const project = useDoc((d) => d.project);
@@ -385,7 +384,7 @@ function RouteScene({ harness, positions, rotations, placed, curves, red, length
         const length = lengths?.segments.get(s.id);
         // One tube along the sampled curve, from ends[0] to ends[1], so tubes meet at point endpoints.
         const pts = curve?.points ?? [positions[s.ends[0]], positions[s.ends[1]]];
-        const tight = red.has(s.id) && curve ? stretches(pts, curve.tight) : [];
+        const tight = red.has(s.id) && curve ? tightRuns(pts, curve.tight) : [];
         const picked = selectedSegment === s.id;
         return (
           <group key={s.id}>
