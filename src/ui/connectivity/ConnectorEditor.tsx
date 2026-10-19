@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { addConnector, allNets, connectorOwner, definitionUsers, removeConnector, revertDefinition, updateConnector, type Component, type ConnectorTypeUse, type DefinitionConnector, type Project } from "../../core";
 import { MissingTypeLine, TypePicker } from "./ConnectorDrawer";
 
@@ -128,6 +128,41 @@ export function RemoveConnectorButton({ project, component, designator, edit }: 
     <button aria-label={`Remove ${designator}`} title="Remove connector, with its nets and topology endpoints" onClick={remove}>
       x
     </button>
+  );
+}
+
+/** Rename one connector of the component's owner, carrying its wiring. One undo step; a refusal is said aloud. */
+export function rename(edit: Edit, component: Component, from: string, to: string): boolean {
+  return tryEdit(edit, (p) => updateConnector(p, connectorOwner(component), from, { designator: to }));
+}
+
+/**
+ * A designator field that commits on blur or Enter, never per keystroke: each
+ * commit renames the wiring, and a half-typed name can collide with a real
+ * one. Escape, an empty field or a refused rename put the old name back.
+ */
+export function DesignatorInput({ value, onCommit }: { value: string; onCommit: (next: string) => boolean }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const commit = () => {
+    const clean = text.trim();
+    if (!clean || clean === value || !onCommit(clean)) setText(value);
+  };
+  return (
+    <input
+      className="short"
+      aria-label={`Designator ${value}`}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setText(value);
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 

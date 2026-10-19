@@ -1,9 +1,9 @@
-import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setInlineConnectors, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
 import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
 import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges, connectorTypeInventory } from "../../core";
-import { AddConnector, ConnectorRow, DefinitionStatus, RemoveConnectorButton, retype } from "./ConnectorEditor";
+import { AddConnector, ConnectorRow, DefinitionStatus, DesignatorInput, RemoveConnectorButton, rename, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
 import { DetachPublish } from "./DetachPublish";
 
@@ -149,7 +149,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
       <h3>Connectors</h3>
       {connectors === undefined && <p className="error">Definition {c.definition} is missing from the library.</p>}
       <ul className="list">
-        {(connectors ?? []).map((con, i) => {
+        {(connectors ?? []).map((con) => {
           const address = `${id}/${con.designator}`;
           const attached = nets.filter((n) => n.net.connectors.includes(address));
           return (
@@ -159,12 +159,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
                 connector={con}
                 inventory={inventory}
                 onType={(type) => retype(edit, c, con.designator, type)}
-                designator={
-                  c.connectors && (
-                    // #56 replaces this with a rename that commits on blur and carries the wiring.
-                    <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
-                  )
-                }
+                designator={<DesignatorInput value={con.designator} onCommit={(to) => rename(edit, c, con.designator, to)} />}
               >
                 <RemoveConnectorButton project={project} component={c} designator={con.designator} edit={edit} />
               </ConnectorRow>
