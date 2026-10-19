@@ -29,12 +29,13 @@ async function open3d(page: Page) {
   await page.locator(".h3d-workspace canvas").waitFor();
 }
 
-/** Show the first harness that is one segment between two connectors, so the camera frames it close. */
+/** Show the first built harness that is one segment between two connectors, so the camera frames it close. Purchased cables are skipped. */
 async function showTwoConnectorHarness(page: Page): Promise<void> {
   const select = page.locator(".h3d-bar select");
   for (const name of await select.locator("option").allTextContents()) {
     await select.selectOption(name);
-    if ((await page.locator(".h3d-bar .muted").textContent())?.startsWith("2 endpoints, 1 segments")) return;
+    if (!(await page.locator(".h3d-bar .muted").textContent())?.startsWith("2 endpoints, 1 segments")) continue;
+    if (!(await page.locator(".h3d-label [data-segment]").textContent())?.startsWith("cable ")) return;
   }
   throw new Error("no harness of two connectors");
 }

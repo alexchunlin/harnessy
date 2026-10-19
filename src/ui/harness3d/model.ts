@@ -1,9 +1,9 @@
 /**
- * The 3D harness view's data: every harness of a topology as plain 3D data.
+ * The 3D harness view's data: every harness and purchased assembly of a topology as plain 3D data.
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type SegmentLength, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, fallbackLabel, harnesses, netLabeller, netSpec, netsOnSegments, pieces, resolveConnector, resolveRef, resolveSpec, type Graph, type Piece, type Project, type SegmentLength, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -43,8 +43,21 @@ export interface Harness3 {
   ties: Tie3[];
 }
 
+/**
+ * Every connected piece the view draws, by the name the picker shows: each
+ * built harness by its label, and each purchased assembly piece by its
+ * connectors, so a patch cable can be placed and selected like a harness.
+ */
+function drawnPieces(project: Project, graph: Graph): { label: string; piece: Piece }[] {
+  const built = harnesses(project, graph).map((h) => ({ label: h.label, piece: h.piece }));
+  const purchased = pieces(graph)
+    .filter((p) => !p.built)
+    .map((piece) => ({ label: fallbackLabel(project, graph, piece), piece }));
+  return [...built, ...purchased];
+}
+
 function harnessNames(project: Project, topology: Topology): string[] {
-  return harnesses(project, buildGraph(topology))
+  return drawnPieces(project, buildGraph(topology))
     .map((h) => h.label)
     .sort();
 }
@@ -64,7 +77,7 @@ function bundleOd(project: Project, routes: ReturnType<typeof allRoutes>): numbe
 
 function extractHarness(project: Project, topology: Topology, name: string): Harness3 | undefined {
   const graph = buildGraph(topology);
-  const harness = harnesses(project, graph).find((h) => h.label === name);
+  const harness = drawnPieces(project, graph).find((h) => h.label === name);
   if (!harness) return undefined;
   const routes = allRoutes(project, graph);
   const onSeg = netsOnSegments(routes);
@@ -91,7 +104,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
     return {
       id,
       ends: s.ends,
-      lengthMm: s.length_mm ?? 200,
+      lengthMm: (s.assembly ? resolveRef(project.library, s.assembly, "assemblies")?.length_mm : s.length_mm) ?? 200,
       odMm: bundleOd(project, rs),
       color: (top && domainColor.get(top)) || "#888888",
       nets: rs.map((r) => label(r.net)),

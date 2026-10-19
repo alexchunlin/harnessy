@@ -42,7 +42,8 @@ export type CheckId =
   | "tie-beyond-segment"
   | "keep-apart"
   | "net-no-spec"
-  | "bend-radius";
+  | "bend-radius"
+  | "assembly-too-short";
 
 export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-too-few-connectors": "error",
@@ -67,6 +68,7 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "keep-apart": "warning",
   "net-no-spec": "warning",
   "bend-radius": "warning",
+  "assembly-too-short": "warning",
 };
 
 const silenceKey = (check: string, target: string) => `${check}|${target}`;
@@ -227,6 +229,9 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       if (!resolveRef(project.library, s.assembly, "assemblies")) add("dangling-reference", s.id, "topology", `segment ${s.id} references ${s.assembly}, which has no library file`);
       const ends = s.ends.map((e) => graph.endpoints.get(e)?.kind);
       if (!ends.every((k) => k === "connector")) add("assembly-ends-not-connectors", s.id, "topology", `purchased assembly ${s.id} must run connector to connector`);
+      // A path shorter than the cable is ordinary spare length; only a path the cable cannot reach is flagged.
+      const { mm, pathMm } = lengths.segments.get(s.id) ?? {};
+      if (mm !== undefined && pathMm !== undefined && pathMm > mm) add("assembly-too-short", s.id, "3d", `purchased assembly ${s.id}: path ${pathMm} mm, cable ${mm} mm`);
     } else if (segmentLength(lengths, s.id) === undefined) {
       add("segment-no-length", s.id, "topology", `segment ${s.id} has no length`);
     }
