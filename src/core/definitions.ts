@@ -135,3 +135,45 @@ export function addConnector(project: Project, owner: DrawerOwner, connector: De
 export function updateConnector(project: Project, owner: DrawerOwner, designator: string, patch: ConnectorPatch): Project {
   return owner.kind === "definition" ? updateDefinitionConnector(project, owner.id, designator, patch) : updateInlineConnector(project, owner.id, designator, patch);
 }
+
+/**
+ * Give a component its own copy of its definition's connectors and bridges,
+ * so later edits to the definition pass it by. Its nets and pins stay, since
+ * the designators do not change.
+ */
+export function detachComponent(project: Project, componentId: string): Project {
+  const component = project.components.get(componentId);
+  if (!component) throw new Error(`no component ${componentId}`);
+  if (!component.definition) throw new Error(`component ${componentId} is already a one-off`);
+  const def = resolveRef(project.library, component.definition, "components");
+  if (!def) throw new Error(`definition ${component.definition} is missing from the library`);
+  const detached: Component = { id: component.id, name: component.name, connectors: def.connectors.map((c) => ({ ...c })) };
+  if (def.bridges?.length) detached.bridges = def.bridges.map((b) => [...b]);
+  const components = new Map(project.components);
+  components.set(componentId, detached);
+  return { ...project, components };
+}
+
+/** A definition id from a display name, slugified, with `-2`, `-3` and so on until no library entry has it. */
+export function freeDefinitionId(project: Project, name: string): string {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "component";
+  let id = base;
+  for (let n = 2; project.library.components.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+/**
+ * Publish a one-off's connectors and bridges as a new project definition
+ * named after the component, and point the component at it. The id is free
+ * in the merged library, so publishing never overwrites an entry.
+ */
+export function publishDefinition(project: Project, componentId: string): { project: Project; id: string } {
+  const { component, connectors } = inlineOrThrow(project, componentId);
+  const id = freeDefinitionId(project, component.name);
+  const def: ComponentDefinition = { id, name: component.name, connectors: connectors.map((c) => ({ ...c })) };
+  if (component.bridges?.length) def.bridges = component.bridges.map((b) => [...b]);
+  const p = putDefinition(project, def);
+  const components = new Map(p.components);
+  components.set(componentId, { id: component.id, name: component.name, definition: `components/${id}` });
+  return { project: { ...p, components }, id };
+}

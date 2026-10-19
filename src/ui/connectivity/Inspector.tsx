@@ -5,6 +5,7 @@ import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges, connectorTypeInventory } from "../../core";
 import { AddConnector, ConnectorRow, DefinitionStatus, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
+import { DetachPublish } from "./DetachPublish";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
 const unhover = () => hover(NO_HOVER);
@@ -130,6 +131,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
         <span>{c.definition ?? <span className="muted">one-off, connectors declared inline</span>}</span>
       </div>
       <DefinitionStatus project={project} component={c} edit={edit} />
+      <DetachPublish project={project} component={c} edit={edit} />
       <div className="field">
         <label>Id</label>
         <code>{c.id}</code>
