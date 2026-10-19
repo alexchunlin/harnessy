@@ -4,10 +4,10 @@
  *
  * Connectors are placed against the machine with move and turn handles, and
  * a segment leaves its connector along the connector's axis. Breakouts,
- * points and tie points are dragged into place, and segments pull straight
- * between them. The routed length of every segment is live and the stored
- * length shows beside it. A tie point is a position in space; its distance
- * along the segment is derived.
+ * points and tie points are dragged into place. Each segment draws as one
+ * tube along the core bundle curve, so a chain through point endpoints runs
+ * smooth, and each tube is labelled with its routed length. A tie point is
+ * a position in space; its distance along the segment is derived.
  *
  * What is drawn is the project's saved placement laid over the sketch: a
  * part nobody placed sits where the sketch has it. A drag draws from local
@@ -25,10 +25,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePointAt, buildGraph, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Placement, type RigidMove, type SegmentLength } from "../../core";
+import { addTiePointAt, buildGraph, bundleCurves, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Lengths, type Placement, type Pose as CorePose, type RigidMove, type SegmentCurve } from "../../core";
 import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
-import { ALL, add, dist, lerp, round, roundVec, scale, sub, type Harness3, type Vec3, type World3 } from "./model";
+import { ALL, add, dist, lerp, round, roundVec, scale, sub, tubeLabel, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
 import { placeReference, rad, ReferenceObject, ReferencePanel, type ReferenceState } from "./ReferenceModel";
 
@@ -52,12 +52,6 @@ type Mode = "translate" | "rotate";
 const REFERENCE = "reference";
 const deg = (v: Vec3): Vec3 => [round(THREE.MathUtils.radToDeg(v[0])), round(THREE.MathUtils.radToDeg(v[1])), round(THREE.MathUtils.radToDeg(v[2]))];
 
-/** A connector's wires leave along its local -Y. */
-function exitDirection(rotation: Vec3): Vec3 {
-  const v = new THREE.Vector3(0, -1, 0).applyEuler(new THREE.Euler(...rotation));
-  return [v.x, v.y, v.z];
-}
-
 /** The turn that points a connector's wire exit from one point toward another. */
 function turnToward(from: Vec3, to: Vec3): Vec3 {
   const toward = new THREE.Vector3(...sub(to, from));
@@ -71,16 +65,13 @@ interface Pose {
   /** Connector rotations in radians. */
   rotations: Record<string, Vec3>;
   placed: PlacedTie[];
-  /** Tie point order along each segment, from ends[0] to ends[1]. */
-  chains: Record<string, string[]>;
 }
 
 /**
  * Where everything is drawn. A saved position wins over the sketch, and the
  * live part wins over both. A connector with no saved rotation exits toward
  * the far end of its segment. A tie point with no saved position sits at its
- * typed distance along the straight line between its segment's ends. Tie
- * points are ordered by their projection onto that line, ties broken by id.
+ * typed distance along the straight line between its segment's ends.
  */
 function poseOf(world: World3, placement: Placement, live: Live | undefined): Pose {
   const h = world.all;
@@ -107,18 +98,7 @@ function poseOf(world: World3, placement: Placement, live: Live | undefined): Po
     positions[t.id] = over(t.id, placement.ties[t.id] ?? typed);
     placed.push({ id: t.id, segment: t.segment, label: t.label });
   }
-
-  const chains: Record<string, string[]> = {};
-  for (const s of h.segments) {
-    const start = positions[s.ends[0]];
-    const line = sub(positions[s.ends[1]], start);
-    const along = (id: string) => sub(positions[id], start).reduce((sum, v, i) => sum + v * line[i], 0);
-    chains[s.id] = placed
-      .filter((c) => c.segment === s.id)
-      .map((c) => c.id)
-      .sort((x, y) => along(x) - along(y) || (x < y ? -1 : 1));
-  }
-  return { positions, rotations, placed, chains };
+  return { positions, rotations, placed };
 }
 
 /** The parts that move with one part when lengths are locked: every endpoint and tie point of its harness. */
@@ -170,11 +150,10 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   // The lengths the project uses, the same numbers the topology inspector and the BOM show.
   const lengths = useDoc((d) => {
     const top = d.project?.topologies.get(topologyId);
-    return d.project && top ? lengthsOf(d.project, top).segments : undefined;
+    return d.project && top ? lengthsOf(d.project, top) : undefined;
   });
   const placement = useDoc((d) => (d.project ? placementOf(d.project, topologyId) : undefined));
   const connectors = useMemo(() => new Set(harness.nodes.filter((n) => n.kind === "connector").map((n) => n.id)), [harness]);
-  const strainRelief = useMemo(() => Object.fromEntries(harness.nodes.map((n) => [n.id, n.strainReliefMm ?? 0])), [harness]);
 
   const [live, setLiveState] = useState<Live>();
   // The latest live part, read when a drag is let go, which can come before React renders the last move.
@@ -197,7 +176,18 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   const base = useMemo(() => poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, undefined), [world, placement]);
   const liveMembers = useMemo(() => (live && locked ? membersOf(live.id) : undefined), [live?.id, locked, allPieces]);
   const drawn = useMemo(() => (live && liveMembers ? movedPose(base, liveMembers, rigidMoveOf(base, live)) : poseOf(world, placement ?? { positions: {}, rotations: {}, ties: {} }, live)), [base, live, liveMembers, world, placement]);
-  const { positions, rotations, placed, chains } = drawn;
+  const { positions, rotations, placed } = drawn;
+  // The bundle curve through what is drawn. A tie point bends it once it is saved, or while it moves.
+  const project = useDoc((d) => d.project);
+  const drawnPose = useMemo((): CorePose => {
+    const moving = new Set([...(live ? [live.id] : []), ...(liveMembers?.ties ?? [])]);
+    return {
+      positions: Object.fromEntries(harness.nodes.map((n) => [n.id, positions[n.id]])),
+      rotations: Object.fromEntries([...connectors].map((id) => [id, rotations[id].map((r) => THREE.MathUtils.radToDeg(r)) as Vec3])),
+      ties: Object.fromEntries(harness.ties.filter((t) => placement?.ties[t.id] || moving.has(t.id)).map((t) => [t.id, positions[t.id]])),
+    };
+  }, [drawn, harness, connectors, placement, live?.id, liveMembers]);
+  const curves = useMemo(() => (project && topology ? bundleCurves(project, topology, drawnPose) : new Map<string, SegmentCurve>()), [project, topology, drawnPose]);
 
   const [selected, setSelected] = useState<string>();
   const [frame, setFrame] = useState(0);
@@ -232,24 +222,14 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  /** The points a segment passes through, each tagged with the tie point or endpoint it belongs to. */
-  const route = (segId: string): { id?: string; at: Vec3 }[] => {
-    const s = harness.segments.find((x) => x.id === segId)!;
-    const stub = (id: string) => (connectors.has(id) && rotations[id] && strainRelief[id] > 0 ? [{ at: add(positions[id], scale(exitDirection(rotations[id]), strainRelief[id])) }] : []);
-    return [{ id: s.ends[0], at: positions[s.ends[0]] }, ...stub(s.ends[0]), ...chains[segId].map((id) => ({ id, at: positions[id] })), ...stub(s.ends[1]), { id: s.ends[1], at: positions[s.ends[1]] }];
-  };
-  const path = (segId: string) => route(segId).map((r) => r.at);
-  const routed = (segId: string) => {
-    const pts = path(segId);
-    return pts.slice(1).reduce((t, p, i) => t + dist(pts[i], p), 0);
-  };
+  /** A tie point's distance from its named end: the project's number, or the drawn curve's while a drag is held. */
   const tieDistance = (tieId: string) => {
-    const c = placed.find((x) => x.id === tieId)!;
-    const s = harness.segments.find((x) => x.id === c.segment)!;
-    const r = route(s.id);
-    let d = 0;
-    for (let i = 1; i < r.length && r[i - 1].id !== tieId; i++) d += dist(r[i - 1].at, r[i].at);
-    return { from: s.ends[0], mm: d };
+    const t = harness.ties.find((x) => x.id === tieId)!;
+    const s = harness.segments.find((x) => x.id === t.segment)!;
+    const curve = curves.get(s.id);
+    const d = curve?.ties[tieId];
+    if (live && curve && d !== undefined) return t.from === s.ends[0] ? d : curve.lengthMm - d;
+    return lengths?.ties.get(tieId)?.mm ?? t.distanceMm;
   };
 
   /**
@@ -284,11 +264,6 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
 
   /** Make a tie point where a tube was double-clicked, saved with its position as one edit. Its distance is measured on the curve as drawn. */
   function addTie(segmentId: string, at: Vec3) {
-    const drawnPose = {
-      positions: Object.fromEntries(harness.nodes.map((n) => [n.id, positions[n.id]])),
-      rotations: Object.fromEntries([...connectors].map((id) => [id, rotations[id].map((r) => THREE.MathUtils.radToDeg(r)) as Vec3])),
-      ties: Object.fromEntries(harness.ties.map((t) => [t.id, positions[t.id]])),
-    };
     let made: string | undefined;
     useDoc.getState().edit((p) => {
       const r = addTiePointAt(p, topologyId, segmentId, at, drawnPose);
@@ -318,7 +293,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
       <Stage onPointerMissed={() => setSelected(undefined)}>
         <Frame centre={middle} radius={reach} token={frame} />
         {reference && <ReferenceObject loaded={reference.loaded} units={reference.model.units} position={reference.position} rotation={reference.rotation} />}
-        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} path={path} routed={routed} lengths={lengths} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} onAddTie={addTie} />
+        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} curves={curves} lengths={lengths} dragging={live !== undefined} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} onAddTie={addTie} />
         {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} onEnd={commit} />}
       </Stage>
       <aside className="h3d-panel">
@@ -368,7 +343,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   );
 }
 
-function RouteScene({ harness, positions, rotations, placed, path, routed, lengths, selected, onSelect, onDrag, onDragEnd, tieDistance, onAddTie }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; path: (segId: string) => Vec3[]; routed: (segId: string) => number; lengths: Map<string, SegmentLength> | undefined; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => { from: string; mm: number }; onAddTie: (segmentId: string, at: Vec3) => void }) {
+function RouteScene({ harness, positions, rotations, placed, curves, lengths, dragging, selected, onSelect, onDrag, onDragEnd, tieDistance, onAddTie }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; curves: Map<string, SegmentCurve>; lengths: Lengths | undefined; dragging: boolean; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => number; onAddTie: (segmentId: string, at: Vec3) => void }) {
   const start = useDrag(onDrag, onDragEnd);
   const [hovered, setHovered] = useState<string>();
   // The card follows the pointer first, and falls back to the selected connector.
@@ -382,28 +357,23 @@ function RouteScene({ harness, positions, rotations, placed, path, routed, lengt
   return (
     <>
       {harness.segments.map((s) => {
-        const pts = path(s.id);
-        const length = lengths?.get(s.id);
-        const longest = pts.slice(1).reduce((best, p, i) => (dist(pts[i], p) > dist(pts[best], pts[best + 1]) ? i : best), 0);
-        const mid = lerp(pts[longest], pts[longest + 1], 0.5);
+        const curve = curves.get(s.id);
+        const length = lengths?.segments.get(s.id);
+        // One tube along the sampled curve, from ends[0] to ends[1], so tubes meet at point endpoints.
+        const pts = curve?.points ?? [positions[s.ends[0]], positions[s.ends[1]]];
         return (
           <group key={s.id}>
-            {pts.slice(1).map((p, i) => (
-              <Tube
-                key={i}
-                points={[pts[i], p]}
-                radius={s.odMm / 2}
-                color={s.color}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onAddTie(s.id, [e.point.x, e.point.y, e.point.z]);
-                }}
-              />
-            ))}
-            {/* A placed segment shows the length the project uses. An unplaced one shows what is drawn beside what is typed. */}
-            <Label at={mid} tone="muted">
-              {length?.source === "3d" ? length.mm : Math.round(routed(s.id))}
-              {length?.source !== "3d" && <span className="h3d-ghost"> / {length?.mm ?? "?"} {length?.source ?? "typed"}</span>}
+            <Tube
+              points={pts}
+              radius={s.odMm / 2}
+              color={s.color}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onAddTie(s.id, [e.point.x, e.point.y, e.point.z]);
+              }}
+            />
+            <Label at={pts[Math.floor(pts.length / 2)]} tone="muted">
+              <span data-segment={s.id}>{length ? tubeLabel(length, curve?.lengthMm ?? dist(pts[0], pts[pts.length - 1]), dragging) : ""}</span>
             </Label>
           </group>
         );
@@ -414,7 +384,7 @@ function RouteScene({ harness, positions, rotations, placed, path, routed, lengt
           <group key={c.id}>
             <Handle at={at} shape="diamond" color={selected === c.id ? "#ffd166" : "#ffffff"} onPointerDown={grab(c.id, at)} />
             <Label at={[at[0], at[1] + 22, at[2]]}>
-              {c.label} @ {round(tieDistance(c.id).mm)}
+              {c.label} @ {round(tieDistance(c.id))}
             </Label>
           </group>
         );

@@ -176,8 +176,10 @@ export function Handle({ at, shape, color, onPointerDown }: { at: Vec3; shape: "
 }
 
 export function Label({ at, children, tone = "plain" }: { at: Vec3; children: ReactNode; tone?: "plain" | "muted" | "accent" }) {
+  // Pin labels to the canvas's own parent. Left to itself, Html moves them once the pointer events connect, and a label mounted before that can go missing.
+  const parent = useThree((s) => s.gl.domElement.parentNode as HTMLElement);
   return (
-    <Html position={at} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+    <Html position={at} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }} portal={{ current: parent }}>
       <div className={`h3d-label h3d-${tone}`}>{children}</div>
     </Html>
   );

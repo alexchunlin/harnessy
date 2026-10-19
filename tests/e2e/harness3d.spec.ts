@@ -86,6 +86,13 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   await page.waitForTimeout(1000);
   expect(await snapshot(folder)).toEqual(opened);
 
+  // An unplaced segment's tube is labelled with its typed length, not the length of its sketch.
+  const tube = page.locator(".h3d-label [data-segment]");
+  await expect(tube).toHaveCount(1);
+  const tubeSegment = (await tube.getAttribute("data-segment"))!;
+  const typedMm = ((await readJson(folder, TOPOLOGY)) as { segments: { id: string; length_mm?: number }[] }).segments.find((s) => s.id === tubeSegment)!.length_mm;
+  await expect(tube).toHaveText(`${typedMm} mm`);
+
   // Lengths come from the placement, so the view has nothing to write back.
   await expect(page.getByRole("button", { name: /Write to the harness/ })).toHaveCount(0);
 
@@ -140,12 +147,16 @@ test("a connector dragged in 3D is saved and comes back where it was left after 
   await waitForFile(folder, PLACEMENT, (v) => Object.keys((v as { positions: Record<string, Vec3> }).positions).length === 2);
   const top = (await readJson(folder, TOPOLOGY)) as { segments: { id: string; ends: string[]; length_mm?: number }[] };
   const segment = top.segments.find((s) => s.ends.includes(id) && s.ends.includes(other))!;
+  // The tube's label shows the routed length the topology inspector shows.
+  const routed = (await page.locator(`.h3d-label [data-segment="${segment.id}"]`).textContent())!;
+  expect(routed).toMatch(/^\d+ mm$/);
   await page.reload();
   await page.getByRole("button", { name: "Topology", exact: true }).click();
   await canvasSettled(page);
   await page.locator(`.seg-label[data-segment="${segment.id}"]`).click();
   const inspector = page.locator(".pane-right");
   await expect(inspector.locator(".segment-length")).toContainText("from 3D");
+  await expect(inspector.locator(".segment-length")).toContainText(routed);
   await expect(inspector.getByPlaceholder("not measured")).toHaveCount(0);
   // The typed length stays in the file for when the segment is unplaced.
   expect(((await readJson(folder, TOPOLOGY)) as typeof top).segments.find((s) => s.id === segment.id)!.length_mm).toBe(segment.length_mm);

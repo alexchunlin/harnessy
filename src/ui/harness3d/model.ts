@@ -3,7 +3,7 @@
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type SegmentLength, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -157,6 +157,18 @@ export function extractAll(project: Project, topology: Topology): World3 {
     members: Object.fromEntries(parts.map((h) => [h.name, { nodes: new Set(h.nodes.map((n) => n.id)), segments: new Set(h.segments.map((x) => x.id)) }])),
     names: parts.map((h) => h.name),
   };
+}
+
+/**
+ * The label beside a segment's tube: its routed length, the number the
+ * topology inspector and the BOM use. A purchased assembly shows its library
+ * length beside the path drawn for it. While a drag is held, a placed
+ * segment follows the drawn curve, which becomes its length on release.
+ */
+export function tubeLabel(length: SegmentLength, drawnMm: number, dragging = false): string {
+  if (length.source === "library") return `cable ${length.mm ?? "?"} mm, path ${round(drawnMm)} mm`;
+  if (length.source === "3d" && dragging) return `${round(drawnMm)} mm`;
+  return length.mm === undefined ? "no length" : `${length.mm} mm`;
 }
 
 // Vectors ----------------------------------------------------------------------
