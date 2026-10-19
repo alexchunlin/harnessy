@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
+import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
-import { deriveTopology, drawnFrom, homeKey, topologyLayout, type TopoEdge, type TopoNode } from "./model";
+import { arcPath, deriveTopology, drawnFrom, homeKey, topologyLayout, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
 import { EndpointNode, HarnessBoxNode, TieNode, WaitingGroupNode } from "./nodes";
 import { CalloutEdge, RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
@@ -386,6 +386,14 @@ function Canvas({ topologyId }: { topologyId: string }) {
           colorMode={theme}
           elevateEdgesOnSelect
         >
+          <ViewportPortal>
+            {/* Each fan's faint arc, under the segments and boxes. */}
+            <svg className="fan-arcs" aria-hidden>
+              {layout.arcs.map((a, i) => (
+                <path key={`${a.node}:${i}`} d={arcPath(a)} data-fan={a.node} />
+              ))}
+            </svg>
+          </ViewportPortal>
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>

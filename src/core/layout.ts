@@ -8,8 +8,13 @@ import { buildGraph, degree, harnesses, otherEnd, pieces, type Graph, type Piece
 import { allNets, type Project } from "./project";
 import type { Endpoint, Position, Segment, Topology, TopologyCanvas } from "./schema";
 
-/** The drawn length of every logical edge, in canvas pixels. */
-export const UNIFORM_LENGTH = 150;
+/**
+ * The drawn length of every logical edge, in canvas pixels. At this length,
+ * children STEP_DEGREES apart sit about one SIBLING_PITCH apart, so connector
+ * boxes on a fan do not overlap whichever way it faces. 350 is the least
+ * that keeps the RAMMP example clear.
+ */
+export const UNIFORM_LENGTH = 400;
 /** The least distance between two siblings on a crowded arc: a connector box and a little air. */
 export const SIBLING_PITCH = 104;
 /** The angle between neighbouring children of a node that has a parent. */
@@ -71,6 +76,21 @@ export interface HarnessBox {
   offset: Position;
 }
 
+/**
+ * A faint arc through the children of one breakout or splice, so the fan
+ * reads as one group. Angles are in degrees with screen y down, so the sweep
+ * runs clockwise from `from` to `to`. A root's arc is the whole circle. A
+ * trunk node between two roots has one arc for each side of the trunk.
+ */
+export interface FanArc {
+  /** The breakout or splice the fan grows from. */
+  node: string;
+  centre: Position;
+  radius: number;
+  from: number;
+  to: number;
+}
+
 export interface TopologyLayout {
   /** Every endpoint of the topology, by id. Centres, in canvas pixels. */
   endpoints: Map<string, EndpointLayout>;
@@ -78,6 +98,8 @@ export interface TopologyLayout {
   segments: Map<string, [Position, Position]>;
   /** Built harnesses first, then purchased cables, each in piece id order. */
   pieces: PieceLayout[];
+  /** One per breakout or splice with children, through its children's homes. */
+  arcs: FanArc[];
   /** One per endpoint moved past the call-out distance, in endpoint id order. */
   callouts: Callout[];
   /** Connectors with nets and no segment, under the pieces, by component name. */
@@ -122,11 +144,12 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   const named = new Map(harnesses(project, graph).map((h) => [h.piece.id, h]));
   // Each piece in its own frame first. A turn about the piece's centre belongs here, before the bounds are taken.
   const laid = ordered.map((piece) => {
-    const local = layoutPiece(graph, piece, roots);
-    return { piece, local, rect: bounds(graph, local) };
+    const { pos: local, arcs } = layoutPiece(graph, piece, roots);
+    return { piece, local, arcs, rect: bounds(graph, local) };
   });
   const home: Positions = new Map();
   const out: PieceLayout[] = [];
+  const arcs: FanArc[] = [];
   const bottom = pack(
     laid.map((l) => l.rect),
     (i, x, y) => {
@@ -134,7 +157,9 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
       // The box offset is added after packing and moves the homes, so a dragged box carries every endpoint with it.
       const offset = canvas.pieces[piece.id]?.offset ?? { x: 0, y: 0 };
       const placed = { x: x + offset.x, y: y + offset.y, w: rect.w, h: rect.h };
-      for (const [id, p] of local) home.set(id, { x: p.x - rect.x + placed.x, y: p.y - rect.y + placed.y });
+      const move = (p: Position) => ({ x: p.x - rect.x + placed.x, y: p.y - rect.y + placed.y });
+      for (const [id, p] of local) home.set(id, move(p));
+      for (const a of laid[i].arcs) arcs.push({ ...a, centre: move(a.centre) });
       const h = named.get(piece.id);
       // The box rect waits for the endpoint offsets below, since the box goes around every drawn endpoint.
       const box = h && { rect: boxAround(placed), label: h.label, partNumber: h.partNumber, unnamed: h.anchors.length === 0, offset };
@@ -146,19 +171,47 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   // A waiting connector with an endpoint record draws where the grid puts it. Other endpoints with no segment have no home.
   for (const g of waiting) for (const c of g.connectors) if (c.endpoint) home.set(c.endpoint, c.position);
 
-  const { endpoints, segmentEnd, callouts } = applyOffsets(graph, home, canvas.offsets);
+  const { endpoints, anchor, callouts } = applyOffsets(graph, home, canvas.offsets);
   out.forEach((p, i) => {
     if (!p.box) return;
     const members = [...laid[i].piece.endpoints].map((id) => ({ at: endpoints.get(id)!.drawn, size: ENDPOINT_SIZE[graph.endpoints.get(id)!.kind] }));
     p.box.rect = harnessBoxRect(members);
   });
+  const calledOut = new Set(callouts.map((c) => c.endpoint));
+  // A line meets the box where the box is. A called-out end stays at its home, where there is no box to meet.
+  const endAt = (id: string, other: Position) => {
+    const kind = graph.endpoints.get(id)!.kind;
+    return calledOut.has(id) ? anchor.get(id)! : segmentEnd(kind, anchor.get(id)!, other);
+  };
   const segments = new Map<string, [Position, Position]>();
   for (const s of topology.segments) {
-    const a = segmentEnd.get(s.ends[0]);
-    const b = segmentEnd.get(s.ends[1]);
-    if (a && b) segments.set(s.id, [a, b]);
+    const a = anchor.get(s.ends[0]);
+    const b = anchor.get(s.ends[1]);
+    if (a && b) segments.set(s.id, [endAt(s.ends[0], b), endAt(s.ends[1], a)]);
   }
-  return { endpoints, segments, pieces: out, waiting, callouts };
+  return { endpoints, segments, pieces: out, arcs, waiting, callouts };
+}
+
+/**
+ * Where a segment ends at an endpoint centred on `centre`, coming from
+ * `other`. A connector box is met at the point on its edge nearest `other`,
+ * so lines do not all converge on its middle. Every smaller box is met at its
+ * centre.
+ */
+export function segmentEnd(kind: Endpoint["kind"], centre: Position, other: Position): Position {
+  if (kind !== "connector") return centre;
+  const hw = ENDPOINT_SIZE.connector.w / 2;
+  const hh = ENDPOINT_SIZE.connector.h / 2;
+  const x = Math.min(Math.max(other.x, centre.x - hw), centre.x + hw);
+  const y = Math.min(Math.max(other.y, centre.y - hh), centre.y + hh);
+  const inX = hw - Math.abs(x - centre.x);
+  const inY = hh - Math.abs(y - centre.y);
+  if (inX > 0 && inY > 0) {
+    // `other` lies inside the box: push out to the nearer edge.
+    if (inX < inY) return { x: x < centre.x ? centre.x - hw : centre.x + hw, y };
+    return { x, y: y < centre.y ? centre.y - hh : centre.y + hh };
+  }
+  return { x, y };
 }
 
 // Offsets -----------------------------------------------------------------------
@@ -168,17 +221,17 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
  * out from their parent's home, so an offset moves only its own endpoint.
  * Close by, the segments follow the box. Past the call-out distance they
  * stay true at home and a call-out line points to the box. A waiting
- * endpoint has no offset.
+ * endpoint has no offset. `anchor` is where each endpoint's segments aim.
  */
 function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["offsets"]) {
   const endpoints = new Map<string, EndpointLayout>();
-  const segmentEnd: Positions = new Map();
+  const anchor: Positions = new Map();
   const callouts: Callout[] = [];
   for (const [id, p] of home) {
     const offset = degree(graph, id) > 0 ? offsets[id] : undefined;
     if (!offset) {
       endpoints.set(id, { home: p, drawn: p });
-      segmentEnd.set(id, p);
+      anchor.set(id, p);
       continue;
     }
     // The offset is in its harness's frame. A turned harness rotates it here before it lands on the canvas.
@@ -186,11 +239,11 @@ function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["of
     endpoints.set(id, { home: p, drawn });
     if (Math.hypot(offset.x, offset.y) > CALLOUT_DISTANCE) {
       callouts.push({ endpoint: id, from: p, to: drawn });
-      segmentEnd.set(id, p);
-    } else segmentEnd.set(id, drawn);
+      anchor.set(id, p);
+    } else anchor.set(id, drawn);
   }
   callouts.sort((a, b) => (a.endpoint < b.endpoint ? -1 : a.endpoint > b.endpoint ? 1 : 0));
-  return { endpoints, segmentEnd, callouts };
+  return { endpoints, anchor, callouts };
 }
 
 // The waiting grid ------------------------------------------------------------------
@@ -295,24 +348,28 @@ function logicalTree(graph: Graph, piece: Piece, roots: Set<string>): LogicalTre
   return { nodes, edges };
 }
 
-/** Homes for one piece, relative to its root at the origin. */
-function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions {
+/** Homes and fan arcs for one piece, relative to its root at the origin. */
+function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): { pos: Positions; arcs: FanArc[] } {
   const tree = logicalTree(graph, piece, roots);
   const marked = tree.nodes.filter((n) => roots.has(n));
   const trunk = marked.length >= 2 ? longestPathBetween(tree, marked) : [marked[0] ?? middleOfLongestPath(tree)];
   const root = trunk[0];
   const pos: Positions = new Map([[root, { x: 0, y: 0 }]]);
   const visited = new Set<string>();
+  const arcs: FanArc[] = [];
   /** Lay out a node's children, or only the ones in `only` when the trunk splits them between its two sides. */
   const grow = (node: string, parent: string | undefined, away: number, only?: LogicalEdge[]) => {
     visited.add(node);
     const kids = only ?? tree.edges.get(node)!.filter((e) => e.b !== parent && !visited.has(e.b));
-    const k = kids.length;
-    // A root spreads its children evenly over the whole circle; every other node fans them around the direction away from its parent.
-    const angles = parent === undefined ? kids.map((_, i) => (i * 360) / k) : kids.map((_, i) => away + (i - (k - 1) / 2) * STEP_DEGREES);
+    const { angles, length } = fan(kids.length, parent === undefined, away);
+    const kind = graph.endpoints.get(node)?.kind;
+    if (kids.length > 0 && (kind === "breakout" || kind === "splice")) {
+      const [from, to] = parent === undefined ? [0, 360] : [angles[0], angles[angles.length - 1]];
+      arcs.push({ node, centre: pos.get(node)!, radius: length, from, to });
+    }
     kids.forEach((e, i) => {
       if (visited.has(e.b)) return;
-      pos.set(e.b, step(pos.get(node)!, angles[i], UNIFORM_LENGTH));
+      pos.set(e.b, step(pos.get(node)!, angles[i], length));
       spaceEvenly(pos, e);
       grow(e.b, node, angles[i]);
     });
@@ -321,7 +378,25 @@ function layoutPiece(graph: Graph, piece: Piece, roots: Set<string>): Positions 
   else layTrunk(tree, trunk, pos, visited, grow);
   // A cycle is a design rule error; anything the walk could not reach sits on the root so it stays visible.
   for (const id of piece.endpoints) if (!pos.has(id)) pos.set(id, { x: 0, y: 0 });
-  return pos;
+  return { pos, arcs };
+}
+
+/**
+ * The angles of a node's children and the length of its segments to them. A
+ * root spreads its children evenly over the whole circle; every other node
+ * fans them STEP_DEGREES apart around the direction away from its parent.
+ * A fan that would pass the half circle shrinks its step to fit it. A
+ * crowded fan lengthens its segments until neighbours sit SIBLING_PITCH
+ * apart; every other fan keeps the uniform length.
+ */
+function fan(k: number, isRoot: boolean, away: number): { angles: number[]; length: number } {
+  const gaps = isRoot ? k : k - 1;
+  const stepDegrees = isRoot ? 360 / k : Math.min(STEP_DEGREES, 180 / Math.max(gaps, 1));
+  const angles = isRoot ? Array.from({ length: k }, (_, i) => i * stepDegrees) : Array.from({ length: k }, (_, i) => away + (i - (k - 1) / 2) * stepDegrees);
+  const crowded = isRoot ? k > 1 : gaps * STEP_DEGREES > 180;
+  // Neighbours on a circle of radius r, `step` apart, sit 2 r sin(step / 2) apart.
+  const pitchLength = SIBLING_PITCH / (2 * Math.sin((stepDegrees * Math.PI) / 360));
+  return { angles, length: crowded ? Math.max(UNIFORM_LENGTH, pitchLength) : UNIFORM_LENGTH };
 }
 
 /**

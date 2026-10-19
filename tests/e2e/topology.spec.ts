@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, pointOnAnEdge, viewportTransform, waitForFile } from "./helpers";
+import { canvasSettled, fanArcsOf, freshExample, openProject, pointOnAnEdge, viewportTransform, waitForFile } from "./helpers";
 
 /** Topology round two: the ratsnest, layer filtering, and the side by side view. */
 
@@ -195,6 +195,39 @@ test("side by side shows both canvases, a net picked on either side lights it on
   await page.reload();
   await expect(page.getByRole("button", { name: "Side by side" })).toHaveClass(/active/);
   expect(await page.locator(".side-pane-left").evaluate((e) => (e as { style: { width: string } }).style.width)).toBe(width);
+});
+
+test("segments meet connector boxes at their edges, and each fan draws its faint arc", async ({ page }) => {
+  const folder = await freshExample("fan-arcs");
+  await openTopology(page, folder);
+  await page.waitForTimeout(600);
+
+  // Both ends of the battery lead sit on the edge of their connector box, not inside it and not at its top centre.
+  const ends = await page.evaluate((id) => {
+    type Path = { getAttribute(n: string): string | null; getScreenCTM(): { a: number; b: number; c: number; d: number; e: number; f: number } };
+    const doc = (globalThis as unknown as { document: { querySelector(sel: string): Path | null } }).document;
+    const path = doc.querySelector(`.react-flow__edge[data-id="${id}"] path.react-flow__edge-path`)!;
+    const n = path.getAttribute("d")!.match(/-?[\d.]+(e-?\d+)?/g)!.map(Number);
+    const c = path.getScreenCTM()!;
+    const screen = (x: number, y: number) => ({ x: x * c.a + y * c.c + c.e, y: x * c.b + y * c.d + c.f });
+    return [screen(n[0], n[1]), screen(n[2], n[3])];
+  }, BATTERY_SEGMENT);
+  for (const [i, end] of BATTERY_ENDS.entries()) {
+    const box = (await page.locator(`.react-flow__node[data-id="${end}"]`).boundingBox())!;
+    const p = ends[i];
+    const tol = 1.5;
+    expect(p.x).toBeGreaterThanOrEqual(box.x - tol);
+    expect(p.x).toBeLessThanOrEqual(box.x + box.width + tol);
+    expect(p.y).toBeGreaterThanOrEqual(box.y - tol);
+    expect(p.y).toBeLessThanOrEqual(box.y + box.height + tol);
+    const fromEdge = Math.min(Math.abs(p.x - box.x), Math.abs(p.x - box.x - box.width), Math.abs(p.y - box.y), Math.abs(p.y - box.y - box.height));
+    expect(fromEdge).toBeLessThan(tol);
+    expect(Math.hypot(p.x - (box.x + box.width / 2), p.y - box.y)).toBeGreaterThan(tol);
+  }
+
+  const arcs = await fanArcsOf(folder, "top-222268");
+  expect(arcs.length).toBeGreaterThan(0);
+  await expect(page.locator(".fan-arcs path")).toHaveCount(arcs.length);
 });
 
 test("the Root toggle marks and unmarks an endpoint in one undo step each, and survives a reload", async ({ page }) => {
