@@ -10,10 +10,10 @@ import type { DefinitionConnector } from "./schema";
  */
 
 /** Who a drawer row's connector belongs to: a component definition by id, or a one-off component by id. */
-export type DrawerOwner = { kind: "definition"; id: string } | { kind: "component"; id: string };
+export type ConnectorOwner = { kind: "definition"; id: string } | { kind: "component"; id: string };
 
 export interface DrawerRow {
-  owner: DrawerOwner;
+  owner: ConnectorOwner;
   /** The definition's name, or the one-off component's own name. */
   ownerName: string;
   designator: string;
@@ -27,13 +27,13 @@ export interface DrawerRow {
   users: number;
 }
 
-export function ownerKey(owner: DrawerOwner): string {
+export function ownerKey(owner: ConnectorOwner): string {
   return `${owner.kind}:${owner.id}`;
 }
 
 /** Rows grouped by owner, owners by name, connectors in their listed order. A definition that does not resolve has no rows. */
 export function drawerRows(project: Project): DrawerRow[] {
-  const groups: { owner: DrawerOwner; name: string; connectors: DefinitionConnector[]; users: number }[] = [];
+  const groups: { owner: ConnectorOwner; name: string; connectors: DefinitionConnector[]; users: number }[] = [];
   const defs = new Map<string, { users: number }>();
   for (const c of project.components.values()) {
     if (c.connectors) {

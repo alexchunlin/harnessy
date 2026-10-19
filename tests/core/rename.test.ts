@@ -3,7 +3,8 @@ import { buildBom, cutListCsv } from "../../src/core/bom";
 import { updateDefinitionConnector, updateInlineConnector } from "../../src/core/definitions";
 import { addConnectorToNet, addSegment, bendsKey, createNet, movePin, placeBlankComponent, placeComponent, placeConnector, setBends, setHarnessAnchor, setInlineBridges, setPin, silence } from "../../src/core/ops";
 import { componentBridges, componentConnectors, findNet, loadProject, pinLayout, saveProject, type Project } from "../../src/core/project";
-import { twoNetProject } from "./fixture";
+import { runChecks } from "../../src/core/drc";
+import { savedJson, savedLibraryFiles, twoNetProject } from "./fixture";
 
 /** Two switches from the shared `switch` definition, wired P1 to P1, plus the two-net fixture. */
 function switchProject() {
@@ -33,7 +34,7 @@ describe("renaming a connector on a shared definition", () => {
     const a = placeConnector(project, ids.top, `${ids.a}/P1`, { x: 0, y: 200 });
     const b = placeConnector(a.project, ids.top, `${ids.b}/P1`, { x: 300, y: 200 });
     const p = updateDefinitionConnector(addSegment(b.project, ids.top, a.id, b.id, 500).project, "switch", "P1", { designator: "UPLINK" });
-    const endpoints = p.topologies.get(ids.top)!.endpoints;
+    const endpoints: { id: string }[] = savedJson(p, `topologies/${ids.top}.json`).endpoints;
     const at = (id: string) => endpoints.find((e) => e.id === id);
     expect(at(a.id)).toMatchObject({ kind: "connector", connector: `${ids.a}/UPLINK` });
     expect(at(b.id)).toMatchObject({ kind: "connector", connector: `${ids.b}/UPLINK` });
@@ -46,8 +47,7 @@ describe("renaming a connector on a shared definition", () => {
     p = setBends(p, bendsKey(ids.trunk, `${ids.a}/P1`), [{ x: 12, y: 24 }]);
     p = updateDefinitionConnector(p, "switch", "P1", { designator: "UPLINK" });
     expect(pinLayout(p, p.components.get(ids.a)!).top).toEqual(["UPLINK"]);
-    expect(p.connectivityCanvas.bends[bendsKey(ids.trunk, `${ids.a}/UPLINK`)]).toEqual([{ x: 12, y: 24 }]);
-    expect(p.connectivityCanvas.bends[bendsKey(ids.trunk, `${ids.a}/P1`)]).toBeUndefined();
+    expect(savedJson(p, "canvas/connectivity.json").bends).toEqual({ [bendsKey(ids.trunk, `${ids.a}/UPLINK`)]: [{ x: 12, y: 24 }] });
   });
 });
 
@@ -82,7 +82,7 @@ describe("renaming a one-off's connector", () => {
     expect(componentConnectors(p, c)?.map((x) => x.designator)).toEqual(["IN", "T2"]);
     expect(componentBridges(p, c)).toEqual([["IN", "T2"]]);
     expect(findNet(p, ids.sig)!.net.connectors).toContain(`${board.id}/IN`);
-    expect(p.projectLibrary.components.size).toBe(0);
+    expect(savedLibraryFiles(p)).toEqual([]);
   });
 });
 
@@ -114,6 +114,7 @@ describe("a rename and what reads it", () => {
   it("keeps a silence on the connector", () => {
     const { project, ids } = switchProject();
     const p = updateDefinitionConnector(silence(project, "connector-idle", `${ids.a}/P2`), "switch", "P2", { designator: "SPARE" });
-    expect(p.drc.silences).toEqual([{ check: "connector-idle", target: `${ids.a}/SPARE` }]);
+    const idle = runChecks(p, undefined).filter((f) => f.check === "connector-idle" && f.target.startsWith(`${ids.a}/`));
+    expect(idle.map((f) => [f.target, f.silenced ?? false])).toEqual([[`${ids.a}/SPARE`, true]]);
   });
 });

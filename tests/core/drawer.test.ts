@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { connectorTypeInventory, drawerRows } from "../../src/core/drawer";
-import { setConnectorTypes } from "../../src/core/definitions";
+import { revertDefinition, setConnectorTypes } from "../../src/core/definitions";
 import { buildBom } from "../../src/core/bom";
 import { createNet, placeBlankComponent, placeComponent, removeNet } from "../../src/core/ops";
-import { componentConnectors, saveProject } from "../../src/core/project";
-import { twoNetProject } from "./fixture";
+import { saveProject } from "../../src/core/project";
+import { savedJson, twoNetProject } from "./fixture";
 
 /** The two-net fixture plus two switches sharing the `switch` definition and a one-off with two inline connectors. */
 function drawerProject() {
@@ -61,21 +61,27 @@ describe("setting connector types in bulk", () => {
       { owner: { kind: "definition", id: "switch" }, designator: "P2", type: "connectors/jst-gh-4" },
       { owner: { kind: "component", id: ids.odd }, designator: "SIG", type: "connectors/jst-gh-4" },
     ]);
-    for (const id of [ids.a, ids.b]) {
-      const c = p.components.get(id)!;
-      expect(c.definition).toBe("components/switch");
-      expect(c.connectors).toBeUndefined();
-      expect(componentConnectors(p, c)?.map((x) => x.connector)).toEqual(["connectors/jst-gh-4", "connectors/jst-gh-4"]);
-    }
-    expect(componentConnectors(p, p.components.get(ids.odd)!)?.map((x) => x.connector)).toEqual(["connectors/xt60", "connectors/jst-gh-4"]);
+    // Both switches still share the definition: neither was detached into a one-off.
+    for (const id of [ids.a, ids.b]) expect(savedJson(p, `components/${id}.json`)).toEqual({ id, name: "Ethernet switch", definition: "components/switch" });
+    const rows = drawerRows(p)
+      .filter((r) => r.ownerName === "Ethernet switch" || r.ownerName === "Brake board")
+      .map((r) => [r.ownerName, r.designator, r.type, r.users]);
+    expect(rows).toEqual([
+      ["Brake board", "PWR", "connectors/xt60", 1],
+      ["Brake board", "SIG", "connectors/jst-gh-4", 1],
+      ["Ethernet switch", "P1", "connectors/jst-gh-4", 2],
+      ["Ethernet switch", "P2", "connectors/jst-gh-4", 2],
+    ]);
     expect(connectorTypeInventory(p).find((t) => t.type === "connectors/jst-gh-4")?.count).toBe(5);
   });
 
-  it("writes a project copy of a shared definition and leaves the shared catalogue untouched on save", () => {
+  it("writes a project copy of a shared definition and leaves the shared library untouched on save", () => {
     const { project } = drawerProject();
     const p = setConnectorTypes(project, [{ owner: { kind: "definition", id: "switch" }, designator: "P1", type: "connectors/jst-gh-4" }]);
-    expect(p.repoLibrary.components.get("switch")?.connectors[0].connector).toBe("connectors/rj45");
-    expect(project.library.components.get("switch")?.connectors[0].connector).toBe("connectors/rj45");
+    const switchP1 = (x: typeof p) => drawerRows(x).find((r) => r.ownerName === "Ethernet switch" && r.designator === "P1")?.type;
+    expect(switchP1(project)).toBe("connectors/rj45");
+    // Giving the copy back shows the shared entry as it was.
+    expect(switchP1(revertDefinition(p, "switch"))).toBe("connectors/rj45");
     const files = saveProject(p);
     expect(JSON.parse(files.get("library/components/switch.json")!).connectors[0].connector).toBe("connectors/jst-gh-4");
     expect([...files.keys()].filter((f) => f.startsWith("library/"))).toEqual(["library/components/switch.json"]);

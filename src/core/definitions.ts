@@ -2,7 +2,8 @@ import { mergeLibraries, resolveRef } from "./library";
 import { removeConnectorFromNet, removeEndpoint, removeNet } from "./ops";
 import { allNets, findNet, type Project } from "./project";
 import { designator, type Bridges, type Component, type ComponentDefinition, type DefinitionConnector, type Net, type PinLayout, type Topology, SIDES } from "./schema";
-import type { DrawerOwner } from "./drawer";
+import type { ConnectorOwner } from "./drawer";
+import { formatNetAddress, parseRef, parseTarget } from "./refs";
 
 /**
  * Edits to component definitions and one-off connectors (ADR 0003). An edit
@@ -64,9 +65,14 @@ function checkType(project: Project, patch: ConnectorPatch): void {
 
 /** Check a connector about to join `connectors`: a valid designator not already taken, and a type the library has. */
 function checkNew(project: Project, connectors: DefinitionConnector[], connector: DefinitionConnector, where: string): void {
-  if (!designator.safeParse(connector.designator).success) throw new Error(`designator ${JSON.stringify(connector.designator)}: use letters, digits, hyphen, underscore`);
-  if (connectors.some((c) => c.designator === connector.designator)) throw new Error(`${where} already has a connector ${connector.designator}`);
+  checkDesignator(connectors, connector.designator, where);
   checkType(project, { connector: connector.connector });
+}
+
+/** Refuse a designator that is not a name or that the owner already has. */
+function checkDesignator(connectors: DefinitionConnector[], name: string, where: string): void {
+  if (!designator.safeParse(name).success) throw new Error(`designator ${JSON.stringify(name)}: use letters, digits, hyphen, underscore`);
+  if (connectors.some((c) => c.designator === name)) throw new Error(`${where} already has a connector ${name}`);
 }
 
 /** Add a connector to a definition. Reaches every component sharing it. Shadows a shared definition. */
@@ -88,12 +94,11 @@ export function addInlineConnector(project: Project, componentId: string, connec
 /** What an edit may change on one connector. A new designator renames it and carries its wiring. */
 export type ConnectorPatch = Partial<Pick<DefinitionConnector, "designator" | "connector" | "label" | "side">>;
 
-/** Refuse a new designator that is not a name or that the owner already has. */
+/** The new designator a patch renames to, checked, or undefined when it keeps the name. */
 function checkRename(connectors: DefinitionConnector[], from: string, patch: ConnectorPatch, where: string): string | undefined {
   const to = patch.designator;
   if (to === undefined || to === from) return undefined;
-  if (!designator.safeParse(to).success) throw new Error(`designator ${JSON.stringify(to)}: use letters, digits, hyphen, underscore`);
-  if (connectors.some((c) => c.designator === to)) throw new Error(`${where} already has a connector ${to}`);
+  checkDesignator(connectors, to, where);
   return to;
 }
 
@@ -134,8 +139,9 @@ function renameInBridges(bridges: Bridges | undefined, from: string, to: string)
 
 /** A bend key or silence target names an address, or `<net>:<address>` for one net at one connector. */
 function renameTarget(target: string, was: string, now: string): string {
-  if (target === was) return now;
-  return target.endsWith(`:${was}`) ? `${target.slice(0, -was.length)}${now}` : target;
+  const { net, address } = parseTarget(target);
+  if (address !== was) return target;
+  return net === undefined ? now : formatNetAddress(net, now);
 }
 
 function renameOnNet(net: Net, was: string, now: string): Net {
@@ -171,7 +177,7 @@ export function updateInlineConnector(project: Project, componentId: string, des
 }
 
 export interface ConnectorTypeChange {
-  owner: DrawerOwner;
+  owner: ConnectorOwner;
   designator: string;
   /** Connector type ref the library has, `connectors/<id>`. */
   type: string;
@@ -189,17 +195,17 @@ export function setConnectorTypes(project: Project, changes: ConnectorTypeChange
 }
 
 /** Who owns a component's connectors: its definition, or the component itself when it is a one-off. */
-export function connectorOwner(component: Component): DrawerOwner {
-  return component.definition ? { kind: "definition", id: component.definition.slice(component.definition.indexOf("/") + 1) } : { kind: "component", id: component.id };
+export function connectorOwner(component: Component): ConnectorOwner {
+  return component.definition ? { kind: "definition", id: parseRef(component.definition).id } : { kind: "component", id: component.id };
 }
 
 /** Add a connector to whichever owns it, a definition or a one-off. */
-export function addConnector(project: Project, owner: DrawerOwner, connector: DefinitionConnector): Project {
+export function addConnector(project: Project, owner: ConnectorOwner, connector: DefinitionConnector): Project {
   return owner.kind === "definition" ? addDefinitionConnector(project, owner.id, connector) : addInlineConnector(project, owner.id, connector);
 }
 
 /** Change one connector of whichever owns it, a definition or a one-off. */
-export function updateConnector(project: Project, owner: DrawerOwner, designator: string, patch: ConnectorPatch): Project {
+export function updateConnector(project: Project, owner: ConnectorOwner, designator: string, patch: ConnectorPatch): Project {
   return owner.kind === "definition" ? updateDefinitionConnector(project, owner.id, designator, patch) : updateInlineConnector(project, owner.id, designator, patch);
 }
 
@@ -248,8 +254,8 @@ export function publishDefinition(project: Project, componentId: string): { proj
 /**
  * Take the wiring off one designator on each of these components: the nets
  * that used it lose it and its pins, a net left under two connectors goes,
- * its topology endpoints go with their segments, and the canvas forgets
- * where its pin was drawn.
+ * its topology endpoints go with their segments, the design rule silences
+ * on it go, and the canvas forgets where its pin was drawn.
  */
 function detachConnectorRefs(project: Project, componentIds: string[], designator: string): Project {
   let p = project;
@@ -264,6 +270,9 @@ function detachConnectorRefs(project: Project, componentIds: string[], designato
     for (const t of [...p.topologies.values()]) {
       for (const e of t.endpoints) if (e.kind === "connector" && e.connector === address) p = removeEndpoint(p, t.id, e.id);
     }
+    // A connector added back under this name is checked afresh.
+    const silences = p.drc.silences.filter((x) => parseTarget(x.target).address !== address);
+    if (silences.length !== p.drc.silences.length) p = { ...p, drc: { ...p.drc, silences } };
     const layout = p.connectivityCanvas.pins[componentId];
     if (layout) {
       const kept = Object.fromEntries(Object.entries(layout).map(([side, ds]) => [side, ds?.filter((d) => d !== designator)]));
@@ -302,6 +311,6 @@ export function removeInlineConnector(project: Project, componentId: string, des
  * Remove a connector from whichever owns it, a definition or a one-off, and
  * clean up after it on every component it reached. One call, so one undo step.
  */
-export function removeConnector(project: Project, owner: DrawerOwner, designator: string): Project {
+export function removeConnector(project: Project, owner: ConnectorOwner, designator: string): Project {
   return owner.kind === "definition" ? removeDefinitionConnector(project, owner.id, designator) : removeInlineConnector(project, owner.id, designator);
 }

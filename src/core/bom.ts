@@ -56,15 +56,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
   const name = (id: string) => endpointName(project, graph, id);
   const label = netLabeller(project);
   const rows: CutListRow[] = [];
-  // A cut length is the routed length plus the slack of every stretch on every segment the piece crosses. The row says how much is slack.
-  const cut = (routed: number | undefined, segmentIds: Iterable<string>) => {
-    let slack = 0;
-    for (const id of segmentIds) {
-      const s = graph.segments.get(id);
-      if (s) slack += segmentSlack(project, graph, s);
-    }
-    return { length_mm: routed === undefined ? undefined : routed + slack, slack_mm: slack };
-  };
+  const cut = (routed: number | undefined, segmentIds: Iterable<string>) => cutLength(project, graph, routed, segmentIds);
   const row = (r: Partial<CutListRow> & { row: RowKind; harness: string }) => rows.push({ ...emptyRow(), ...r });
 
   const contactsAt = new Map<string, number>();
@@ -161,16 +153,6 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
 
   for (const sh of topology.sheaths) {
     const spec = resolveRef(lib, sh.spec, "sheaths");
-    let length: number | undefined = sh.overlap_mm;
-    for (const id of sh.segments) {
-      const seg = graph.segments.get(id);
-      const l = seg ? segmentLength(graph, seg, assemblyLength) : undefined;
-      if (l === undefined) {
-        length = undefined;
-        break;
-      }
-      length += l;
-    }
     const ends = chainEnds(graph, sh.segments);
     row({
       harness: sh.segments[0] ? harnessOf(sh.segments[0]) : PURCHASED,
@@ -179,7 +161,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
       part_number: spec?.part_number,
       description: spec?.name,
       qty: 1,
-      ...cut(length, sh.segments),
+      ...sheathCut(project, graph, sh),
       from: ends ? name(ends[0]) : undefined,
       to: ends ? name(ends[1]) : undefined,
       notes: sh.overlap_mm ? `includes ${sh.overlap_mm} mm overlap` : undefined,
@@ -233,10 +215,36 @@ function summarize(rows: CutListRow[]): SummaryRow[] {
   return [...groups.values()].sort(compareRows);
 }
 
+export interface Cut {
+  /** Undefined while a segment on the piece has no length. */
+  length_mm: number | undefined;
+  slack_mm: number;
+}
+
+/**
+ * A cut length is the routed length plus the slack of every stretch on every
+ * segment the piece crosses. The slack is reported on its own as well.
+ */
+function cutLength(project: Project, graph: Graph, routed: number | undefined, segmentIds: Iterable<string>): Cut {
+  let slack = 0;
+  for (const id of segmentIds) {
+    const s = graph.segments.get(id);
+    if (s) slack += segmentSlack(project, graph, s);
+  }
+  return { length_mm: routed === undefined ? undefined : routed + slack, slack_mm: slack };
+}
+
+/** A sheath's cut: the segments it covers, its overlap and their slack. The sheath row and the sheath inspector both read this. */
+export function sheathCut(project: Project, graph: Graph, sheath: Topology["sheaths"][number]): Cut {
+  const routed = routeTotal(graph, new Set(sheath.segments), assemblyLengthOf(project));
+  return cutLength(project, graph, routed === undefined ? undefined : routed + sheath.overlap_mm, sheath.segments);
+}
+
 function routeTotal(graph: Graph, segments: Set<string>, assemblyLength: (ref: string) => number | undefined): number | undefined {
   let total = 0;
   for (const id of segments) {
-    const l = segmentLength(graph, graph.segments.get(id)!, assemblyLength);
+    const seg = graph.segments.get(id);
+    const l = seg ? segmentLength(graph, seg, assemblyLength) : undefined;
     if (l === undefined) return undefined;
     total += l;
   }

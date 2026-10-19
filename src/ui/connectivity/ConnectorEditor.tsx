@@ -37,7 +37,7 @@ export function definitionStanding(project: Project, id: string): "shared" | "sh
 /** The mark a shadowed definition carries, in the inspector and the library panel. */
 export function ShadowMark() {
   return (
-    <span className="shadow-mark" title="This project keeps its own copy, which shadows the shared catalogue">
+    <span className="shadow-mark" title="This project keeps its own copy, which shadows the shared library">
       project copy
     </span>
   );
@@ -55,16 +55,16 @@ export function DefinitionStatus({ project, component, edit }: { project: Projec
     <div className="definition-status">
       <p className="muted">
         {users === 1 ? "Only this component uses the definition." : `${users} components share the definition, and a connector edit here changes all of them.`}{" "}
-        {standing === "shared" && "An edit takes a project copy; the shared catalogue stays as it is."}
+        {standing === "shared" && "An edit takes a project copy; the shared library stays as it is."}
         {standing === "project" && "The definition is this project's own."}
       </p>
       {standing === "shadowed" && (
         <div className="row">
           <ShadowMark />
           <button
-            title="Delete this project's copy so the shared catalogue entry stands again"
+            title="Delete this project's copy so the shared library entry stands again"
             onClick={() => {
-              if (!window.confirm(`Give back this project's copy of ${name}? The shared catalogue entry stands again, and its edits here are lost.`)) return;
+              if (!window.confirm(`Give back this project's copy of ${name}? The shared library entry stands again, and its edits here are lost.`)) return;
               tryEdit(edit, (p) => revertDefinition(p, id));
             }}
           >

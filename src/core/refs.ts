@@ -29,3 +29,19 @@ export function parseAddress(address: string): ConnectorAddress {
 export function formatAddress(component: string, designator: string): string {
   return `${component}/${designator}`;
 }
+
+/** A finding target or bend key for one net at one connector: `<net>:<address>`. */
+export function formatNetAddress(net: string, address: string): string {
+  return `${net}:${address}`;
+}
+
+/**
+ * Read a finding target or bend key. `<net>:<address>` names one net at one
+ * connector, a bare `<component>/<designator>` names a connector, and anything
+ * else is a plain id (a net, a segment, a component).
+ */
+export function parseTarget(target: string): { net?: string; address?: string } {
+  const i = target.indexOf(":");
+  if (i >= 0) return { net: target.slice(0, i), address: target.slice(i + 1) };
+  return target.includes("/") ? { address: target } : {};
+}

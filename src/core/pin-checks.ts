@@ -1,6 +1,7 @@
 import type { Net, Topology } from "./schema";
 import { allNets, connectorLabel, netPins, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
+import { formatNetAddress } from "./refs";
 import { buildGraph, isBuilt, netLabeller, routeOf, type Graph } from "./derive";
 
 type AddPinFinding = (check: "pin-duplicate" | "pin-out-of-range" | "pin-missing", target: string, message: string) => void;
@@ -26,10 +27,10 @@ export function checkPins(project: Project, topology: Topology | undefined, add:
       const type = connectorType(project, address);
       if (type) {
         const over = pins.flatMap((pin, i) => (pin !== null && pin > type.pins ? [`pin ${pin} (conductor ${i + 1})`] : []));
-        if (over.length > 0) add("pin-out-of-range", `${net.id}:${address}`, `${row}: ${over.join(", ")} ${over.length === 1 ? "is" : "are"} above the ${type.pins} pins of ${type.name}`);
+        if (over.length > 0) add("pin-out-of-range", formatNetAddress(net.id, address), `${row}: ${over.join(", ")} ${over.length === 1 ? "is" : "are"} above the ${type.pins} pins of ${type.name}`);
       }
       const open = pins.flatMap((pin, i) => (pin === null ? [i + 1] : []));
-      if (asks && open.length > 0) add("pin-missing", `${net.id}:${address}`, `${row}: conductor${open.length === 1 ? "" : "s"} ${open.join(", ")} ${open.length === 1 ? "has" : "have"} no pin`);
+      if (asks && open.length > 0) add("pin-missing", formatNetAddress(net.id, address), `${row}: conductor${open.length === 1 ? "" : "s"} ${open.join(", ")} ${open.length === 1 ? "has" : "have"} no pin`);
       pins.forEach((pin, i) => {
         if (pin === null) return;
         const byPin = onPin.get(address) ?? new Map<number, string[]>();

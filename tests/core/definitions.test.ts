@@ -3,7 +3,7 @@ import { addDefinitionConnector, addInlineConnector, revertDefinition, updateDef
 import { runChecks } from "../../src/core/drc";
 import { createNet, placeBlankComponent, placeComponent, setPin } from "../../src/core/ops";
 import { componentConnectors, deletedPaths, findNet, loadProject, saveProject, type Project } from "../../src/core/project";
-import { twoNetProject } from "./fixture";
+import { savedJson, savedLibraryFiles, twoNetProject } from "./fixture";
 
 /** Two switches from the shared `switch` definition, plus the two-net fixture. */
 function switchProject() {
@@ -17,14 +17,15 @@ function switchProject() {
 const designators = (p: Project, id: string) => componentConnectors(p, p.components.get(id)!)?.map((c) => c.designator);
 
 describe("adding a connector to a definition", () => {
-  it("reaches every component sharing it, through a project copy that leaves the shared catalogue alone", () => {
+  it("reaches every component sharing it, through a project copy that leaves the shared library alone", () => {
     const { project, ids } = switchProject();
     const p = addDefinitionConnector(project, "switch", { designator: "P3", connector: "connectors/jst-gh-4" });
     expect(designators(p, ids.a)).toEqual(["P1", "P2", "P3"]);
     expect(designators(p, ids.b)).toEqual(["P1", "P2", "P3"]);
-    expect(p.repoLibrary.components.get("switch")?.connectors.map((c) => c.designator)).toEqual(["P1", "P2"]);
-    const saved = JSON.parse(saveProject(p).get("library/components/switch.json")!);
+    const saved = savedJson(p, "library/components/switch.json");
     expect(saved.connectors.map((c: { designator: string }) => c.designator)).toEqual(["P1", "P2", "P3"]);
+    // Giving the copy back shows the shared entry as it was.
+    expect(designators(revertDefinition(p, "switch"), ids.a)).toEqual(["P1", "P2"]);
   });
 });
 
@@ -60,7 +61,7 @@ describe("adding a connector to a one-off", () => {
       { designator: "J1", connector: "connectors/jst-gh-2" },
       { designator: "PWR", connector: "connectors/xt60" },
     ]);
-    expect(p.projectLibrary.components.size).toBe(0);
+    expect(savedLibraryFiles(p)).toEqual([]);
   });
 });
 
@@ -91,7 +92,7 @@ describe("giving a project copy back", () => {
     const edited = addDefinitionConnector(project, "switch", { designator: "P3", connector: "connectors/rj45" });
     const p = revertDefinition(edited, "switch");
     expect(designators(p, ids.a)).toEqual(["P1", "P2"]);
-    expect(p.projectLibrary.components.has("switch")).toBe(false);
+    expect(savedLibraryFiles(p)).toEqual([]);
     const after = saveProject(p);
     expect(deletedPaths(saveProject(edited), after)).toEqual(["library/components/switch.json"]);
     expect(after).toEqual(before);
@@ -110,6 +111,6 @@ describe("giving a project copy back", () => {
     const placed = placeComponent(loaded, "components/brake-board", { x: 0, y: 300 });
     expect(() => revertDefinition(placed.project, "brake-board")).toThrow(/1 component uses it/);
     const p = revertDefinition(loaded, "brake-board");
-    expect(p.library.components.has("brake-board")).toBe(false);
+    expect(savedLibraryFiles(p)).toEqual([]);
   });
 });

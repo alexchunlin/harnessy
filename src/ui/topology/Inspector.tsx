@@ -23,6 +23,7 @@ import {
   setSegmentLength,
   setSpliceNets,
   setStretchSlack,
+  sheathCut,
   stretchesOf,
   updateSheath,
   updateTiePoint,
@@ -383,16 +384,7 @@ function SheathApply({ project, topology, segmentIds, edit, onSelect }: { projec
 
 function SheathInspector({ project, topology, id, edit }: Props & { id: string }) {
   const s = topology.sheaths.find((x) => x.id === id)!;
-  const graph = buildGraph(topology);
-  let total: number | undefined = s.overlap_mm;
-  for (const seg of s.segments) {
-    const l = graph.segments.get(seg)?.length_mm;
-    if (l === undefined) {
-      total = undefined;
-      break;
-    }
-    total += l;
-  }
+  const { length_mm: total, slack_mm: slack } = sheathCut(project, buildGraph(topology), s);
   return (
     <div className="pane pane-right">
       <h3>Sheath</h3>
@@ -413,7 +405,7 @@ function SheathInspector({ project, topology, id, edit }: Props & { id: string }
       <div className="field">
         <label>Covers</label>
         <span>
-          {s.segments.length} segment{s.segments.length === 1 ? "" : "s"}, cut length {total === undefined ? "unknown (a segment has no length)" : `${total} mm`}
+          {s.segments.length} segment{s.segments.length === 1 ? "" : "s"}, cut length {total === undefined ? "unknown (a segment has no length)" : `${total} mm${slack ? `, ${slack} mm of it slack` : ""}`}
         </span>
       </div>
       <button onClick={() => edit((p) => removeSheath(p, topology.id, id))}>Remove sheath</button>

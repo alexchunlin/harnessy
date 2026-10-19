@@ -76,8 +76,8 @@ describe("slack-exceeds-stretch", () => {
     p = ops.addTiePoint(p, ids.top, ids.seg, "ties/zip-tie", 200).project;
     p = ops.setProjectSlack(p, 150);
     expect(checks(p, ids.top, "slack-exceeds-stretch").map((f) => f.target)).toEqual([ids.seg]);
-    const anchor = p.topologies.get(ids.top)!.segments.find((s) => s.id === ids.seg)!.harness!;
-    p = ops.setHarnessAnchor(p, ids.top, ids.seg, { ...anchor, slack_mm: 250 });
+    // The fixture's anchor, now with a harness default.
+    p = ops.setHarnessAnchor(p, ids.top, ids.seg, { name: "Power harness", part_number: "HRN-001", slack_mm: 250 });
     expect(checks(p, ids.top, "slack-exceeds-stretch")).toHaveLength(2);
   });
 
