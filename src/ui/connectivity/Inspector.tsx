@@ -3,7 +3,7 @@ import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsI
 import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges, connectorTypeInventory } from "../../core";
-import { AddConnector, ConnectorRow, DefinitionStatus, retype } from "./ConnectorEditor";
+import { AddConnector, ConnectorRow, DefinitionStatus, DesignatorInput, rename, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
@@ -157,12 +157,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
                 connector={con}
                 inventory={inventory}
                 onType={(type) => retype(edit, c, con.designator, type)}
-                designator={
-                  c.connectors && (
-                    // #56 replaces this with a rename that commits on blur and carries the wiring.
-                    <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
-                  )
-                }
+                designator={<DesignatorInput value={con.designator} onCommit={(to) => rename(edit, c, con.designator, to)} />}
               >
                 {c.connectors && (
                   // #58 replaces this with a removal that detaches the nets.

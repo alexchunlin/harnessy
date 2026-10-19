@@ -1,6 +1,6 @@
 import { mergeLibraries, resolveRef } from "./library";
 import type { Project } from "./project";
-import { designator, type Component, type ComponentDefinition, type DefinitionConnector } from "./schema";
+import { designator, type Bridges, type Component, type ComponentDefinition, type DefinitionConnector, type Net, type PinLayout, type Topology, SIDES } from "./schema";
 import type { DrawerOwner } from "./drawer";
 
 /**
@@ -84,23 +84,89 @@ export function addInlineConnector(project: Project, componentId: string, connec
   return { ...project, components };
 }
 
-/** What an edit may change on one connector. The designator is renamed by its own op. */
-export type ConnectorPatch = Partial<Pick<DefinitionConnector, "connector" | "label" | "side">>;
+/** What an edit may change on one connector. A new designator renames it and carries its wiring. */
+export type ConnectorPatch = Partial<Pick<DefinitionConnector, "designator" | "connector" | "label" | "side">>;
+
+/** Refuse a new designator that is not a name or that the owner already has. */
+function checkRename(connectors: DefinitionConnector[], from: string, patch: ConnectorPatch, where: string): string | undefined {
+  const to = patch.designator;
+  if (to === undefined || to === from) return undefined;
+  if (!designator.safeParse(to).success) throw new Error(`designator ${JSON.stringify(to)}: use letters, digits, hyphen, underscore`);
+  if (connectors.some((c) => c.designator === to)) throw new Error(`${where} already has a connector ${to}`);
+  return to;
+}
+
+/**
+ * Point every reference to `<component>/<from>` at `<component>/<to>`, for
+ * each of `componentIds`: net connector lists and their pins keys, topology
+ * connector endpoints, star-net bend keys, the drawn pin layout and design
+ * rule silences.
+ */
+function renameConnectorRefs(project: Project, componentIds: string[], from: string, to: string): Project {
+  let p = project;
+  for (const componentId of componentIds) {
+    const was = `${componentId}/${from}`;
+    const now = `${componentId}/${to}`;
+    const nets = new Map<string, Net[]>();
+    for (const [domain, list] of p.nets) nets.set(domain, list.map((n) => (n.connectors.includes(was) ? renameOnNet(n, was, now) : n)));
+    const topologies = new Map<string, Topology>();
+    for (const [id, t] of p.topologies) topologies.set(id, { ...t, endpoints: t.endpoints.map((e) => (e.kind === "connector" && e.connector === was ? { ...e, connector: now } : e)) });
+    const canvas = p.connectivityCanvas;
+    const bends: typeof canvas.bends = {};
+    for (const [key, value] of Object.entries(canvas.bends)) bends[renameTarget(key, was, now)] = value;
+    const pins = { ...canvas.pins };
+    const layout = pins[componentId];
+    if (layout) {
+      const renamed: PinLayout = {};
+      for (const side of SIDES) if (layout[side]) renamed[side] = layout[side]!.map((d) => (d === from ? to : d));
+      pins[componentId] = renamed;
+    }
+    const silences = p.drc.silences.map((x) => ({ ...x, target: renameTarget(x.target, was, now) }));
+    p = { ...p, nets, topologies, connectivityCanvas: { ...canvas, bends, pins }, drc: { ...p.drc, silences } };
+  }
+  return p;
+}
+
+function renameInBridges(bridges: Bridges | undefined, from: string, to: string): Bridges | undefined {
+  return bridges?.map((b) => b.map((d) => (d === from ? to : d)));
+}
+
+/** A bend key or silence target names an address, or `<net>:<address>` for one net at one connector. */
+function renameTarget(target: string, was: string, now: string): string {
+  if (target === was) return now;
+  return target.endsWith(`:${was}`) ? `${target.slice(0, -was.length)}${now}` : target;
+}
+
+function renameOnNet(net: Net, was: string, now: string): Net {
+  const out: Net = { ...net, connectors: net.connectors.map((a) => (a === was ? now : a)) };
+  if (net.pins && was in net.pins) {
+    const pins: NonNullable<Net["pins"]> = {};
+    for (const [address, list] of Object.entries(net.pins)) pins[address === was ? now : address] = list;
+    out.pins = pins;
+  }
+  return out;
+}
 
 /** Change one connector of a definition. Reaches every component sharing it. Shadows a shared definition. */
 export function updateDefinitionConnector(project: Project, id: string, designator: string, patch: ConnectorPatch): Project {
   checkType(project, patch);
   const def = definitionOrThrow(project, id);
-  return putDefinition(project, { ...def, connectors: patchAt(def.connectors, designator, patch, `definition ${id}`) });
+  const to = checkRename(def.connectors, designator, patch, `definition ${id}`);
+  const connectors = patchAt(def.connectors, designator, patch, `definition ${id}`);
+  const p = putDefinition(project, { ...def, connectors, bridges: to ? renameInBridges(def.bridges, designator, to) : def.bridges });
+  return to ? renameConnectorRefs(p, definitionUsers(p, id).map((c) => c.id), designator, to) : p;
 }
 
 /** Change one inline connector of a one-off component. */
 export function updateInlineConnector(project: Project, componentId: string, designator: string, patch: ConnectorPatch): Project {
   checkType(project, patch);
   const { component, connectors } = inlineOrThrow(project, componentId);
+  const to = checkRename(connectors, designator, patch, `component ${componentId}`);
   const components = new Map(project.components);
-  components.set(componentId, { ...component, connectors: patchAt(connectors, designator, patch, `component ${componentId}`) });
-  return { ...project, components };
+  const bridges = to ? renameInBridges(component.bridges, designator, to) : component.bridges;
+  components.set(componentId, { ...component, connectors: patchAt(connectors, designator, patch, `component ${componentId}`), bridges });
+  const p = { ...project, components };
+  return to ? renameConnectorRefs(p, [componentId], designator, to) : p;
 }
 
 export interface ConnectorTypeChange {
