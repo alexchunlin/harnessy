@@ -17,7 +17,7 @@ function switchProject() {
 const designators = (p: Project, id: string) => componentConnectors(p, p.components.get(id)!)?.map((c) => c.designator);
 
 describe("adding a connector to a definition", () => {
-  it("reaches every component sharing it, through a project copy that leaves the shared catalogue alone", () => {
+  it("reaches every component sharing it, through a project copy that leaves the shared library alone", () => {
     const { project, ids } = switchProject();
     const p = addDefinitionConnector(project, "switch", { designator: "P3", connector: "connectors/jst-gh-4" });
     expect(designators(p, ids.a)).toEqual(["P1", "P2", "P3"]);

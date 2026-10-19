@@ -10,7 +10,7 @@ const PWM = "Absolute encoder, PWM output";
 
 type Def = { connectors: { designator: string; connector: string }[] };
 
-test("bulk-retypes two definition rows from the drawer into project copies, leaving the shared catalogue alone", async ({ page }) => {
+test("bulk-retypes two definition rows from the drawer into project copies, leaving the shared library alone", async ({ page }) => {
   const shared = await fs.readFile(path.join(process.cwd(), "library", "components", "strain-gauge.json"), "utf8");
   const folder = await freshExample("drawer");
   await openProject(page, folder);

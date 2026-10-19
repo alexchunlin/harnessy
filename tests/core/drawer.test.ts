@@ -71,7 +71,7 @@ describe("setting connector types in bulk", () => {
     expect(connectorTypeInventory(p).find((t) => t.type === "connectors/jst-gh-4")?.count).toBe(5);
   });
 
-  it("writes a project copy of a shared definition and leaves the shared catalogue untouched on save", () => {
+  it("writes a project copy of a shared definition and leaves the shared library untouched on save", () => {
     const { project } = drawerProject();
     const p = setConnectorTypes(project, [{ owner: { kind: "definition", id: "switch" }, designator: "P1", type: "connectors/jst-gh-4" }]);
     expect(p.repoLibrary.components.get("switch")?.connectors[0].connector).toBe("connectors/rj45");

@@ -36,7 +36,7 @@ export interface Project {
   connectivityCanvas: ConnectivityCanvas;
   topologyCanvases: Map<string, TopologyCanvas>;
   drc: DrcFile;
-  /** The shared catalogue the project was opened against. The app never writes it; a revert falls back to it. */
+  /** The shared library the project was opened against. The app never writes it; a revert falls back to it. */
   repoLibrary: Library;
   /** The project's own library entries, which shadow the repo library. */
   projectLibrary: Library;
