@@ -29,7 +29,8 @@ test("R with an endpoint selected turns its harness, survives a reload, and R ty
   await page.waitForTimeout(400);
   expect(await turnsIn(folder, piece.id)).toBeUndefined();
 
-  await node.click();
+  // The breakout is still selected. Leave the field and R turns its harness.
+  await kind.evaluate((el) => (el as unknown as { blur(): void }).blur());
   await page.keyboard.press("r");
   await waitForFile(folder, TOPOLOGY_CANVAS, (v) => (v as Canvas).pieces[piece.id]?.turns === 1);
   // Only positions turn. The endpoint and the box title stay upright.

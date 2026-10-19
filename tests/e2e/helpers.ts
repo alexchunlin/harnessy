@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
-import { buildGraph, layoutTopology, loadLibrary, loadProject, pieces, type Files, type PieceLayout, type Position } from "../../src/core";
+import { buildGraph, layoutTopology, loadLibrary, loadProject, pieces, type FanArc, type Files, type PieceLayout, type Position } from "../../src/core";
 
 export const E2E_HOME = process.env.HARNESSY_E2E_HOME ?? "/tmp/harnessy-e2e";
 const REPO = process.cwd();
@@ -95,6 +95,16 @@ export async function drawnLayout(folder: string, topologyId: string): Promise<M
   const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
   const layout = layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!);
   return new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+}
+
+/** The fan arcs core's layout draws for the project as saved in `folder`. */
+export async function fanArcsOf(folder: string, topologyId: string): Promise<FanArc[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  return layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!).arcs;
 }
 
 /** The viewport's transform, which an edit must leave alone. */

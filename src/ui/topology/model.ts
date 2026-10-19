@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -44,10 +44,12 @@ export interface SegmentEdgeData {
   fanAt: [boolean, boolean];
   /** The box each end sits in, so the fan starts past its edge. */
   endSizes: [{ w: number; h: number }, { w: number; h: number }];
+  /** Where the line ends at each endpoint: a connector's box edge, the centre of anything smaller, or the home of a called-out end. */
+  ends: [Position, Position];
+  /** Each end's box centre, or its home when called out. */
+  centres: [Position, Position];
   /** true when some conductor is selected or hovered: strands not lit dim */
   anyLit: boolean;
-  /** An end whose box sits past the call-out distance stays at its home centre, here, instead of following the box. */
-  homeEnds?: [Position | undefined, Position | undefined];
   [key: string]: unknown;
 }
 
@@ -124,6 +126,17 @@ export function drawnPositions(project: Project, topology: Topology): Map<string
   return drawnFrom(topologyLayout(project, topology));
 }
 
+/** An SVG path for one fan arc. A whole circle is drawn as two halves, since one SVG arc cannot close on itself. */
+export function arcPath(a: FanArc): string {
+  const at = (deg: number) => {
+    const r = (deg * Math.PI) / 180;
+    return `${a.centre.x + Math.cos(r) * a.radius} ${a.centre.y + Math.sin(r) * a.radius}`;
+  };
+  const sweep = a.to - a.from;
+  if (sweep >= 360) return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from + 180)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from)}`;
+  return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 ${sweep > 180 ? 1 : 0} 1 ${at(a.to)}`;
+}
+
 /**
  * Derive React Flow nodes and edges for one topology. `drawn` holds each
  * endpoint's centre, from `drawnPositions` or a glide towards it; `drafts`
@@ -169,7 +182,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const h = homes.get(id)!;
     if (degree(graph, id) > 0 && Math.hypot(p.x - h.x, p.y - h.y) > CALLOUT_DISTANCE) calledOut.add(id);
   }
-  const segmentEnd = (id: string) => (calledOut.has(id) ? homes.get(id) : positions.get(id));
+  const anchorOf = (id: string) => (calledOut.has(id) ? homes.get(id) : positions.get(id));
 
   // A segment is in the layer when any net routed through it is, or when it
   // carries no net at all. An endpoint follows its segments; a lone connector
@@ -226,7 +239,8 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const anySelectedNet = selectedRoutes.length > 0;
   const edges: TopoEdge[] = [];
   for (const s of topology.segments) {
-    if (!graph.endpoints.has(s.ends[0]) || !graph.endpoints.has(s.ends[1])) continue;
+    // An end that draws nowhere yet, such as one the glide has not reached, has no node for the line to meet.
+    if (!positions.has(s.ends[0]) || !positions.has(s.ends[1])) continue;
     const onHere = onSegments.get(s.id) ?? [];
     const nets = onHere.map((r) => ({ id: r.net.id, label: label(r.net), domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: netConductors(project, r.net, r.domain).length }));
     const assembly = s.assembly ? resolveRef(project.library, s.assembly, "assemblies") : undefined;
@@ -235,13 +249,16 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const classes = [routeColor ? "on-route" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ");
     const { strands, badge } = s.assembly ? { strands: [], badge: undefined } : strandsOf(project, onHere, domains, label, litConductors);
     const kinds = s.ends.map((e) => graph.endpoints.get(e)!.kind);
+    // A called-out end stays at its home, where no box sits; any other end meets its box.
+    const centres: [Position, Position] = [anchorOf(s.ends[0])!, anchorOf(s.ends[1])!];
+    const endAt = (i: 0 | 1) => (calledOut.has(s.ends[i]) ? centres[i] : segmentEnd(kinds[i], centres[i], centres[1 - i]));
+    const ends: [Position, Position] = [endAt(0), endAt(1)];
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
       data: {
         segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor,
         faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [],
-        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], anyLit: litConductors.size > 0,
-        homeEnds: calledOut.has(s.ends[0]) || calledOut.has(s.ends[1]) ? [calledOut.has(s.ends[0]) ? homes.get(s.ends[0]) : undefined, calledOut.has(s.ends[1]) ? homes.get(s.ends[1]) : undefined] : undefined,
+        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], ends, centres, anyLit: litConductors.size > 0,
       },
       selected: (selected.has(s.id) || highlightSegments.has(s.id)) && !outOfLayer, selectable: !outOfLayer, focusable: !outOfLayer, className: classes || undefined,
       zIndex: routeColor ? 4 : 1, interactionWidth: outOfLayer ? 0 : 16,
@@ -277,8 +294,8 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const seg = graph.segments.get(t.segment);
     if (!seg) continue;
     // A tie point draws at its fraction of the way along the drawn segment.
-    const a = segmentEnd(t.from);
-    const b = segmentEnd(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
+    const a = anchorOf(t.from);
+    const b = anchorOf(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
     if (!a || !b) continue;
     const len = segmentLength(graph, seg, assemblyLength) ?? 0;
     const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;

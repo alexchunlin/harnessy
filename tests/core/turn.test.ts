@@ -96,6 +96,22 @@ describe("turning a harness", () => {
     ends.forEach((_, i) => close(sub(homesAfter[i], c1), quarter(sub(homesBefore[i], c0))));
   });
 
+  it("a fan's arc turns with its harness", () => {
+    const b = bench();
+    const { hub, ends } = b.tree(3);
+    const before = b.layout();
+    b.project = ops.turnPiece(b.project, b.top, b.piece());
+    const after = b.layout();
+    const arcBefore = before.arcs.find((a) => a.node === hub)!;
+    const arcAfter = after.arcs.find((a) => a.node === hub)!;
+    const c0 = centre(ends.map((id) => before.endpoints.get(id)!.home));
+    const c1 = centre(ends.map((id) => after.endpoints.get(id)!.home));
+    close(sub(arcAfter.centre, c1), quarter(sub(arcBefore.centre, c0)));
+    expect(arcAfter.radius).toBe(arcBefore.radius);
+    expect(arcAfter.from - arcBefore.from).toBeCloseTo(90, 6);
+    expect(arcAfter.to - arcBefore.to).toBeCloseTo(90, 6);
+  });
+
   it("an endpoint's offset turns with its harness", () => {
     const b = bench();
     const { ends } = b.tree(3);
