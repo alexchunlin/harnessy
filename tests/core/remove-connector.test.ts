@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { addConnector, removeConnector } from "../../src/core/definitions";
+import { addConnector, removeConnector, revertDefinition } from "../../src/core/definitions";
 import { runChecks } from "../../src/core/drc";
 import { addConnectorToNet, addTiePoint, bendsKey, createNet, movePin, numberPinsInOrder, placeBlankComponent, placeComponent, removeConnectorFromNet, setBends, setInlineBridges, setStretchSlack, silence } from "../../src/core/ops";
-import { componentConnectors, findNet, saveProject, type Project } from "../../src/core/project";
-import { twoNetProject } from "./fixture";
+import { componentConnectors, findNet, loadProject, saveProject, type Project } from "../../src/core/project";
+import { savedJson, testLibrary, twoNetProject } from "./fixture";
 
 /** Two switches from the shared `switch` definition, plus the two-net fixture. */
 function switchProject() {
@@ -22,7 +22,8 @@ describe("removing a connector from a shared definition", () => {
     const p = removeConnector(project, { kind: "definition", id: "switch" }, "P1");
     expect(designators(p, ids.a)).toEqual(["P2"]);
     expect(designators(p, ids.b)).toEqual(["P2"]);
-    expect(p.repoLibrary.components.get("switch")?.connectors.map((c) => c.designator)).toEqual(["P1", "P2"]);
+    // Giving the copy back shows the shared entry as it was.
+    expect(designators(revertDefinition(p, "switch"), ids.a)).toEqual(["P1", "P2"]);
     expect(findNet(p, ids.trunk)).toBeUndefined();
   });
 });
@@ -48,12 +49,12 @@ describe("removing a connector that is placed in a topology", () => {
     let p = setStretchSlack(tie.project, ids.top, { kind: "segment", id: ids.seg }, 20);
     p = setStretchSlack(p, ids.top, { kind: "tie", id: tie.id }, 10);
     p = removeConnector(p, { kind: "definition", id: "battery" }, "OUT");
-    const t = p.topologies.get(ids.top)!;
-    expect(t.endpoints.map((e) => e.id)).not.toContain(ids.batEnd);
-    expect(t.segments).toEqual([]);
-    expect(t.ties).toEqual([]);
+    const saved = savedJson(p, `topologies/${ids.top}.json`);
+    expect(saved.endpoints.map((e: { id: string }) => e.id)).not.toContain(ids.batEnd);
+    expect(saved.segments).toEqual([]);
+    expect(saved.ties).toEqual([]);
     expect(findNet(p, ids.power)).toBeUndefined();
-    expect(runChecks(p, t).filter((f) => f.check === "dangling-reference")).toEqual([]);
+    expect(runChecks(p, p.topologies.get(ids.top)).filter((f) => f.check === "dangling-reference")).toEqual([]);
   });
 });
 
@@ -73,16 +74,17 @@ describe("removing a bridged connector", () => {
   it("drops it from its bridges and drops a bridge left under two", () => {
     const { project, ids } = bridgedOneOff();
     const p = removeConnector(project, { kind: "component", id: ids.board }, "J2");
-    expect(p.components.get(ids.board)?.bridges).toEqual([["J1", "J3"]]);
+    expect(savedJson(p, `components/${ids.board}.json`).bridges).toEqual([["J1", "J3"]]);
     expect(runChecks(p, undefined).filter((f) => f.check === "dangling-reference")).toEqual([]);
   });
 
   it("drops the designator from a definition's bridges too", () => {
     const { project, ids } = bridgedOneOff();
-    const lib = project.repoLibrary.components;
-    const withBridges = { ...project, library: { ...project.library, components: new Map(project.library.components).set("mib", { ...lib.get("mib")!, bridges: [["J1", "J2"]] }) } };
-    const p = removeConnector(withBridges, { kind: "definition", id: "mib" }, "J2");
-    expect(p.library.components.get("mib")?.bridges).toBeUndefined();
+    const files = saveProject(project);
+    const mib = { ...testLibrary().components.get("mib")!, bridges: [["J1", "J2"]] };
+    files.set("library/components/mib.json", JSON.stringify(mib));
+    const p = removeConnector(loadProject(files, testLibrary()).project, { kind: "definition", id: "mib" }, "J2");
+    expect(savedJson(p, "library/components/mib.json")).not.toHaveProperty("bridges");
     expect(designators(p, ids.mib)).toEqual(["P1", "J1", "ETH"]);
   });
 });
@@ -92,7 +94,7 @@ describe("removing a connector the canvas has laid out", () => {
     const { project, ids } = bridgedOneOff();
     let p = movePin(project, ids.board, "J3", "top", 0);
     p = removeConnector(p, { kind: "component", id: ids.board }, "J3");
-    const layout = p.connectivityCanvas.pins[ids.board] ?? {};
+    const layout = savedJson(p, "canvas/connectivity.json").pins[ids.board] ?? {};
     expect(Object.values(layout).flat()).not.toContain("J3");
   });
 });
