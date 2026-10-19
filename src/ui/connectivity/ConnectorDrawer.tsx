@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { connectorTypeInventory, drawerRows, ownerKey, setConnectorTypes, type ConnectorTypeUse, type DrawerRow, type Project } from "../../core";
+import { connectorTypeInventory, drawerRows, ownerKey, parseRef, setConnectorTypes, type ConnectorTypeUse, type DrawerRow, type Project } from "../../core";
 
 type Edit = (fn: (p: Project) => Project) => void;
 
@@ -131,7 +131,7 @@ export function TypePicker({ label, inventory, value, onChange, placeholder }: {
       )}
       {!known && value && (
         <option value={value} disabled>
-          {value.slice(value.indexOf("/") + 1)} (not in library)
+          {parseRef(value).id} (not in library)
         </option>
       )}
       {inventory.map((t) => (

@@ -4,6 +4,7 @@ import { componentConnectors, findNet, netPinCount, netPins, pinLayout, type Pro
 import { buildGraph, buses, busOf, degree, otherEnd, stretchesOf, type SlackOwner } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
+import { formatNetAddress } from "./refs";
 
 /**
  * Operations over a project. Each returns a new Project sharing unchanged
@@ -47,11 +48,15 @@ export function renameProject(project: Project, name: string): Project {
   return next(project, { file: { ...project.file, name } });
 }
 
+/** A slack value as stored: whole millimetres. Refuses a negative or non-number value; undefined passes through. */
+function slackMm(value: number | undefined): number | undefined {
+  if (value !== undefined && !(value >= 0)) throw new Error(`slack is never negative: ${value}`);
+  return value === undefined ? undefined : Math.round(value);
+}
+
 /** Set the project's default slack. Zero and absent mean the same, so zero leaves the key out of the file. */
-export function setProjectSlack(project: Project, slackMm: number | undefined): Project {
-  if (slackMm !== undefined && !(slackMm >= 0)) throw new Error(`slack is never negative: ${slackMm}`);
-  const slack_mm = slackMm ? Math.round(slackMm) : undefined;
-  return next(project, { file: { ...project.file, slack_mm } });
+export function setProjectSlack(project: Project, slack: number | undefined): Project {
+  return next(project, { file: { ...project.file, slack_mm: slackMm(slack) || undefined } });
 }
 
 export function addDomain(project: Project, domain: Domain): Project {
@@ -421,7 +426,7 @@ export function removeConnectorFromNet(project: Project, id: string, address: st
 
 /** The bends key for a net's drawn line: the net id, or `<net>:<address>` for a star net's spoke. */
 export function bendsKey(netId: string, address?: string): string {
-  return address ? `${netId}:${address}` : netId;
+  return address ? formatNetAddress(netId, address) : netId;
 }
 
 function keyNet(key: string): string {
@@ -690,9 +695,7 @@ export function setSegmentAssembly(project: Project, topologyId: string, segment
 }
 
 export function setHarnessAnchor(project: Project, topologyId: string, segmentId: string, anchor: HarnessAnchor | undefined): Project {
-  const slack = anchor?.slack_mm;
-  if (slack !== undefined && !(slack >= 0)) throw new Error(`slack is never negative: ${slack}`);
-  if (slack !== undefined) anchor = { ...anchor!, slack_mm: Math.round(slack) };
+  if (anchor?.slack_mm !== undefined) anchor = { ...anchor, slack_mm: slackMm(anchor.slack_mm) };
   return updateSegment(project, topologyId, segmentId, (s) => ({ ...s, harness: anchor }));
 }
 
@@ -777,9 +780,8 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
  * Set or clear one stretch's slack. A tie point owns the stretch on its
  * first-end side; the segment owns its last stretch. Slack is never negative.
  */
-export function setStretchSlack(project: Project, topologyId: string, owner: SlackOwner, slackMm: number | undefined): Project {
-  if (slackMm !== undefined && !(slackMm >= 0)) throw new Error(`slack is never negative: ${slackMm}`);
-  const slack_mm = slackMm === undefined ? undefined : Math.round(slackMm);
+export function setStretchSlack(project: Project, topologyId: string, owner: SlackOwner, slack: number | undefined): Project {
+  const slack_mm = slackMm(slack);
   if (owner.kind === "segment") return updateSegment(project, topologyId, owner.id, (s) => ({ ...s, slack_mm }));
   return updateTopology(project, topologyId, (t) => {
     if (!t.ties.some((tie) => tie.id === owner.id)) throw new Error(`no tie point ${owner.id}`);
