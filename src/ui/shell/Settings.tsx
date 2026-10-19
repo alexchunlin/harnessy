@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ALL_LAYER_ID, addDomain, addLayer, domainConductorCount, removeDomain, removeLayer, renameProject, setDomainConductors, setKeepApart, updateDomain, updateLayer } from "../../core";
+import { ALL_LAYER_ID, addDomain, addLayer, domainConductorCount, removeDomain, removeLayer, renameProject, setDomainConductors, setProjectSlack, setKeepApart, updateDomain, updateLayer } from "../../core";
 import { useDoc, useProject } from "../store";
 import { ConductorList } from "./ConductorList";
+import { SlackInput } from "./SlackInput";
 
-/** Project settings: name, domains, layers, keep-apart pairs. */
+/** Project settings: name, default slack, domains, layers, keep-apart pairs. */
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const project = useProject();
   const edit = useDoc((s) => s.edit);
@@ -15,6 +16,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <header>
           <label>
             Project name <input value={project.file.name} onChange={(e) => edit((p) => renameProject(p, e.target.value))} />
+          </label>
+          <label>
+            Default slack (mm){" "}
+            <SlackInput
+              key={project.file.slack_mm ?? 0}
+              label="Project default slack (mm)"
+              value={project.file.slack_mm ?? 0}
+              placeholder="0"
+              onCommit={(v) => edit((p) => setProjectSlack(p, v))}
+            />
           </label>
           <button onClick={onClose}>Close</button>
         </header>

@@ -1,8 +1,11 @@
-import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setInlineConnectors, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
-import { allNets, netLabeller } from "../../core";
+import { addConnectorToNet, allConnectorAddresses, buses, busesThrough, busOf, componentConnectors, connectorLabel, findNet, flipComponent, moveNetToDomain, movePin, netLabel, netsOnlyOn, pinLayout, removeComponent, removeConnectorFromNet, removeGroup, removeNet, removeNote, renameComponent, netConductors, renameNet, resetBends, setBusName, setNetConductors, SIDES, updateGroup, updateNote, type Bus, type Project, type Side } from "../../core";
+import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsInOrder, setPin } from "../../core";
+import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
-import { componentBridges } from "../../core";
+import { componentBridges, connectorTypeInventory } from "../../core";
+import { AddConnector, ConnectorRow, DefinitionStatus, DesignatorInput, RemoveConnectorButton, rename, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
+import { DetachPublish } from "./DetachPublish";
 
 const hover = (h: Hover) => useDoc.getState().setHover(h);
 const unhover = () => hover(NO_HOVER);
@@ -111,7 +114,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
   const connectors = componentConnectors(project, c);
   const nets = allNets(project);
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
-  const connectorTypes = [...project.library.connectors.keys()].sort();
+  const inventory = connectorTypeInventory(project);
   const allBuses = buses(project);
   const label = (net: { id: string } & Parameters<typeof netLabel>[1]) => netLabel(project, net, busOf(allBuses, net.id)?.label);
   const through = busesThrough(allBuses, id);
@@ -127,6 +130,8 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
         <label>Definition</label>
         <span>{c.definition ?? <span className="muted">one-off, connectors declared inline</span>}</span>
       </div>
+      <DefinitionStatus project={project} component={c} edit={edit} />
+      <DetachPublish project={project} component={c} edit={edit} />
       <div className="field">
         <label>Id</label>
         <code>{c.id}</code>
@@ -144,30 +149,20 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
       <h3>Connectors</h3>
       {connectors === undefined && <p className="error">Definition {c.definition} is missing from the library.</p>}
       <ul className="list">
-        {(connectors ?? []).map((con, i) => {
+        {(connectors ?? []).map((con) => {
           const address = `${id}/${con.designator}`;
           const attached = nets.filter((n) => n.net.connectors.includes(address));
           return (
             <li key={con.designator} className="insp-connector" onMouseEnter={() => hover({ nets: attached.map((n) => n.net.id) })} onMouseLeave={unhover}>
-              {c.connectors ? (
-                <div className="row">
-                  <input className="short" value={con.designator} aria-label="Designator" onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, designator: e.target.value.replace(/[^A-Za-z0-9_-]/g, "") } : x))))} />
-                  <select value={con.connector} onChange={(e) => edit((p) => setInlineConnectors(p, id, c.connectors!.map((x, j) => (j === i ? { ...x, connector: e.target.value } : x))))}>
-                    {connectorTypes.map((t) => (
-                      <option key={t} value={`connectors/${t}`}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  <button onClick={() => edit((p) => setInlineConnectors(p, id, c.connectors!.filter((_, j) => j !== i)))} title="Remove connector">
-                    x
-                  </button>
-                </div>
-              ) : (
-                <div className="row">
-                  <strong>{con.designator}</strong> <span className="muted">{con.connector.split("/")[1]}</span>
-                </div>
-              )}
+              <ConnectorRow
+                ownerName={c.name}
+                connector={con}
+                inventory={inventory}
+                onType={(type) => retype(edit, c, con.designator, type)}
+                designator={<DesignatorInput value={con.designator} onCommit={(to) => rename(edit, c, con.designator, to)} />}
+              >
+                <RemoveConnectorButton project={project} component={c} designator={con.designator} edit={edit} />
+              </ConnectorRow>
               <div className="insp-nets">
                 {attached.length === 0 && <span className="muted">no nets</span>}
                 {attached.map(({ net, domain }) => (
@@ -195,18 +190,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
           <BusList project={project} buses={through} />
         </>
       )}
-      {c.connectors && (
-        <button
-          onClick={() => {
-            const first = connectorTypes[0];
-            if (!first) return window.alert("The library has no connector types.");
-            const n = c.connectors!.length + 1;
-            edit((p) => setInlineConnectors(p, id, [...c.connectors!, { designator: `J${n}`, connector: `connectors/${first}` }]));
-          }}
-        >
-          Add connector
-        </button>
-      )}
+      {connectors && <AddConnector component={c} taken={connectors.map((x) => x.designator)} inventory={inventory} edit={edit} />}
       <button
         onClick={() => {
           const lost = netsOnlyOn(project, id);
@@ -263,6 +247,9 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
   const overridden = net.conductor_specs !== undefined || net.spec !== undefined || net.conductors !== undefined;
   const free = allConnectorAddresses(project).filter((a) => !net.connectors.includes(a));
   const hasBends = Object.keys(project.connectivityCanvas.bends).some((k) => k === id || k.startsWith(`${id}:`));
+  const activeTopology = useDoc((s) => s.activeTopology);
+  // A net that runs only over purchased assemblies has its pinout moulded in.
+  const pinned = asksForPins(activeTopology ? project.topologies.get(activeTopology) : undefined, net, domain);
   return (
     <div className="pane pane-right">
       <h3>Net</h3>
@@ -293,11 +280,26 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
       <h3>Connectors</h3>
       <ul className="list">
         {net.connectors.map((a) => (
-          <li key={a} className="row" onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
-            <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
-            <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
-              x
-            </button>
+          <li key={a} className="net-connector" data-address={a} onMouseEnter={() => hover({ nets: [id], component: a.split("/")[0] })} onMouseLeave={unhover}>
+            <div className="row">
+              <span style={{ flex: 1 }}>{connectorLabel(project, a)}</span>
+              {pinned && (
+                <button onClick={() => edit((p) => numberPinsInOrder(p, id, a))} title="Set this connector's pins to 1, 2, 3 in conductor order">
+                  Number in order
+                </button>
+              )}
+              <button onClick={() => edit((p) => removeConnectorFromNet(p, id, a))} title="Remove from net" disabled={net.connectors.length <= 2}>
+                x
+              </button>
+            </div>
+            {pinned && (
+              <PinFields
+                label={connectorLabel(project, a)}
+                pins={netPins(project, net, domain, a)}
+                color={(i) => conductorColor(project.library, conductors.length > 1 ? conductors[i] : conductors[0], i, d?.color ?? "#888")}
+                onSet={(i, pin) => edit((p) => setPin(p, id, a, i, pin))}
+              />
+            )}
           </li>
         ))}
       </ul>
@@ -316,6 +318,52 @@ function NetInspector({ project, id, edit }: { project: Project; id: string; edi
         <button onClick={() => edit((p) => removeNet(p, id))}>Delete net</button>
       </div>
     </div>
+  );
+}
+
+/** One small pin field per conductor at one connector, labelled by the conductor's number and colour. */
+function PinFields({ label, pins, color, onSet }: { label: string; pins: (number | null)[]; color: (i: number) => string; onSet: (i: number, pin: number | null) => void }) {
+  return (
+    <div className="pin-fields">
+      {pins.map((pin, i) => (
+        <PinField key={i} index={i} label={label} pin={pin} color={color(i)} onSet={(v) => onSet(i, v)} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A pin field takes a whole number from one up or empty. It commits on blur
+ * or Enter, so typing 12 is one undo step, and anything else reverts.
+ */
+function PinField({ index, label, pin, color, onSet }: { index: number; label: string; pin: number | null; color: string; onSet: (pin: number | null) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (pin === null ? "" : String(pin));
+  const valid = /^([1-9]\d*)?$/.test(shown);
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    if (!valid) return;
+    const next = draft === "" ? null : Number(draft);
+    if (next !== pin) onSet(next);
+  };
+  return (
+    <label className="pin-field" title={`Conductor ${index + 1}`}>
+      <span className="swatch" style={{ background: color }} />
+      <span className="muted">{index + 1}</span>
+      <input
+        aria-label={`${label} pin for conductor ${index + 1}`}
+        aria-invalid={!valid}
+        inputMode="numeric"
+        value={shown}
+        onChange={(e) => /^\d*$/.test(e.target.value) && setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setDraft(null);
+        }}
+      />
+    </label>
   );
 }
 

@@ -1,7 +1,8 @@
 import type { Topology } from "./schema";
 import { allNets, componentConnectors, connectorLabel, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
-import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { checkPins } from "./pin-checks";
+import { type Graph, allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength, stretchesOf } from "./derive";
 
 export type Severity = "error" | "warning";
 
@@ -37,7 +38,12 @@ export type CheckId =
   | "harness-unnamed"
   | "tie-beyond-segment"
   | "keep-apart"
-  | "net-no-spec";
+  | "net-no-spec"
+  | "slack-on-assembly"
+  | "slack-exceeds-stretch"
+  | "pin-duplicate"
+  | "pin-out-of-range"
+  | "pin-missing";
 
 export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-too-few-connectors": "error",
@@ -61,6 +67,11 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "tie-beyond-segment": "warning",
   "keep-apart": "warning",
   "net-no-spec": "warning",
+  "slack-on-assembly": "warning",
+  "slack-exceeds-stretch": "warning",
+  "pin-duplicate": "error",
+  "pin-out-of-range": "error",
+  "pin-missing": "warning",
 };
 
 export function assemblyLengthOf(project: Project): (ref: string) => number | undefined {
@@ -79,6 +90,7 @@ export function runChecks(project: Project, topology: Topology | undefined): Fin
 
   checkProject(project, add);
   if (topology) checkTopology(project, topology, add);
+  checkPins(project, topology, (check, target, message) => add(check, target, "connectivity", message));
 
   const silenced = new Set(project.drc.silences.map((s) => silenceKey(s.check, s.target)));
   for (const f of out) if (f.severity === "warning" && silenced.has(silenceKey(f.check, f.target))) f.silenced = true;
@@ -267,6 +279,8 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
     if (h.anchors.length > 1) add("harness-two-anchors", h.piece.id, "topology", `one piece carries ${h.anchors.length} harness names: ${h.anchors.map((a) => a.harness!.name).join(", ")}`);
   }
 
+  checkSlack(project, graph, add);
+
   const keepApart = project.file.keep_apart ?? [];
   if (keepApart.length > 0) {
     for (const [segId, rs] of netsOnSegments(routes)) {
@@ -274,6 +288,24 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       for (const [a, b] of keepApart) {
         if (domains.has(a) && domains.has(b)) add("keep-apart", segId, "topology", `segment ${segId} carries both ${a} and ${b}, which the project keeps apart`);
       }
+    }
+  }
+}
+
+/** Slack a purchased assembly cannot take, and slack too long for its stretch to be meant. */
+function checkSlack(project: Project, graph: Graph, add: Add): void {
+  for (const s of graph.topology.segments) {
+    if (!s.assembly) {
+      // Effective slack, so a harness or project default can trip it too.
+      for (const st of stretchesOf(project, graph, s)) {
+        if (st.lengthMm === undefined || st.effectiveSlackMm <= st.lengthMm) continue;
+        add("slack-exceeds-stretch", st.owner.id, "topology", `stretch ${st.from} to ${st.to} on segment ${s.id} has ${st.effectiveSlackMm} mm of slack over ${st.lengthMm} mm of route`);
+      }
+      continue;
+    }
+    if (s.slack_mm !== undefined) add("slack-on-assembly", s.id, "topology", `purchased assembly ${s.id} carries ${s.slack_mm} mm of slack, which the cut list ignores`);
+    for (const t of graph.topology.ties) {
+      if (t.segment === s.id && t.slack_mm !== undefined) add("slack-on-assembly", t.id, "topology", `tie point ${t.id} on purchased assembly ${s.id} carries ${t.slack_mm} mm of slack, which the cut list ignores`);
     }
   }
 }

@@ -1,6 +1,6 @@
 import { runChecks, silence, unsilence, type Finding } from "../../core";
 import { useDoc, useProject } from "../store";
-import { parseAddress } from "../../core/refs";
+import { parseAddress, parseTarget } from "../../core/refs";
 
 /** KiCad-style design rule panel: check, severity, target, click to select. */
 export function DrcPanel() {
@@ -18,8 +18,10 @@ export function DrcPanel() {
 
   function jump(f: Finding) {
     if (view !== "side-by-side") setView(f.view);
-    // Connector addresses select their component on the connectivity canvas.
-    const id = f.view === "connectivity" && f.target.includes("/") ? parseAddress(f.target).component : f.target;
+    // A net and connector address (`net:cmp/DES`) selects the net. A bare
+    // connector address selects its component on the connectivity canvas.
+    const { net, address } = parseTarget(f.target);
+    const id = f.view !== "connectivity" ? f.target : (net ?? (address ? parseAddress(address).component : f.target));
     select(f.view, [id]);
   }
 

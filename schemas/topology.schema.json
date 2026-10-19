@@ -148,11 +148,21 @@
               },
               "part_number": {
                 "type": "string"
+              },
+              "slack_mm": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
               "name"
             ]
+          },
+          "slack_mm": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -220,6 +230,11 @@
           "spec": {
             "type": "string",
             "pattern": "^(ties)\\/[a-z0-9][a-z0-9-]*$"
+          },
+          "slack_mm": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [

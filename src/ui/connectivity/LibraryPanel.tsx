@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ComponentDefinition, Project } from "../../core";
+import { definitionStanding, ShadowMark } from "./ConnectorEditor";
 
 export const DRAG_TYPE = "application/x-harnessy-definition";
 
@@ -11,6 +12,7 @@ export function LibraryPanel({
   onArrange,
   onDistribute,
   canDistribute,
+  onDrawer,
 }: {
   project: Project;
   onBlank: () => void;
@@ -19,6 +21,7 @@ export function LibraryPanel({
   onArrange: (how: "row" | "column") => void;
   onDistribute: () => void;
   canDistribute: boolean;
+  onDrawer: () => void;
 }) {
   const [q, setQ] = useState("");
   const entries = useMemo(() => {
@@ -33,10 +36,13 @@ export function LibraryPanel({
       <input placeholder="Search components" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search components" />
       <ul className="list lib-list">
         {entries.map((d) => (
-          <LibraryEntry key={d.id} def={d} shadowed={project.projectLibrary.components.has(d.id)} />
+          <LibraryEntry key={d.id} def={d} standing={definitionStanding(project, d.id)} />
         ))}
         {entries.length === 0 && <li className="muted">No matches</li>}
       </ul>
+      <button onClick={onDrawer} title="Every connector's type in one table, set in bulk">
+        Connector drawer
+      </button>
       <h3>Actions</h3>
       <button onClick={onBlank}>New blank component</button>
       <button onClick={onGroup} disabled={!canGroup} title="Wrap the selected components in a labelled group">
@@ -58,7 +64,7 @@ export function LibraryPanel({
   );
 }
 
-function LibraryEntry({ def, shadowed }: { def: ComponentDefinition; shadowed: boolean }) {
+function LibraryEntry({ def, standing }: { def: ComponentDefinition; standing: ReturnType<typeof definitionStanding> }) {
   return (
     <li
       className="lib-entry"
@@ -71,7 +77,8 @@ function LibraryEntry({ def, shadowed }: { def: ComponentDefinition; shadowed: b
     >
       <span>{def.name}</span>
       <span className="muted">
-        {def.connectors.length} conn{shadowed ? ", project copy" : ""}
+        {standing === "shadowed" && <ShadowMark />} {standing === "project" && "project's own, "}
+        {def.connectors.length} conn
       </span>
     </li>
   );

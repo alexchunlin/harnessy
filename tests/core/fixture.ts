@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { emptyLibrary, loadLibrary, type Files, type Library } from "../../src/core/library";
-import { loadProject } from "../../src/core/project";
+import { loadProject, saveProject } from "../../src/core/project";
 import { sequentialIdSource, setIdSource } from "../../src/core/ids";
 import { starterProject } from "../../src/core/starter";
 import * as ops from "../../src/core/ops";
@@ -86,6 +86,18 @@ function walk(dir: string, base: string, into: Files): void {
     if (statSync(full).isDirectory()) walk(full, base, into);
     else if (name.endsWith(".json")) into.set(relative(base, full), readFileSync(full, "utf8"));
   }
+}
+
+/** One file of the saved project, parsed. Undefined when the save writes no such file. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function savedJson(project: Project, path: string): any {
+  const text = saveProject(project).get(path);
+  return text === undefined ? undefined : JSON.parse(text);
+}
+
+/** The project library files the save writes. */
+export function savedLibraryFiles(project: Project): string[] {
+  return [...saveProject(project).keys()].filter((f) => f.startsWith("library/")).sort();
 }
 
 /** The RAMMP example as checked in, against the repo library. */

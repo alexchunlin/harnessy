@@ -1,9 +1,10 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
-import { findNet, pinLayout, type Project } from "./project";
-import { buildGraph, buses, busOf, degree, otherEnd, pieces, type Piece } from "./derive";
+import { findNet, netPinCount, netPins, pinLayout, type Project } from "./project";
+import { buildGraph, buses, busOf, degree, otherEnd, pieces, stretchesOf, type Piece, type SlackOwner } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, TopologyCanvas } from "./schema";
 import { ALL_LAYER_ID, EMPTY_TOPOLOGY_CANVAS } from "./schema";
+import { formatNetAddress } from "./refs";
 
 /**
  * Operations over a project. Each returns a new Project sharing unchanged
@@ -47,6 +48,17 @@ export function renameProject(project: Project, name: string): Project {
   return next(project, { file: { ...project.file, name } });
 }
 
+/** A slack value as stored: whole millimetres. Refuses a negative or non-number value; undefined passes through. */
+function slackMm(value: number | undefined): number | undefined {
+  if (value !== undefined && !(value >= 0)) throw new Error(`slack is never negative: ${value}`);
+  return value === undefined ? undefined : Math.round(value);
+}
+
+/** Set the project's default slack. Zero and absent mean the same, so zero leaves the key out of the file. */
+export function setProjectSlack(project: Project, slack: number | undefined): Project {
+  return next(project, { file: { ...project.file, slack_mm: slackMm(slack) || undefined } });
+}
+
 export function addDomain(project: Project, domain: Domain): Project {
   if (project.file.domains.some((d) => d.id === domain.id)) throw new Error(`domain ${domain.id} exists`);
   const nets = new Map(project.nets);
@@ -55,7 +67,7 @@ export function addDomain(project: Project, domain: Domain): Project {
 }
 
 export function updateDomain(project: Project, id: string, patch: Partial<Omit<Domain, "id">>): Project {
-  return next(project, { file: { ...project.file, domains: project.file.domains.map((d) => (d.id === id ? { ...d, ...patch } : d)) } });
+  return fitDomainPins(next(project, { file: { ...project.file, domains: project.file.domains.map((d) => (d.id === id ? { ...d, ...patch } : d)) } }), id);
 }
 
 /** One spec per conductor on a domain. Clears the single spec and count; an empty or undefined list leaves the domain with no spec and one conductor. */
@@ -301,7 +313,10 @@ export function removeComponent(project: Project, id: string): Project {
     nets.set(
       domain,
       list
-        .map((n) => ({ ...n, connectors: n.connectors.filter((a) => !a.startsWith(`${id}/`)) }))
+        .map((n) => {
+          if (!n.connectors.some((a) => a.startsWith(`${id}/`))) return n;
+          return fitPins(project, { ...n, connectors: n.connectors.filter((a) => !a.startsWith(`${id}/`)) }, domain);
+        })
         .filter((n, i) => n.connectors.length >= 2 || n.connectors.length === list[i].connectors.length),
     );
   }
@@ -347,21 +362,91 @@ function updateNet(project: Project, id: string, fn: (n: Net) => Net): Project {
   return next(project, { nets });
 }
 
+// Pins ---------------------------------------------------------------------------
+
+/**
+ * Bring a net's pins in step with its connectors and pin count: drop entries
+ * for connectors it no longer has, trim or pad each array to the count, drop
+ * entries with no pin set, and drop the key when nothing is left. Returns the
+ * same net when nothing changes.
+ */
+function fitPins(project: Project, net: Net, domain: string): Net {
+  if (!net.pins) return net;
+  const count = netPinCount(project, net, domain);
+  const pins: Record<string, (number | null)[]> = {};
+  for (const address of net.connectors) {
+    const stored = net.pins[address];
+    if (!stored) continue;
+    const row = Array.from({ length: count }, (_, i) => stored[i] ?? null);
+    if (row.some((x) => x !== null)) pins[address] = row;
+  }
+  const fitted = Object.keys(pins).length ? pins : undefined;
+  if (JSON.stringify(fitted) === JSON.stringify(net.pins)) return net;
+  return { ...net, pins: fitted };
+}
+
+function fitNetPins(project: Project, id: string): Project {
+  const found = findNet(project, id);
+  if (!found) return project;
+  const fitted = fitPins(project, found.net, found.domain);
+  return fitted === found.net ? project : updateNet(project, id, () => fitted);
+}
+
+function fitDomainPins(project: Project, domain: string): Project {
+  const list = project.nets.get(domain);
+  if (!list) return project;
+  const fitted = list.map((n) => fitPins(project, n, domain));
+  if (fitted.every((n, i) => n === list[i])) return project;
+  const nets = new Map(project.nets);
+  nets.set(domain, fitted);
+  return next(project, { nets });
+}
+
+function putPins(project: Project, id: string, address: string, fn: (row: (number | null)[]) => (number | null)[]): Project {
+  const found = findNet(project, id);
+  if (!found) throw new Error(`no net ${id}`);
+  if (!found.net.connectors.includes(address)) throw new Error(`net ${id} does not terminate ${address}`);
+  const row = fn(netPins(project, found.net, found.domain, address));
+  const net = fitPins(project, { ...found.net, pins: { ...found.net.pins, [address]: row } }, found.domain);
+  return updateNet(project, id, () => net);
+}
+
+/** Set or clear (undefined or null) the pin conductor `index` lands on at one connector of a net. */
+export function setPin(project: Project, id: string, address: string, index: number, pin: number | null | undefined): Project {
+  if (pin != null && !(Number.isInteger(pin) && pin >= 1)) throw new Error(`pin must be a whole number from 1 up, got ${pin}`);
+  return putPins(project, id, address, (row) => {
+    if (!Number.isInteger(index) || index < 0 || index >= row.length) throw new Error(`net ${id} has no conductor ${index + 1}`);
+    return row.map((x, i) => (i === index ? (pin ?? null) : x));
+  });
+}
+
+/** Number a connector row of a net 1 to n in conductor order, overwriting what it held. */
+export function numberPinsInOrder(project: Project, id: string, address: string): Project {
+  return putPins(project, id, address, (row) => row.map((_, i) => i + 1));
+}
+
 export function addConnectorToNet(project: Project, id: string, address: string): Project {
   const found = findNet(project, id);
   if (found?.net.connectors.includes(address)) return project;
   return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: [...n.connectors, address] })), (key) => keyNet(key) === id);
 }
 
+/**
+ * Take a connector off a net. Its spoke's bends go. The other spokes keep
+ * theirs while the net is still a star; under three connectors it is drawn as
+ * one straight line, so every bend on it goes.
+ */
 export function removeConnectorFromNet(project: Project, id: string, address: string): Project {
-  return dropBends(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), (key) => keyNet(key) === id);
+  const p = fitNetPins(updateNet(project, id, (n) => ({ ...n, connectors: n.connectors.filter((a) => a !== address) })), id);
+  const star = (findNet(p, id)?.net.connectors.length ?? 0) >= 3;
+  return dropBends(p, (key) => (star ? key === bendsKey(id, address) : keyNet(key) === id));
 }
 
 // Bends -------------------------------------------------------------------------
 
 /** The bends key for a net's drawn line: the net id, or `<net>:<address>` for a star net's spoke. */
 export function bendsKey(netId: string, address?: string): string {
-  return address ? `${netId}:${address}` : netId;
+  return address ? formatNetAddress(netId, address) : netId;
 }
 
 function keyNet(key: string): string {
@@ -395,12 +480,12 @@ export function renameNet(project: Project, id: string, name: string | undefined
 
 /** One spec for every conductor and a count. Clears a per-conductor list; both undefined returns the net to its domain default. */
 export function setNetSpec(project: Project, id: string, spec: string | undefined, conductors: number | undefined): Project {
-  return updateNet(project, id, (n) => ({ ...n, spec, conductors, conductor_specs: undefined }));
+  return fitNetPins(updateNet(project, id, (n) => ({ ...n, spec, conductors, conductor_specs: undefined })), id);
 }
 
 /** One spec per conductor. Clears the single spec and count; an empty or undefined list returns the net to its domain default. */
 export function setNetConductors(project: Project, id: string, specs: string[] | undefined): Project {
-  return updateNet(project, id, (n) => ({ ...n, spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined }));
+  return fitNetPins(updateNet(project, id, (n) => ({ ...n, spec: undefined, conductors: undefined, conductor_specs: specs && specs.length ? [...specs] : undefined })), id);
 }
 
 /** Name the bus a net is on. The name sits on this net and leaves every other member, so a bus has one anchor. */
@@ -420,7 +505,7 @@ export function moveNetToDomain(project: Project, id: string, domain: string): P
   const nets = new Map(project.nets);
   nets.set(found.domain, nets.get(found.domain)!.filter((n) => n.id !== id));
   nets.set(domain, [...nets.get(domain)!, found.net]);
-  return next(project, { nets });
+  return fitNetPins(next(project, { nets }), id);
 }
 
 export function removeNet(project: Project, id: string): Project {
@@ -665,6 +750,7 @@ export function setSegmentAssembly(project: Project, topologyId: string, segment
 }
 
 export function setHarnessAnchor(project: Project, topologyId: string, segmentId: string, anchor: HarnessAnchor | undefined): Project {
+  if (anchor?.slack_mm !== undefined) anchor = { ...anchor, slack_mm: slackMm(anchor.slack_mm) };
   return updateSegment(project, topologyId, segmentId, (s) => ({ ...s, harness: anchor }));
 }
 
@@ -750,8 +836,38 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
   }));
 }
 
+/**
+ * Set or clear one stretch's slack. A tie point owns the stretch on its
+ * first-end side; the segment owns its last stretch. Slack is never negative.
+ */
+export function setStretchSlack(project: Project, topologyId: string, owner: SlackOwner, slack: number | undefined): Project {
+  const slack_mm = slackMm(slack);
+  if (owner.kind === "segment") return updateSegment(project, topologyId, owner.id, (s) => ({ ...s, slack_mm }));
+  return updateTopology(project, topologyId, (t) => {
+    if (!t.ties.some((tie) => tie.id === owner.id)) throw new Error(`no tie point ${owner.id}`);
+    return { ...t, ties: t.ties.map((tie) => (tie.id === owner.id ? { ...tie, slack_mm } : tie)) };
+  });
+}
+
+/**
+ * Remove a tie point. The stretch beyond it absorbs the stretch it bounded,
+ * and takes the sum of both stretches' effective slack, so no cut length moves.
+ */
 export function removeTiePoint(project: Project, topologyId: string, tieId: string): Project {
-  return updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+  const t = project.topologies.get(topologyId);
+  const tie = t?.ties.find((x) => x.id === tieId);
+  const seg = tie && t?.segments.find((s) => s.id === tie.segment);
+  const p = updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+  if (!t || !seg) return p;
+  const graph = buildGraph(t);
+  const stretches = stretchesOf(project, graph, seg);
+  const i = stretches.findIndex((s) => s.owner.kind === "tie" && s.owner.id === tieId);
+  const [removed, absorbing] = [stretches[i], stretches[i + 1]];
+  if (!removed || !absorbing) return p;
+  const sum = removed.effectiveSlackMm + absorbing.effectiveSlackMm;
+  // An unset stretch that would come out the same anyway stays unset.
+  if (absorbing.slackMm === undefined && sum === absorbing.effectiveSlackMm) return p;
+  return setStretchSlack(p, topologyId, absorbing.owner, sum);
 }
 
 // Harness boxes -------------------------------------------------------------------

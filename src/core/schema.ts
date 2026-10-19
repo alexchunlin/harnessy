@@ -200,6 +200,8 @@ export const ProjectFileSchema = z.object({
   domains: z.array(DomainSchema),
   layers: z.array(LayerSchema),
   keep_apart: z.array(z.tuple([slug, slug])).optional(),
+  /** Slack for every stretch whose harness sets no default. Zero when absent. */
+  slack_mm: mm.optional(),
 });
 
 export const ComponentSchema = z
@@ -228,6 +230,8 @@ export const NetSchema = z.object({
   conductor_specs: z.array(specRef).optional(),
   /** The name of the bus this net is on, anchored here. At most one member net of a bus carries it. */
   bus: z.string().optional(),
+  /** The pin each conductor lands on at a connector, in conductor order. Null where none is set; absent when the net has none. */
+  pins: z.record(connectorAddress, z.array(z.number().int().positive().nullable())).optional(),
 });
 
 export const NetsFileSchema = z.array(NetSchema);
@@ -239,7 +243,12 @@ export const EndpointSchema = z.discriminatedUnion("kind", [
   z.object({ id: projectId("end"), kind: z.literal("splice"), nets: z.array(projectId("net")), spec: spliceRef.optional() }),
 ]);
 
-export const HarnessAnchorSchema = z.object({ name: z.string(), part_number: z.string().optional() });
+export const HarnessAnchorSchema = z.object({
+  name: z.string(),
+  part_number: z.string().optional(),
+  /** Slack for every stretch in this harness that has none of its own. */
+  slack_mm: mm.optional(),
+});
 
 export const SegmentSchema = z.object({
   id: projectId("seg"),
@@ -247,6 +256,8 @@ export const SegmentSchema = z.object({
   length_mm: mm.optional(),
   assembly: assemblyRef.optional(),
   harness: HarnessAnchorSchema.optional(),
+  /** Slack of the segment's last stretch, or the whole segment when it has no tie points. */
+  slack_mm: mm.optional(),
 });
 
 export const SheathSchema = z.object({
@@ -262,6 +273,8 @@ export const TiePointSchema = z.object({
   from: projectId("end"),
   distance_mm: mm,
   spec: tieRef,
+  /** Slack of the stretch on this tie point's first-end side. */
+  slack_mm: mm.optional(),
 });
 
 export const TopologySchema = z.object({

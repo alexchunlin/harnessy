@@ -24,6 +24,9 @@ import {
   setSegmentAssembly,
   setSegmentLength,
   setSpliceNets,
+  setStretchSlack,
+  sheathCut,
+  stretchesOf,
   unmarkRoot,
   updateSheath,
   updateTiePoint,
@@ -31,6 +34,7 @@ import {
   type Route,
   type Topology,
 } from "../../core";
+import { SlackInput } from "../shell/SlackInput";
 import { endpointName, netStrands, SHEATH_PALETTE } from "./model";
 
 type Edit = (fn: (p: Project) => Project) => void;
@@ -235,19 +239,33 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
           <div className="field">
             <label>Name (anchored on this segment)</label>
             <input
+              aria-label="Harness name"
               value={s.harness?.name ?? ""}
               placeholder="unnamed"
-              onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, ev.target.value ? { name: ev.target.value, part_number: s.harness?.part_number } : undefined))}
+              onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, ev.target.value ? { ...s.harness, name: ev.target.value } : undefined))}
             />
           </div>
           {s.harness && (
             <div className="field">
               <label>Part number</label>
-              <input value={s.harness.part_number ?? ""} onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, { name: s.harness!.name, part_number: ev.target.value || undefined }))} />
+              <input value={s.harness.part_number ?? ""} onChange={(ev) => edit((p) => setHarnessAnchor(p, topology.id, id, { ...s.harness!, part_number: ev.target.value || undefined }))} />
+            </div>
+          )}
+          {s.harness && (
+            <div className="field">
+              <label>Default slack (mm)</label>
+              <SlackInput
+                key={s.harness.slack_mm ?? ""}
+                label="Harness default slack (mm)"
+                value={s.harness.slack_mm}
+                placeholder={String(project.file.slack_mm ?? 0)}
+                onCommit={(v) => edit((p) => setHarnessAnchor(p, topology.id, id, { ...s.harness!, slack_mm: v }))}
+              />
             </div>
           )}
         </>
       )}
+      {!s.assembly && <StretchList project={project} topology={topology} segmentId={id} edit={edit} />}
       <h3>Nets on this segment</h3>
       <ul className="list insp-list">
         {nets.map((r) => (
@@ -302,6 +320,43 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
   );
 }
 
+/** A segment's stretches in order, each named by its two bounds, with its own slack field. */
+function StretchList({ project, topology, segmentId, edit }: { project: Project; topology: Topology; segmentId: string; edit: Edit }) {
+  const graph = buildGraph(topology);
+  const seg = graph.segments.get(segmentId)!;
+  const stretches = stretchesOf(project, graph, seg);
+  const boundName = (id: string) => {
+    const tie = topology.ties.find((t) => t.id === id);
+    if (!tie) return endpointName(project, graph.endpoints.get(id));
+    return `tie point ${tie.distance_mm} mm from ${endpointName(project, graph.endpoints.get(tie.from))}`;
+  };
+  return (
+    <>
+      <h3>Slack</h3>
+      <ul className="list insp-list" data-testid="stretches">
+        {stretches.map((st) => {
+          const name = `${boundName(st.from)} to ${boundName(st.to)}`;
+          return (
+            <li key={`${st.owner.kind}:${st.owner.id}`}>
+              <span>
+                {name}
+                {st.lengthMm !== undefined && <span className="muted"> ({st.lengthMm} mm)</span>}
+              </span>
+              <SlackInput
+                key={`${st.owner.id}:${st.slackMm ?? ""}`}
+                label={`Slack ${name}`}
+                value={st.slackMm}
+                placeholder={String(st.inheritedSlackMm)}
+                onCommit={(v) => edit((p) => setStretchSlack(p, topology.id, st.owner, v))}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 function MultiSegment({ project, topology, segmentIds, edit, onSelect }: Props & { segmentIds: string[] }) {
   return (
     <div className="pane pane-right">
@@ -343,16 +398,7 @@ function SheathApply({ project, topology, segmentIds, edit, onSelect }: { projec
 
 function SheathInspector({ project, topology, id, edit }: Props & { id: string }) {
   const s = topology.sheaths.find((x) => x.id === id)!;
-  const graph = buildGraph(topology);
-  let total: number | undefined = s.overlap_mm;
-  for (const seg of s.segments) {
-    const l = graph.segments.get(seg)?.length_mm;
-    if (l === undefined) {
-      total = undefined;
-      break;
-    }
-    total += l;
-  }
+  const { length_mm: total, slack_mm: slack } = sheathCut(project, buildGraph(topology), s);
   return (
     <div className="pane pane-right">
       <h3>Sheath</h3>
@@ -373,7 +419,7 @@ function SheathInspector({ project, topology, id, edit }: Props & { id: string }
       <div className="field">
         <label>Covers</label>
         <span>
-          {s.segments.length} segment{s.segments.length === 1 ? "" : "s"}, cut length {total === undefined ? "unknown (a segment has no length)" : `${total} mm`}
+          {s.segments.length} segment{s.segments.length === 1 ? "" : "s"}, cut length {total === undefined ? "unknown (a segment has no length)" : `${total} mm${slack ? `, ${slack} mm of it slack` : ""}`}
         </span>
       </div>
       <button onClick={() => edit((p) => removeSheath(p, topology.id, id))}>Remove sheath</button>
