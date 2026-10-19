@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setEndpointOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
-import { arcPath, deriveTopology, drawnFrom, topologyLayout, type TopoEdge, type TopoNode } from "./model";
+import { arcPath, deriveTopology, drawnFrom, homeKey, topologyLayout, type TopoEdge, type TopoNode } from "./model";
 import { useGlide } from "./glide";
-import { EndpointNode, HarnessLabelNode, TieNode, WaitingGroupNode } from "./nodes";
+import { EndpointNode, HarnessBoxNode, TieNode, WaitingGroupNode } from "./nodes";
 import { CalloutEdge, RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
 import { LeftPane } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
 
-const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode, waitingGroup: WaitingGroupNode };
+const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessBoxNode, waitingGroup: WaitingGroupNode };
 const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge, callout: CalloutEdge };
 
 export function TopologyView() {
@@ -65,7 +65,20 @@ function Canvas({ topologyId }: { topologyId: string }) {
   // A waiting connector with no endpoint record is a node under its address. Drawing a segment from it places it.
   const waitingAddresses = useMemo(() => new Set(layout.waiting.flatMap((g) => g.connectors.filter((c) => !c.endpoint).map((c) => c.address))), [layout]);
   const glideFrom = useRef(new Map<string, Position>());
-  const drawn = useGlide(homes, glideFrom);
+  const glided = useGlide(homes, glideFrom);
+  // A harness box mid-drag carries every endpoint of its piece by the same amount; the box redraws around them.
+  const [boxDrag, setBoxDrag] = useState<{ piece: string; members: Set<string>; delta: Position } | null>(null);
+  const boxDragStart = useRef<Position | null>(null);
+  const drawn = useMemo(() => {
+    if (!boxDrag) return glided;
+    const { members, delta } = boxDrag;
+    // A moved endpoint's home rides along too, so its call-out and segments keep their shape.
+    const carried = new Set([...members].flatMap((m) => [m, homeKey(m)]));
+    return new Map([...glided].map(([id, p]) => [id, carried.has(id) ? { x: p.x + delta.x, y: p.y + delta.y } : p]));
+  }, [glided, boxDrag]);
+  // The drop's edit gives the piece new homes; the drag lets go only once they are in, so the box never jumps back for a frame.
+  useEffect(() => setBoxDrag(null), [homes]);
+  const [menu, setMenu] = useState<{ x: number; y: number; piece: string } | null>(null);
   const model = useMemo(() => deriveTopology(project, topology, selected, drawn, drafts, options), [project, topology, selected, drawn, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -164,10 +177,17 @@ function Canvas({ topologyId }: { topologyId: string }) {
           return changed ? { ...f, nodes } : f;
         });
       }
+      for (const c of changes) {
+        if (c.type !== "position" || !c.position || !c.dragging || !c.id.startsWith("harness:") || !boxDragStart.current) continue;
+        const piece = c.id.slice("harness:".length);
+        const members = modelRef.current.harnesses.find((h) => h.piece.id === piece)?.piece.endpoints ?? new Set<string>();
+        const delta = { x: Math.round(c.position.x - boxDragStart.current.x), y: Math.round(c.position.y - boxDragStart.current.y) };
+        setBoxDrag({ piece, members, delta });
+      }
       setDrafts((prev) => {
         let next: Map<string, Position> | undefined;
         for (const c of changes) {
-          if (c.type === "position" && c.position && c.dragging) {
+          if (c.type === "position" && c.position && c.dragging && !c.id.startsWith("harness:")) {
             next ??= new Map(prev);
             next.set(c.id, c.position);
           }
@@ -181,8 +201,32 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const onEdgesChange = useCallback((changes: EdgeChange<TopoEdge>[]) => applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]), [applySelectChanges]);
 
+  const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    boxDragStart.current = node.type === "harness" ? { ...node.position } : null;
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node, dragged: Node[]) => {
+      if (node.type === "harness") {
+        boxDragStart.current = null;
+        if (!boxDrag || (boxDrag.delta.x === 0 && boxDrag.delta.y === 0)) {
+          setBoxDrag(null);
+          return;
+        }
+        const { piece, members, delta } = boxDrag;
+        // Each endpoint starts its glide where the drag left it, which is its new home.
+        for (const id of members) {
+          for (const key of [id, homeKey(id)]) {
+            const p = drawn.get(key);
+            if (p) glideFrom.current.set(key, p);
+          }
+        }
+        edit((p) => {
+          const was = p.topologyCanvases.get(topologyId)?.pieces[piece]?.offset ?? { x: 0, y: 0 };
+          return setBoxOffset(p, topologyId, piece, { x: was.x + delta.x, y: was.y + delta.y });
+        });
+        return;
+      }
       const moved = dragged.length ? dragged : [node];
       edit((p) => {
         let next = p;
@@ -220,7 +264,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       });
       setDrafts(new Map());
     },
-    [edit, topologyId, topology, model, layout, drawn],
+    [edit, topologyId, topology, model, layout, boxDrag, drawn],
   );
 
   /** A waiting connector placed by this edit starts its glide from where it waited in the grid. */
@@ -317,7 +361,15 @@ function Canvas({ topologyId }: { topologyId: string }) {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={(e, node) => {
+            if (node.type !== "harness") return;
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, piece: node.id.slice("harness:".length) });
+          }}
+          onPaneClick={() => setMenu(null)}
+          onMoveStart={() => setMenu(null)}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
           onEdgeDoubleClick={(_, e) => e.type === "segment" && e.data?.segment.assembly === undefined && openLength(e.id)}
@@ -345,8 +397,31 @@ function Canvas({ topologyId }: { topologyId: string }) {
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {menu && <BoxMenu at={menu} onClose={() => setMenu(null)} onReset={() => edit((p) => resetBoxOffset(p, topologyId, menu.piece))} />}
       </div>
       <Inspector project={project} topology={topology} routes={model.routes} selected={selection.view === "topology" ? selection.ids : []} edit={edit} onSelect={(ids) => select("topology", ids)} />
+    </div>
+  );
+}
+
+/** A harness box's context menu. Closes on any pointer press outside it, or Escape. */
+function BoxMenu({ at, onClose, onReset }: { at: { x: number; y: number }; onClose: () => void; onReset: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: PointerEvent) => !ref.current?.contains(e.target as globalThis.Node) && onClose();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key);
+    };
+  }, [onClose]);
+  return (
+    <div className="topo-menu" role="menu" ref={ref} style={{ left: at.x, top: at.y }} onContextMenu={(e) => e.preventDefault()}>
+      <button role="menuitem" onClick={() => (onReset(), onClose())}>
+        Reset position
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { findNet, pinLayout, type Project } from "./project";
-import { buildGraph, buses, busOf, degree, otherEnd } from "./derive";
+import { buildGraph, buses, busOf, degree, otherEnd, pieces } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, TopologyCanvas } from "./schema";
 import { ALL_LAYER_ID } from "./schema";
 
@@ -625,7 +625,7 @@ export function addSegment(project: Project, topologyId: string, from: string, t
   const id = newId(project, "seg");
   const segment: Segment = { id, ends: [a, b], length_mm: lengthMm === undefined ? undefined : Math.round(lengthMm) };
   const p = updateTopology(project, topologyId, (t) => ({ ...t, segments: [...t.segments, segment] }));
-  return { project: promotePoints(p, topologyId, [a, b]), id };
+  return { project: carryPieces(project, topologyId, promotePoints(p, topologyId, [a, b])), id };
 }
 
 function promotePoints(project: Project, topologyId: string, endpointIds: string[]): Project {
@@ -692,7 +692,7 @@ export function removeSegment(project: Project, topologyId: string, segmentId: s
   }
   const lone = new Set(seg.ends.filter((e) => degree(graph, e) === 0));
   if (lone.size) p = updateTopology(p, topologyId, (t) => ({ ...t, endpoints: t.endpoints.filter((e) => !lone.has(e.id)) }));
-  return p;
+  return carryPieces(project, topologyId, p);
 }
 
 // Sheaths and tie points --------------------------------------------------------
@@ -752,6 +752,65 @@ export function updateTiePoint(project: Project, topologyId: string, tieId: stri
 
 export function removeTiePoint(project: Project, topologyId: string, tieId: string): Project {
   return updateTopology(project, topologyId, (t) => ({ ...t, ties: t.ties.filter((tie) => tie.id !== tieId) }));
+}
+
+// Harness boxes -------------------------------------------------------------------
+
+type PieceEntry = TopologyCanvas["pieces"][string];
+
+function updatePieces(project: Project, topologyId: string, fn: (pieces: TopologyCanvas["pieces"]) => TopologyCanvas["pieces"]): Project {
+  const canvas = project.topologyCanvases.get(topologyId) ?? { offsets: {}, pieces: {}, roots: [] };
+  const topologyCanvases = new Map(project.topologyCanvases);
+  topologyCanvases.set(topologyId, { ...canvas, pieces: fn(canvas.pieces) });
+  return next(project, { topologyCanvases });
+}
+
+/** Store a harness box's offset from its packed place, keyed by piece id. */
+export function setBoxOffset(project: Project, topologyId: string, pieceId: string, offset: Position): Project {
+  return updatePieces(project, topologyId, (pieces) => ({ ...pieces, [pieceId]: { ...pieces[pieceId], offset: round(offset) } }));
+}
+
+/** Send a harness box back to its packed place. Its turn stays. */
+export function resetBoxOffset(project: Project, topologyId: string, pieceId: string): Project {
+  return updatePieces(project, topologyId, (pieces) => {
+    const rest = { ...pieces };
+    const { offset: _, ...kept } = rest[pieceId] ?? {};
+    if (Object.keys(kept).length) rest[pieceId] = kept;
+    else delete rest[pieceId];
+    return rest;
+  });
+}
+
+/**
+ * Piece ids shift as segments come and go, so carry each `pieces` entry from
+ * the topology in `before` to the piece in `after` that holds the most of its
+ * endpoints. When two entries land on one piece, the one from the piece with
+ * more endpoints wins. Entries left on no piece drop.
+ */
+function carryPieces(before: Project, topologyId: string, after: Project): Project {
+  const canvas = after.topologyCanvases.get(topologyId);
+  const was = before.topologies.get(topologyId);
+  const now = after.topologies.get(topologyId);
+  if (!canvas || !was || !now || Object.keys(canvas.pieces).length === 0) return after;
+  const newPieces = pieces(buildGraph(now));
+  const claims = new Map<string, { size: number; from: string; entry: PieceEntry }>();
+  for (const old of pieces(buildGraph(was))) {
+    const entry = canvas.pieces[old.id];
+    if (!entry) continue;
+    let best: { id: string; shared: number } | undefined;
+    for (const p of newPieces) {
+      let shared = 0;
+      for (const e of old.endpoints) if (p.endpoints.has(e)) shared++;
+      if (shared > (best?.shared ?? 0)) best = { id: p.id, shared };
+    }
+    if (!best) continue;
+    const held = claims.get(best.id);
+    const size = old.endpoints.size;
+    if (!held || size > held.size || (size === held.size && old.id < held.from)) claims.set(best.id, { size, from: old.id, entry });
+  }
+  const carried: TopologyCanvas["pieces"] = {};
+  for (const [id, c] of claims) carried[id] = c.entry;
+  return updatePieces(after, topologyId, () => carried);
 }
 
 // Design rule silences ---------------------------------------------------------

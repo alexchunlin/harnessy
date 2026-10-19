@@ -1,11 +1,11 @@
 import type { Edge, Node } from "@xyflow/react";
-import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
 export interface EndpointNodeData { endpoint: Endpoint; label: string; /** waits in the grid for its first segment */ waiting: boolean; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** the connector's component is selected on the connectivity canvas */ lit: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface TieNodeData { tie: TiePoint; label: string; outOfLayer: boolean; [key: string]: unknown }
-export interface LabelNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+export interface BoxNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface WaitingGroupNodeData { name: string; [key: string]: unknown }
 /** One conductor's strand in the fan at a segment's ends. */
 export interface Strand {
@@ -62,7 +62,7 @@ export interface RatsnestEdgeData {
   [key: string]: unknown;
 }
 
-export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<LabelNodeData, "harness"> | Node<WaitingGroupNodeData, "waitingGroup">;
+export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<BoxNodeData, "harness"> | Node<WaitingGroupNodeData, "waitingGroup">;
 /** A thin line from an endpoint's home to its box, once the box sits past the call-out distance. */
 export interface CalloutEdgeData {
   endpoint: string;
@@ -308,16 +308,14 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     });
   }
 
+  // Each harness draws in a box around its endpoints as drawn, so the box glides and drags with them. Only its title band takes the pointer.
   for (const h of hs) {
-    const anchor = h.anchors[0] ?? graph.segments.get(h.piece.id);
-    let at: Position;
-    if (anchor) {
-      const a = positions.get(anchor.ends[0]) ?? { x: 0, y: 0 };
-      const b = positions.get(anchor.ends[1]) ?? { x: 0, y: 0 };
-      at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 28 };
-    } else at = { x: 0, y: 0 };
+    const rect = harnessBoxRect([...h.piece.endpoints].map((id) => ({ at: positions.get(id) ?? { x: 0, y: 0 }, size: ENDPOINT_SIZE[graph.endpoints.get(id)?.kind ?? "point"] })));
     const outOfLayer = [...h.piece.segments].every((id) => segmentOut.has(id));
-    nodes.push({ id: `harness:${h.piece.id}`, type: "harness", position: at, data: { harness: h, outOfLayer }, selectable: false, draggable: false, className: outOfLayer ? "out-of-layer" : undefined, zIndex: 6 });
+    nodes.push({
+      id: `harness:${h.piece.id}`, type: "harness", position: { x: rect.x, y: rect.y }, data: { harness: h, outOfLayer }, selectable: false, draggable: !outOfLayer, dragHandle: ".harness-box-title",
+      className: outOfLayer ? "out-of-layer" : undefined, style: { pointerEvents: "none" }, zIndex: 0, width: rect.w, height: rect.h, measured: { width: rect.w, height: rect.h },
+    });
   }
 
   // Each column of the waiting grid carries its component's name.
