@@ -16,9 +16,14 @@ describe("tube label", () => {
     expect(tubeLabel({ mm: undefined, source: "typed" }, 187)).toBe("no length");
   });
 
-  it("shows a purchased assembly's library length beside its drawn path", () => {
+  it("shows a placed purchased assembly's library length beside its path", () => {
     expect(tubeLabel({ mm: 500, source: "library", pathMm: 640 }, 640.3)).toBe("cable 500 mm, path 640 mm");
-    expect(tubeLabel({ mm: 500, source: "library" }, 212.6)).toBe("cable 500 mm, path 213 mm");
+    expect(tubeLabel({ mm: 500, source: "library", pathMm: 640 }, 655.6, true)).toBe("cable 500 mm, path 656 mm");
+  });
+
+  it("shows an unplaced purchased assembly's library length alone, with no path from its sketch", () => {
+    expect(tubeLabel({ mm: 500, source: "library" }, 212.6)).toBe("cable 500 mm");
+    expect(tubeLabel({ mm: 500, source: "library" }, 212.6, true)).toBe("cable 500 mm");
   });
 
   it("follows the drawn curve of a placed segment while a drag is held", () => {

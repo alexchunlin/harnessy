@@ -175,11 +175,15 @@ export function extractAll(project: Project, topology: Topology): World3 {
 /**
  * The label beside a segment's tube: its routed length, the number the
  * topology inspector and the BOM use. A purchased assembly shows its library
- * length beside the path drawn for it. While a drag is held, a placed
- * segment follows the drawn curve, which becomes its length on release.
+ * length, and once placed the path drawn for it beside that. While a drag is
+ * held, a placed segment follows the drawn curve, which becomes its length on
+ * release.
  */
 export function tubeLabel(length: SegmentLength, drawnMm: number, dragging = false): string {
-  if (length.source === "library") return `cable ${length.mm ?? "?"} mm, path ${round(drawnMm)} mm`;
+  if (length.source === "library") {
+    const cable = `cable ${length.mm ?? "?"} mm`;
+    return length.pathMm === undefined ? cable : `${cable}, path ${dragging ? round(drawnMm) : length.pathMm} mm`;
+  }
   if (length.source === "3d" && dragging) return `${round(drawnMm)} mm`;
   return length.mm === undefined ? "no length" : `${length.mm} mm`;
 }
