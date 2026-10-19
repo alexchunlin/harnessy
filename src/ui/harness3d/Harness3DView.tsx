@@ -18,8 +18,16 @@ export function Harness3DView() {
   const [picked, setPicked] = useState(ALL);
   // Read once for the view, so switching topology does not read the CAD file again.
   const referenceModel = useReferenceModel();
-  // A harness that was renamed or removed falls back to showing them all.
-  const show = world && world.names.includes(picked) ? picked : ALL;
+  // A segment selected from outside the view, such as by a design rule finding.
+  const segment = useDoc((s) => (s.selection.view === "3d" ? s.selection.ids[0] : undefined));
+  // A harness that was renamed or removed falls back to showing them all, and so does one that hides the selected segment.
+  const hides = (name: string) => segment !== undefined && world !== undefined && world.all.segments.some((x) => x.id === segment) && !world.members[name].segments.has(segment);
+  const show = world && world.names.includes(picked) && !hides(picked) ? picked : ALL;
+  /** Show one harness, letting go of a selected segment it does not draw. */
+  const pick = (name: string) => {
+    if (name !== ALL && hides(name)) useDoc.getState().select("3d", []);
+    setPicked(name);
+  };
 
   if (!topology || !world || world.names.length === 0) return <div className="placeholder">Open a topology with a built harness to see it in 3D.</div>;
 
@@ -30,7 +38,7 @@ export function Harness3DView() {
       <div className="h3d-bar">
         <label>
           Harness{" "}
-          <select value={show} onChange={(e) => setPicked(e.target.value)}>
+          <select value={show} onChange={(e) => pick(e.target.value)}>
             <option>{ALL}</option>
             {world.names.map((n) => (
               <option key={n}>{n}</option>

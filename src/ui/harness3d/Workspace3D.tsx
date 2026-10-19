@@ -7,7 +7,9 @@
  * points and tie points are dragged into place. Each segment draws as one
  * tube along the core bundle curve, so a chain through point endpoints runs
  * smooth, and each tube is labelled with its routed length. A tie point is
- * a position in space; its distance along the segment is derived.
+ * a position in space; its distance along the segment is derived. Where a
+ * placed bundle bends tighter than its minimum bend radius, that stretch of
+ * tube draws red, the stretch the design rule check warns about.
  *
  * What is drawn is the project's saved placement laid over the sketch: a
  * part nobody placed sits where the sketch has it. A drag draws from local
@@ -25,10 +27,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
-import { addTiePointAt, buildGraph, bundleCurves, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Lengths, type Placement, type Pose as CorePose, type RigidMove, type SegmentCurve } from "../../core";
+import { addTiePointAt, buildGraph, bundleCurves, bundleMinimums, clearPlacement, lengthsOf, moveHarness, moveRigidly, pieceOf, pieces, placementOf, placeParts, removeTiePoint, type Lengths, type Placement, type Pose as CorePose, type RigidMove, type SegmentCurve } from "../../core";
 import { usePrefs } from "../prefs";
 import { useDoc } from "../store";
-import { ALL, add, dist, lerp, round, roundVec, scale, sub, tubeLabel, type Harness3, type Vec3, type World3 } from "./model";
+import { ALL, add, dist, lerp, round, roundVec, scale, stretches, sub, tubeLabel, type Harness3, type Vec3, type World3 } from "./model";
 import { Card, Frame, Gizmo, Handle, Label, Stage, Tube, useDrag } from "./scene";
 import { placeReference, rad, ReferenceObject, ReferencePanel, type ReferenceState } from "./ReferenceModel";
 
@@ -187,9 +189,28 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
       ties: Object.fromEntries(harness.ties.filter((t) => placement?.ties[t.id] || moving.has(t.id)).map((t) => [t.id, positions[t.id]])),
     };
   }, [drawn, harness, connectors, placement, live?.id, liveMembers]);
-  const curves = useMemo(() => (project && topology ? bundleCurves(project, topology, drawnPose) : new Map<string, SegmentCurve>()), [project, topology, drawnPose]);
+  const minimums = useMemo(() => (project && topology ? bundleMinimums(project, topology) : new Map<string, number>()), [project, topology]);
+  const curves = useMemo(() => (project && topology ? bundleCurves(project, topology, drawnPose, minimums) : new Map<string, SegmentCurve>()), [project, topology, drawnPose, minimums]);
+  // Red goes where the check looks: placed segments, and those the live drag is placing.
+  const red = useMemo(() => {
+    const moving = new Set([...(live ? [live.id] : []), ...(liveMembers?.endpoints ?? [])]);
+    const placedEnd = (e: string) => placement?.positions[e] !== undefined || moving.has(e);
+    return new Set(harness.segments.filter((s) => s.ends.every(placedEnd) && (curves.get(s.id)?.tight.length ?? 0) > 0).map((s) => s.id));
+  }, [harness, curves, placement, live?.id, liveMembers]);
 
   const [selected, setSelected] = useState<string>();
+  // A selected segment lives in the store, so a design rule finding can select it from outside the view.
+  const selectedSegment = useDoc((d) => (d.selection.view === "3d" ? d.selection.ids.find((id) => harness.segments.some((s) => s.id === id)) : undefined));
+  const selectSegment = (id: string | undefined) => {
+    const { selection, select } = useDoc.getState();
+    if (id !== undefined) setSelected(undefined);
+    if (id !== undefined || (selection.view === "3d" && selection.ids.length > 0)) select("3d", id === undefined ? [] : [id]);
+  };
+  /** Select a part for its handles, letting go of any selected segment. */
+  const selectPart = (id: string | undefined) => {
+    setSelected(id);
+    selectSegment(undefined);
+  };
   const [frame, setFrame] = useState(0);
   const [mode, setMode] = useState<Mode>("translate");
   // The project's reference model, drawn where its handles have it while they are held. Rotation in radians.
@@ -212,7 +233,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
-      if (e.key === "Escape") setSelected(undefined);
+      if (e.key === "Escape") selectPart(undefined);
       if (e.key === "g") setMode("translate");
       if (e.key === "r") setMode("rotate");
       if (e.key === "f") setFrame((n) => n + 1);
@@ -270,7 +291,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
       made = r.id;
       return r.project;
     }, "Add tie point");
-    if (made) setSelected(made);
+    if (made) selectPart(made);
   }
 
   function removeTie(id: string) {
@@ -286,14 +307,14 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   const shownAt = shown.nodes.map((n) => positions[n.id]);
   const middle = scale(shownAt.reduce((t, p) => add(t, p), [0, 0, 0] as Vec3), 1 / Math.max(1, shownAt.length));
   const reach = Math.max(100, ...shownAt.map((p) => dist(p, middle)));
-  const selectedLabel = selected === undefined ? undefined : selected === REFERENCE ? reference?.model.path : (harness.nodes.find((n) => n.id === selected)?.label ?? placed.find((c) => c.id === selected)?.label);
+  const selectedLabel = selected === undefined ? (selectedSegment && `segment ${selectedSegment}`) : selected === REFERENCE ? reference?.model.path : (harness.nodes.find((n) => n.id === selected)?.label ?? placed.find((c) => c.id === selected)?.label);
 
   return (
     <div className="h3d-workspace">
-      <Stage onPointerMissed={() => setSelected(undefined)}>
+      <Stage onPointerMissed={() => selectPart(undefined)}>
         <Frame centre={middle} radius={reach} token={frame} />
         {reference && <ReferenceObject loaded={reference.loaded} units={reference.model.units} position={reference.position} rotation={reference.rotation} />}
-        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} curves={curves} lengths={lengths} dragging={live !== undefined} selected={selected} onSelect={setSelected} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} onAddTie={addTie} />
+        <RouteScene harness={shown} positions={positions} rotations={rotations} placed={shownTies} curves={curves} red={red} lengths={lengths} dragging={live !== undefined} selected={selected} selectedSegment={selectedSegment} onSelect={selectPart} onSelectSegment={selectSegment} onDrag={(id, p) => setLive({ id, at: p })} onDragEnd={commit} tieDistance={tieDistance} onAddTie={addTie} />
         {selected !== undefined && (selected !== REFERENCE || reference) && <Gizmo key={selected} at={selected === REFERENCE ? reference!.position : positions[selected]} rotation={selected === REFERENCE ? reference!.rotation : rotations[selected]} mode={liveMode} onChange={moved} onEnd={commit} />}
       </Stage>
       <aside className="h3d-panel">
@@ -323,7 +344,7 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
             Stretch
           </button>
         </div>
-        <ReferencePanel state={referenceModel} middle={middle} onHandles={() => setSelected(REFERENCE)} onRemoved={() => setSelected((id) => (id === REFERENCE ? undefined : id))} />
+        <ReferencePanel state={referenceModel} middle={middle} onHandles={() => selectPart(REFERENCE)} onRemoved={() => setSelected((id) => (id === REFERENCE ? undefined : id))} />
         <details>
           <summary>Placement data</summary>
           <pre>
@@ -343,7 +364,10 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
   );
 }
 
-function RouteScene({ harness, positions, rotations, placed, curves, lengths, dragging, selected, onSelect, onDrag, onDragEnd, tieDistance, onAddTie }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; curves: Map<string, SegmentCurve>; lengths: Lengths | undefined; dragging: boolean; selected: string | undefined; onSelect: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => number; onAddTie: (segmentId: string, at: Vec3) => void }) {
+const TIGHT = "#e5484d";
+const PICKED = "#ffd166";
+
+function RouteScene({ harness, positions, rotations, placed, curves, red, lengths, dragging, selected, selectedSegment, onSelect, onSelectSegment, onDrag, onDragEnd, tieDistance, onAddTie }: { harness: Harness3; positions: Record<string, Vec3>; rotations: Record<string, Vec3>; placed: PlacedTie[]; curves: Map<string, SegmentCurve>; red: Set<string>; lengths: Lengths | undefined; dragging: boolean; selected: string | undefined; selectedSegment: string | undefined; onSelect: (id: string) => void; onSelectSegment: (id: string) => void; onDrag: (id: string, p: Vec3) => void; onDragEnd: () => void; tieDistance: (id: string) => number; onAddTie: (segmentId: string, at: Vec3) => void }) {
   const start = useDrag(onDrag, onDragEnd);
   const [hovered, setHovered] = useState<string>();
   // The card follows the pointer first, and falls back to the selected connector.
@@ -361,19 +385,29 @@ function RouteScene({ harness, positions, rotations, placed, curves, lengths, dr
         const length = lengths?.segments.get(s.id);
         // One tube along the sampled curve, from ends[0] to ends[1], so tubes meet at point endpoints.
         const pts = curve?.points ?? [positions[s.ends[0]], positions[s.ends[1]]];
+        const tight = red.has(s.id) && curve ? stretches(pts, curve.tight) : [];
+        const picked = selectedSegment === s.id;
         return (
           <group key={s.id}>
             <Tube
               points={pts}
               radius={s.odMm / 2}
-              color={s.color}
+              color={picked ? PICKED : s.color}
+              onClick={(e) => {
+                // A click on a part in front of or behind the tube is the part's, and a drag to orbit is no click.
+                if (e.delta > 4 || e.intersections.some((i) => !i.object.userData.tube)) return;
+                e.stopPropagation();
+                onSelectSegment(s.id);
+              }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 onAddTie(s.id, [e.point.x, e.point.y, e.point.z]);
               }}
             />
+            {/* Drawn a little fatter than the tube so the red shows over it. */}
+            {tight.map((p, i) => p.length > 1 && <Tube key={i} points={p} radius={s.odMm / 2 + 0.6} color={TIGHT} />)}
             <Label at={pts[Math.floor(pts.length / 2)]} tone="muted">
-              <span data-segment={s.id}>{length ? tubeLabel(length, curve?.lengthMm ?? dist(pts[0], pts[pts.length - 1]), dragging) : ""}</span>
+              <span data-segment={s.id} data-tight={tight.length > 0 ? tight.length : undefined} data-selected={picked || undefined}>{length ? tubeLabel(length, curve?.lengthMm ?? dist(pts[0], pts[pts.length - 1]), dragging) : ""}</span>
             </Label>
           </group>
         );
@@ -382,7 +416,7 @@ function RouteScene({ harness, positions, rotations, placed, curves, lengths, dr
         const at = positions[c.id];
         return (
           <group key={c.id}>
-            <Handle at={at} shape="diamond" color={selected === c.id ? "#ffd166" : "#ffffff"} onPointerDown={grab(c.id, at)} />
+            <Handle at={at} shape="diamond" color={selected === c.id ? PICKED : "#ffffff"} onPointerDown={grab(c.id, at)} />
             <Label at={[at[0], at[1] + 22, at[2]]}>
               {c.label} @ {round(tieDistance(c.id))}
             </Label>
@@ -391,7 +425,7 @@ function RouteScene({ harness, positions, rotations, placed, curves, lengths, dr
       })}
       {harness.nodes.map((n) => {
         const at = positions[n.id];
-        if (n.kind !== "connector") return <Handle key={n.id} at={at} shape="circle" color={selected === n.id ? "#ffd166" : "#ffffff"} onPointerDown={grab(n.id, at)} />;
+        if (n.kind !== "connector") return <Handle key={n.id} at={at} shape="circle" color={selected === n.id ? PICKED : "#ffffff"} onPointerDown={grab(n.id, at)} />;
         // A connector is a body with its wire exit at the bottom. It moves on its handles only, so a stray drag cannot knock it off the machine.
         return (
           <group key={n.id}>
@@ -413,7 +447,7 @@ function RouteScene({ harness, positions, rotations, placed, curves, lengths, dr
                 }}
               >
                 <boxGeometry args={[20, 24, 14]} />
-                <meshStandardMaterial color={selected === n.id ? "#ffd166" : "#5b9cf5"} roughness={0.4} />
+                <meshStandardMaterial color={selected === n.id ? PICKED : "#5b9cf5"} roughness={0.4} />
               </mesh>
               <mesh position={[0, -8, 0]}>
                 <cylinderGeometry args={[5, 7, 10, 16]} />

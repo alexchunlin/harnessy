@@ -57,6 +57,8 @@ export const WireSpecSchema = z.object({
   ampacity_a: z.number().nonnegative(),
   color: z.string(),
   part_number: z.string().optional(),
+  /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+  min_bend_radius_mm: mm.optional(),
 });
 
 export const CableSpecSchema = z
@@ -70,6 +72,8 @@ export const CableSpecSchema = z
     part_number: z.string().optional(),
     /** One colour per conductor inside the jacket, in order. Unset draws every conductor in the domain colour. */
     conductor_colors: z.array(z.string()).optional(),
+    /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+    min_bend_radius_mm: mm.optional(),
   })
   .refine((c) => c.conductor_colors === undefined || c.conductor_colors.length === c.conductors, {
     message: "conductor_colors lists one colour per conductor",
@@ -81,6 +85,8 @@ export const SheathSpecSchema = z.object({
   kind: z.enum(["braid", "spiral", "heatshrink"]),
   id_mm: z.number().nonnegative(),
   part_number: z.string().optional(),
+  /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+  min_bend_radius_mm: mm.optional(),
 });
 
 export const BreakoutSpecSchema = z.object({

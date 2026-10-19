@@ -113,7 +113,7 @@ export function Frame({ centre, radius, token }: { centre: Vec3; radius: number;
   return null;
 }
 
-export function Tube({ points, radius, color, onDoubleClick }: { points: Vec3[]; radius: number; color: string; onDoubleClick?: (e: ThreeEvent<MouseEvent>) => void }) {
+export function Tube({ points, radius, color, onClick, onDoubleClick }: { points: Vec3[]; radius: number; color: string; onClick?: (e: ThreeEvent<MouseEvent>) => void; onDoubleClick?: (e: ThreeEvent<MouseEvent>) => void }) {
   const geometry = useMemo(() => {
     const v = points.map((p) => new THREE.Vector3(...p));
     const curve = v.length === 2 ? new THREE.LineCurve3(v[0], v[1]) : new THREE.CatmullRomCurve3(v);
@@ -121,7 +121,7 @@ export function Tube({ points, radius, color, onDoubleClick }: { points: Vec3[];
   }, [points, radius]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
-    <mesh geometry={geometry} onDoubleClick={onDoubleClick}>
+    <mesh geometry={geometry} userData={{ tube: true }} onClick={onClick} onDoubleClick={onDoubleClick}>
       <meshStandardMaterial color={color} roughness={0.55} />
     </mesh>
   );

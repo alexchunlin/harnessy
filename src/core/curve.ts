@@ -30,12 +30,22 @@ export interface SegmentCurve {
   ties: Record<string, number>;
   /** The segments of the chain this segment is part of, in chain order. */
   chain: string[];
+  /** The tightest radius measured on the segment outside the stubs, when a minimum was given for it. Not rounded. */
+  minRadiusMm?: number;
+  /** Arc ranges from the segment's ends[0] where the radius is under its minimum, in order. Empty with no minimum. */
+  tight: [number, number][];
 }
 
 /** How far behind a stub end the phantom point sits. */
 const PHANTOM_MM = 10;
 /** Samples per span between two control points. */
 const SAMPLES = 32;
+/** Curvature samples sit at most this far apart, so the measured radius settles. */
+const RADIUS_SPACING_MM = 1;
+/** Curvature samples sit this many to the smallest minimum radius in play, when that is closer still. */
+const PER_RADIUS = 10;
+/** The most curvature samples one chain takes, so a tiny minimum on a long run stays cheap. */
+const MAX_RADIUS_SAMPLES = 20000;
 
 /** The straight run a connector endpoint's type asks for, or zero. */
 export function strainReliefOf(project: Project, topology: Topology, endpointId: string): number {
@@ -56,8 +66,12 @@ export function exitDirection(rotationDeg: Vec3): Vec3 {
  * The curve of every segment whose two ends the pose holds. Segments with an
  * end missing from the pose have no curve. Tie points enter the curve when
  * the pose holds their position.
+ *
+ * `minimums` gives a bundle's minimum bend radius by segment id. A segment
+ * with one gets its measured radius and the stretches under it. The stubs are
+ * straight and are not measured.
  */
-export function bundleCurves(project: Project, topology: Topology, pose: Pose): Map<string, SegmentCurve> {
+export function bundleCurves(project: Project, topology: Topology, pose: Pose, minimums: ReadonlyMap<string, number> = new Map()): Map<string, SegmentCurve> {
   const graph = buildGraph(topology);
   const at = (id: string) => pose.positions[id];
   const posed = (s: Segment) => s.ends.every((e) => graph.endpoints.has(e) && at(e) !== undefined);
@@ -88,13 +102,13 @@ export function bundleCurves(project: Project, topology: Topology, pose: Pose): 
     const ahead = walk(s.ends[1]);
     const segments = [...back.map(([x]) => x), s, ...ahead.map(([x]) => x)];
     const endpoints = [...back.map(([, e]) => e), s.ends[0], s.ends[1], ...ahead.map(([, e]) => e)];
-    for (const c of chainCurve(project, topology, graph, pose, segments, endpoints)) out.set(c.segment, c);
+    for (const c of chainCurve(project, topology, graph, pose, segments, endpoints, minimums))out.set(c.segment, c);
   }
   return out;
 }
 
 /** One chain's curve, cut into its segments. `endpoints` runs one longer than `segments`, in the same order. */
-function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Pose, segments: Segment[], endpoints: string[]): SegmentCurve[] {
+function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Pose, segments: Segment[], endpoints: string[], minimums: ReadonlyMap<string, number>): SegmentCurve[] {
   const v = (p: Vec3) => new Vector3(...p);
   const ctrl: Vector3[] = [];
   // A connector end: its position, its stub length and the stub end, with the phantom point behind it.
@@ -151,6 +165,8 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
     arc.push(arc[j] + d);
   }
 
+  const bends = bendsOf(spline, n, segments.map((s, i) => ({ from: starts[i], to: ends[i], min: minimums.get(s.id) })));
+
   const vec = (p: Vector3): Vec3 => [p.x, p.y, p.z];
   const chain = segments.map((s) => s.id);
   return segments.map((s, i) => {
@@ -169,6 +185,92 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
       const d = lead + arc[t.index] - arc[starts[i]];
       ties[id] = forward ? d : lengthMm - d;
     }
-    return { segment: s.id, lengthMm, points: (forward ? points : points.reverse()).map(vec), ties, chain };
+    // Bend ranges run from the start of this segment's part of the spline: shift them past the lead stub, and flip them if the segment runs the other way.
+    const bend = bends[i];
+    const tight = bend.tight.map(([a, b]): [number, number] => (forward ? [lead + a, lead + b] : [lengthMm - lead - b, lengthMm - lead - a]));
+    if (!forward) tight.reverse();
+    const out: SegmentCurve = { segment: s.id, lengthMm, points: (forward ? points : points.reverse()).map(vec), ties, chain, tight };
+    if (bend.minRadiusMm !== undefined) out.minRadiusMm = bend.minRadiusMm;
+    return out;
   });
+}
+
+interface Bend {
+  minRadiusMm?: number;
+  /** Arc ranges from the start of the segment's part of the spline. */
+  tight: [number, number][];
+}
+
+/**
+ * Measure the radius along one chain's spline. Each part runs between two
+ * control point indices and carries its segment's minimum, if any. The spline
+ * is resampled at an even arc spacing well under the smallest minimum, and
+ * the radius at each sample is the circumradius of it and its two neighbours.
+ */
+function bendsOf(spline: CatmullRomCurve3, n: number, parts: { from: number; to: number; min: number | undefined }[]): Bend[] {
+  const out: Bend[] = parts.map(() => ({ tight: [] }));
+  const mins = parts.map((p) => p.min).filter((m): m is number => m !== undefined && m > 0);
+  if (mins.length === 0 || n < 2) return out;
+
+  // A fine table of spline parameter against arc length, from the first part's start to the last part's end.
+  const t0 = parts[0].from / (n - 1);
+  const t1 = parts[parts.length - 1].to / (n - 1);
+  const steps = Math.max(1, Math.ceil((t1 - t0) * (n - 1) * 256));
+  const ts: number[] = [t0];
+  const arcs: number[] = [0];
+  let prev = spline.getPoint(t0);
+  for (let k = 1; k <= steps; k++) {
+    const t = t0 + ((t1 - t0) * k) / steps;
+    const p = spline.getPoint(t);
+    arcs.push(arcs[k - 1] + p.distanceTo(prev));
+    ts.push(t);
+    prev = p;
+  }
+  const total = arcs[steps];
+  if (total <= 0) return out;
+  // The table entry at or before an arc length, by bisection.
+  const below = (s: number, of: number[]) => {
+    let lo = 0;
+    let hi = of.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (of[mid] <= s) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const tAt = (s: number) => {
+    const lo = below(s, arcs);
+    const span = arcs[lo + 1] - arcs[lo];
+    return lo + 1 < arcs.length && span > 0 ? ts[lo] + ((ts[lo + 1] - ts[lo]) * (s - arcs[lo])) / span : ts[lo];
+  };
+  const bounds = parts.map((p) => [arcs[below(p.from / (n - 1), ts)], arcs[below(p.to / (n - 1), ts)]]);
+
+  const count = Math.min(MAX_RADIUS_SAMPLES, Math.max(2, Math.ceil(total / Math.min(RADIUS_SPACING_MM, Math.min(...mins) / PER_RADIUS))));
+  const h = total / count;
+  const samples: Vector3[] = [];
+  for (let k = 0; k <= count; k++) samples.push(spline.getPoint(tAt(k * h)));
+
+  for (let k = 1; k < count; k++) {
+    const s = k * h;
+    const i = bounds.findIndex(([a, b]) => s >= a && s <= b);
+    const min = parts[i]?.min;
+    if (min === undefined) continue;
+    const r = circumradius(samples[k - 1], samples[k], samples[k + 1]);
+    const bend = out[i];
+    if (bend.minRadiusMm === undefined || r < bend.minRadiusMm) bend.minRadiusMm = r;
+    if (r >= min) continue;
+    const from = Math.max(bounds[i][0], s - h) - bounds[i][0];
+    const to = Math.min(bounds[i][1], s + h) - bounds[i][0];
+    const last = bend.tight[bend.tight.length - 1];
+    if (last && from <= last[1]) last[1] = to;
+    else bend.tight.push([from, to]);
+  }
+  return out;
+}
+
+/** The radius of the circle through three points, infinite when they line up. */
+function circumradius(a: Vector3, b: Vector3, c: Vector3): number {
+  const cross = new Vector3().subVectors(b, a).cross(new Vector3().subVectors(c, a)).length();
+  return cross < 1e-12 ? Infinity : (a.distanceTo(b) * b.distanceTo(c) * a.distanceTo(c)) / (2 * cross);
 }

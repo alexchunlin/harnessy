@@ -1,8 +1,11 @@
 import type { Topology } from "./schema";
 import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
-import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isBuilt, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
 import { lengthsOf, tieDistance } from "./lengths";
+import { bundleMinimums } from "./bend";
+import { bundleCurves } from "./curve";
+import { placementOf } from "./placement";
 
 export type Severity = "error" | "warning";
 
@@ -11,8 +14,8 @@ export interface Finding {
   severity: Severity;
   /** The id of the thing to select: a net, endpoint, segment, sheath, tie point, component, or connector address. */
   target: string;
-  /** Which canvas the target lives on. */
-  view: "connectivity" | "topology";
+  /** Which view the target lives in: one of the two canvases, or the 3D view. */
+  view: "connectivity" | "topology" | "3d";
   message: string;
   silenced?: boolean;
 }
@@ -38,7 +41,8 @@ export type CheckId =
   | "harness-unnamed"
   | "tie-beyond-segment"
   | "keep-apart"
-  | "net-no-spec";
+  | "net-no-spec"
+  | "bend-radius";
 
 export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-too-few-connectors": "error",
@@ -62,6 +66,7 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "tie-beyond-segment": "warning",
   "keep-apart": "warning",
   "net-no-spec": "warning",
+  "bend-radius": "warning",
 };
 
 const silenceKey = (check: string, target: string) => `${check}|${target}`;
@@ -261,6 +266,18 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
   for (const h of allHarnesses) {
     if (h.anchors.length === 0) add("harness-unnamed", h.piece.id, "topology", `harness ${h.label} has no name`);
     if (h.anchors.length > 1) add("harness-two-anchors", h.piece.id, "topology", `one piece carries ${h.anchors.length} harness names: ${h.anchors.map((a) => a.harness!.name).join(", ")}`);
+  }
+
+  // The bend radius reads the saved placement only, so it runs whether or not the 3D view is open.
+  const minimums = bundleMinimums(project, topology, routes);
+  if (minimums.size > 0) {
+    const curves = bundleCurves(project, topology, placementOf(project, topology.id), minimums);
+    for (const s of topology.segments) {
+      const c = curves.get(s.id);
+      const min = minimums.get(s.id);
+      if (!isBuilt(s) || !c || min === undefined || c.tight.length === 0 || c.minRadiusMm === undefined) continue;
+      add("bend-radius", s.id, "3d", `segment ${s.id} bends to R ${Math.floor(c.minRadiusMm)} mm, min ${min} mm`);
+    }
   }
 
   const keepApart = project.file.keep_apart ?? [];
