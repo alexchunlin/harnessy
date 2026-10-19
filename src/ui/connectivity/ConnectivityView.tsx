@@ -18,7 +18,7 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, lengthsOf, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
@@ -73,7 +73,7 @@ function Canvas() {
     if (selection.view !== "topology" || selection.ids.length === 0) return NO_NETS;
     const topology = activeTopology ? project.topologies.get(activeTopology) : undefined;
     if (!topology) return NO_NETS;
-    const routes = allRoutes(project, buildGraph(topology));
+    const routes = allRoutes(project, buildGraph(topology), lengthsOf(project, topology));
     const onSegments = netsOnSegments(routes);
     const out = new Set<string>();
     for (const id of selection.ids) {

@@ -1,7 +1,11 @@
 import type { Topology } from "./schema";
 import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
-import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isBuilt, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
+import { lengthsOf, NO_LENGTHS, tieDistance } from "./lengths";
+import { bundleMinimums } from "./bend";
+import { bundleCurves } from "./curve";
+import { placementOf } from "./placement";
 
 export type Severity = "error" | "warning";
 
@@ -10,8 +14,8 @@ export interface Finding {
   severity: Severity;
   /** The id of the thing to select: a net, endpoint, segment, sheath, tie point, component, or connector address. */
   target: string;
-  /** Which canvas the target lives on. */
-  view: "connectivity" | "topology";
+  /** Which view the target lives in: one of the two canvases, or the 3D view. */
+  view: "connectivity" | "topology" | "3d";
   message: string;
   silenced?: boolean;
 }
@@ -37,7 +41,9 @@ export type CheckId =
   | "harness-unnamed"
   | "tie-beyond-segment"
   | "keep-apart"
-  | "net-no-spec";
+  | "net-no-spec"
+  | "bend-radius"
+  | "assembly-too-short";
 
 export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "net-too-few-connectors": "error",
@@ -61,11 +67,9 @@ export const CHECK_SEVERITY: Record<CheckId, Severity> = {
   "tie-beyond-segment": "warning",
   "keep-apart": "warning",
   "net-no-spec": "warning",
+  "bend-radius": "warning",
+  "assembly-too-short": "warning",
 };
-
-export function assemblyLengthOf(project: Project): (ref: string) => number | undefined {
-  return (ref) => resolveRef(project.library, ref, "assemblies")?.length_mm;
-}
 
 const silenceKey = (check: string, target: string) => `${check}|${target}`;
 
@@ -190,8 +194,12 @@ const DEGREE_RULES = {
 
 function checkTopology(project: Project, topology: Topology, add: Add): void {
   const graph = buildGraph(topology);
-  const assemblyLength = assemblyLengthOf(project);
-  const routes = allRoutes(project, graph);
+  // The bend radius reads the saved placement only, so it runs whether or not the 3D view is open.
+  // A net rides the same segments whatever their lengths, so the minimums come first and the curves are built once, for both the radius and the lengths.
+  const minimums = bundleMinimums(project, topology, allRoutes(project, graph, NO_LENGTHS));
+  const curves = minimums.size > 0 ? bundleCurves(project, topology, placementOf(project, topology.id), minimums) : undefined;
+  const lengths = lengthsOf(project, topology, curves);
+  const routes = allRoutes(project, graph, lengths);
   const allPieces = pieces(graph);
   const allHarnesses = harnesses(project, graph);
   const label = netLabeller(project);
@@ -225,7 +233,10 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       if (!resolveRef(project.library, s.assembly, "assemblies")) add("dangling-reference", s.id, "topology", `segment ${s.id} references ${s.assembly}, which has no library file`);
       const ends = s.ends.map((e) => graph.endpoints.get(e)?.kind);
       if (!ends.every((k) => k === "connector")) add("assembly-ends-not-connectors", s.id, "topology", `purchased assembly ${s.id} must run connector to connector`);
-    } else if (segmentLength(graph, s) === undefined) {
+      // A path shorter than the cable is ordinary spare length; only a path the cable cannot reach is flagged.
+      const { mm, pathMm } = lengths.segments.get(s.id) ?? {};
+      if (mm !== undefined && pathMm !== undefined && pathMm > mm) add("assembly-too-short", s.id, "3d", `purchased assembly ${s.id}: path ${pathMm} mm, cable ${mm} mm`);
+    } else if (segmentLength(lengths, s.id) === undefined) {
       add("segment-no-length", s.id, "topology", `segment ${s.id} has no length`);
     }
     for (const e of s.ends) if (!graph.endpoints.has(e)) add("dangling-reference", s.id, "topology", `segment ${s.id} ends at ${e}, which is not an endpoint`);
@@ -256,13 +267,21 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
       continue;
     }
     if (!seg.ends.includes(t.from)) add("dangling-reference", t.id, "topology", `tie point ${t.id} measures from ${t.from}, which is not an end of ${seg.id}`);
-    const len = segmentLength(graph, seg, assemblyLength);
-    if (len !== undefined && t.distance_mm > len) add("tie-beyond-segment", t.id, "topology", `tie point ${t.id} is ${t.distance_mm} mm along a ${len} mm segment`);
+    const len = segmentLength(lengths, seg.id);
+    const at = tieDistance(lengths, t.id);
+    if (len !== undefined && at !== undefined && at > len) add("tie-beyond-segment", t.id, "topology", `tie point ${t.id} is ${at} mm along a ${len} mm segment`);
   }
 
   for (const h of allHarnesses) {
     if (h.anchors.length === 0) add("harness-unnamed", h.piece.id, "topology", `harness ${h.label} has no name`);
     if (h.anchors.length > 1) add("harness-two-anchors", h.piece.id, "topology", `one piece carries ${h.anchors.length} harness names: ${h.anchors.map((a) => a.harness!.name).join(", ")}`);
+  }
+
+  for (const s of curves ? topology.segments : []) {
+    const c = curves!.get(s.id);
+    const min = minimums.get(s.id);
+    if (!isBuilt(s) || !c || min === undefined || c.tight.length === 0 || c.minRadiusMm === undefined) continue;
+    add("bend-radius", s.id, "3d", `segment ${s.id} bends to R ${Math.floor(c.minRadiusMm)} mm, min ${min} mm`);
   }
 
   const keepApart = project.file.keep_apart ?? [];

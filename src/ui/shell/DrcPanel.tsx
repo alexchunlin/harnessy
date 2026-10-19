@@ -17,7 +17,8 @@ export function DrcPanel() {
   const warnings = findings.filter((f) => f.severity === "warning");
 
   function jump(f: Finding) {
-    if (view !== "side-by-side") setView(f.view);
+    // Side by side shows both canvases but not the 3D view.
+    if (view !== "side-by-side" || f.view === "3d") setView(f.view);
     // Connector addresses select their component on the connectivity canvas.
     const id = f.view === "connectivity" && f.target.includes("/") ? parseAddress(f.target).component : f.target;
     select(f.view, [id]);

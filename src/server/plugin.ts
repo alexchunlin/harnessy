@@ -21,6 +21,17 @@ export function harnessyServer(options: { home?: string } = {}): Plugin {
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith(API_PREFIX)) return next();
         try {
+          // Upload and bytes carry raw file bytes rather than JSON.
+          const url = new URL(req.url, "http://localhost");
+          const op = `${req.method} ${url.pathname.slice(API_PREFIX.length)}`;
+          const q = (k: string) => url.searchParams.get(k) ?? "";
+          if (op === "POST /upload") return json(res, 200, { path: await api.upload(q("root"), q("name"), await readRaw(req)) });
+          if (op === "GET /bytes") {
+            const { bytes, type } = await api.bytes(q("root"), q("path"));
+            res.statusCode = 200;
+            res.setHeader("content-type", type);
+            return res.end(bytes);
+          }
           const result = await route(api, req);
           json(res, 200, result);
         } catch (e) {
@@ -66,6 +77,15 @@ function readJson(req: IncomingMessage): Promise<unknown> {
         reject(new ApiError(400, `bad JSON body: ${(e as Error).message}`));
       }
     });
+    req.on("error", reject);
+  });
+}
+
+function readRaw(req: IncomingMessage): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 }

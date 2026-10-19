@@ -75,9 +75,10 @@ export function useDrag(onMove: (id: string, p: Vec3) => void, onEnd?: (id: stri
 /**
  * Cartesian handles on one thing: red, green and blue arrows to move it, or
  * rings to turn it. The handles sit on an empty object that mirrors the
- * thing's position and rotation, and every change is reported back.
+ * thing's position and rotation. Every change is reported back, and
+ * letting go is reported once so the caller can commit the move.
  */
-export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange }: { at: Vec3; rotation?: Vec3; mode: "translate" | "rotate"; onChange: (position: Vec3, rotation: Vec3) => void }) {
+export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange, onEnd }: { at: Vec3; rotation?: Vec3; mode: "translate" | "rotate"; onChange: (position: Vec3, rotation: Vec3) => void; onEnd?: () => void }) {
   const target = useRef<THREE.Group>(null!);
   return (
     <>
@@ -91,6 +92,7 @@ export function Gizmo({ at, rotation = [0, 0, 0], mode, onChange }: { at: Vec3; 
           const o = target.current;
           onChange([o.position.x, o.position.y, o.position.z], [o.rotation.x, o.rotation.y, o.rotation.z]);
         }}
+        onMouseUp={() => onEnd?.()}
       />
     </>
   );
@@ -111,7 +113,7 @@ export function Frame({ centre, radius, token }: { centre: Vec3; radius: number;
   return null;
 }
 
-export function Tube({ points, radius, color, onDoubleClick }: { points: Vec3[]; radius: number; color: string; onDoubleClick?: (e: ThreeEvent<MouseEvent>) => void }) {
+export function Tube({ points, radius, color, onClick, onDoubleClick }: { points: Vec3[]; radius: number; color: string; onClick?: (e: ThreeEvent<MouseEvent>) => void; onDoubleClick?: (e: ThreeEvent<MouseEvent>) => void }) {
   const geometry = useMemo(() => {
     const v = points.map((p) => new THREE.Vector3(...p));
     const curve = v.length === 2 ? new THREE.LineCurve3(v[0], v[1]) : new THREE.CatmullRomCurve3(v);
@@ -119,7 +121,7 @@ export function Tube({ points, radius, color, onDoubleClick }: { points: Vec3[];
   }, [points, radius]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
-    <mesh geometry={geometry} onDoubleClick={onDoubleClick}>
+    <mesh geometry={geometry} userData={{ tube: true }} onClick={onClick} onDoubleClick={onDoubleClick}>
       <meshStandardMaterial color={color} roughness={0.55} />
     </mesh>
   );
@@ -174,8 +176,10 @@ export function Handle({ at, shape, color, onPointerDown }: { at: Vec3; shape: "
 }
 
 export function Label({ at, children, tone = "plain" }: { at: Vec3; children: ReactNode; tone?: "plain" | "muted" | "accent" }) {
+  // Pin labels to the canvas's own parent. Left to itself, Html moves them once the pointer events connect, and a label mounted before that can go missing.
+  const parent = useThree((s) => s.gl.domElement.parentNode as HTMLElement);
   return (
-    <Html position={at} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+    <Html position={at} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }} portal={{ current: parent }}>
       <div className={`h3d-label h3d-${tone}`}>{children}</div>
     </Html>
   );

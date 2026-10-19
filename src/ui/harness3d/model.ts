@@ -1,9 +1,9 @@
 /**
- * The 3D harness view's data: every harness of a topology as plain 3D data.
+ * The 3D harness view's data: every harness and purchased assembly of a topology as plain 3D data.
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, fallbackLabel, harnesses, lengthsOf, netLabeller, netSpec, netsOnSegments, pieces, resolveConnector, resolveRef, resolveSpec, type Graph, type Piece, type Project, type SegmentLength, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -13,6 +13,8 @@ export interface Node3 {
   label: string;
   /** For connectors: the connector type as manufacturing names it, with its pin count and mating part. */
   type?: { name: string; pins: number; mating: string };
+  /** For connectors: the straight run its type asks for before the bundle may bend, zero when none. */
+  strainReliefMm?: number;
 }
 
 export interface Seg3 {
@@ -41,8 +43,21 @@ export interface Harness3 {
   ties: Tie3[];
 }
 
+/**
+ * Every connected piece the view draws, by the name the picker shows: each
+ * built harness by its label, and each purchased assembly piece by its
+ * connectors, so a patch cable can be placed and selected like a harness.
+ */
+function drawnPieces(project: Project, graph: Graph): { label: string; piece: Piece }[] {
+  const built = harnesses(project, graph).map((h) => ({ label: h.label, piece: h.piece }));
+  const purchased = pieces(graph)
+    .filter((p) => !p.built)
+    .map((piece) => ({ label: fallbackLabel(project, graph, piece), piece }));
+  return [...built, ...purchased];
+}
+
 function harnessNames(project: Project, topology: Topology): string[] {
-  return harnesses(project, buildGraph(topology))
+  return drawnPieces(project, buildGraph(topology))
     .map((h) => h.label)
     .sort();
 }
@@ -62,9 +77,9 @@ function bundleOd(project: Project, routes: ReturnType<typeof allRoutes>): numbe
 
 function extractHarness(project: Project, topology: Topology, name: string): Harness3 | undefined {
   const graph = buildGraph(topology);
-  const harness = harnesses(project, graph).find((h) => h.label === name);
+  const harness = drawnPieces(project, graph).find((h) => h.label === name);
   if (!harness) return undefined;
-  const routes = allRoutes(project, graph);
+  const routes = allRoutes(project, graph, lengthsOf(project, topology));
   const onSeg = netsOnSegments(routes);
   const domainColor = new Map(project.file.domains.map((d) => [d.id, d.color]));
   const label = netLabeller(project);
@@ -74,7 +89,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
     if (e.kind === "connector") {
       const found = resolveConnector(project, e.connector);
       const type = "error" in found ? undefined : resolveRef(project.library, found.connector.connector, "connectors");
-      return { id, kind: "connector", label: connectorLabel(project, e.connector), type: type && { name: type.short ?? type.name, pins: type.pins, mating: type.mating.part_number } };
+      return { id, kind: "connector", label: connectorLabel(project, e.connector), type: type && { name: type.short ?? type.name, pins: type.pins, mating: type.mating.part_number }, strainReliefMm: type?.strain_relief_mm ?? 0 };
     }
     return { id, kind: e.kind, label: e.kind };
   });
@@ -89,7 +104,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
     return {
       id,
       ends: s.ends,
-      lengthMm: s.length_mm ?? 200,
+      lengthMm: (s.assembly ? resolveRef(project.library, s.assembly, "assemblies")?.length_mm : s.length_mm) ?? 200,
       odMm: bundleOd(project, rs),
       color: (top && domainColor.get(top)) || "#888888",
       nets: rs.map((r) => label(r.net)),
@@ -157,6 +172,44 @@ export function extractAll(project: Project, topology: Topology): World3 {
   };
 }
 
+/**
+ * The label beside a segment's tube: its routed length, the number the
+ * topology inspector and the BOM use. A purchased assembly shows its library
+ * length, and once placed the path drawn for it beside that. While a drag is
+ * held, a placed segment follows the drawn curve, which becomes its length on
+ * release.
+ */
+export function tubeLabel(length: SegmentLength, drawnMm: number, dragging = false): string {
+  if (length.source === "library") {
+    const cable = `cable ${length.mm ?? "?"} mm`;
+    return length.pathMm === undefined ? cable : `${cable}, path ${dragging ? round(drawnMm) : length.pathMm} mm`;
+  }
+  if (length.source === "3d" && dragging) return `${round(drawnMm)} mm`;
+  return length.mm === undefined ? "no length" : `${length.mm} mm`;
+}
+
+/**
+ * The parts of a drawn tube that fall in arc ranges measured from its first
+ * point, such as the runs a bend radius finding draws red. Each part
+ * starts and ends where its range does and keeps the corners between.
+ */
+export function tightRuns(points: Vec3[], ranges: [number, number][]): Vec3[][] {
+  const at: number[] = [0];
+  for (let i = 1; i < points.length; i++) at.push(at[i - 1] + dist(points[i - 1], points[i]));
+  // The point at an arc distance along the polyline.
+  const pointAt = (s: number): Vec3 => {
+    for (let i = 1; i < points.length; i++) {
+      if (s <= at[i]) return at[i] > at[i - 1] ? lerp(points[i - 1], points[i], (s - at[i - 1]) / (at[i] - at[i - 1])) : points[i];
+    }
+    return points[points.length - 1];
+  };
+  const total = at[at.length - 1];
+  return ranges.map(([from, to]) => {
+    const [a, b] = [Math.max(0, from), Math.min(total, to)];
+    return [pointAt(a), ...points.filter((_, i) => at[i] > a && at[i] < b), pointAt(b)];
+  });
+}
+
 // Vectors ----------------------------------------------------------------------
 
 export const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -167,4 +220,3 @@ export const dist = (a: Vec3, b: Vec3) => len(sub(a, b));
 export const lerp = (a: Vec3, b: Vec3, t: number): Vec3 => add(a, scale(sub(b, a), t));
 
 export const round = (n: number) => Math.round(n);
-export const roundVec = (v: Vec3): Vec3 => [round(v[0]), round(v[1]), round(v[2])];

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
 import { allRoutes, buildGraph, conductorAddress, conductorRoute, parseConductor } from "../../src/core/derive";
 import { conductorColor } from "../../src/core/library";
+import { lengthsOf } from "../../src/core/lengths";
 import { findNet, loadProject, netConductors, netSpec, saveProject } from "../../src/core/project";
 import { runChecks } from "../../src/core/drc";
 import { serialize } from "../../src/core/serialize";
@@ -113,7 +114,7 @@ describe("conductor identity", () => {
     const last = ops.addSegment(p, ids.top, g.endpoint, s.id, 100);
     p = last.project;
     const graph = buildGraph(p.topologies.get(ids.top)!);
-    const routes = allRoutes(p, graph);
+    const routes = allRoutes(p, graph, lengthsOf(p, graph.topology));
     const c = conductorRoute(routes, conductorAddress(ids.sig, 1))!;
     expect(c.index).toBe(1);
     expect([...c.segments].sort()).toEqual([g.segment, last.id].sort());
@@ -126,7 +127,7 @@ describe("conductor identity", () => {
 
   it("an unplaced connector is left out of the ends", () => {
     const { project, ids } = twoNetProject();
-    const routes = allRoutes(project, buildGraph(project.topologies.get(ids.top)!));
+    const routes = allRoutes(project, buildGraph(project.topologies.get(ids.top)!), lengthsOf(project, project.topologies.get(ids.top)!));
     const c = conductorRoute(routes, conductorAddress(ids.sig, 0))!;
     expect(c.segments.size).toBe(0);
     expect(c.ends).toEqual([]);

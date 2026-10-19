@@ -25,8 +25,8 @@ import { api, fromFiles, toFiles } from "./api";
 export type View = "connectivity" | "topology" | "side-by-side" | "3d";
 const VIEWS: View[] = ["connectivity", "topology", "side-by-side", "3d"];
 
-/** The canvas a selection belongs to. Side by side shows both canvases, so a selection still names one. */
-export type SelectionView = "connectivity" | "topology";
+/** The view a selection belongs to. Side by side shows both canvases, so a selection still names one. The 3D view selects segments here. */
+export type SelectionView = "connectivity" | "topology" | "3d";
 
 export interface Selection {
   view: SelectionView;

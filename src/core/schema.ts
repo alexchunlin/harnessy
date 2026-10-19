@@ -43,6 +43,8 @@ export const ConnectorTypeSchema = z.object({
   short: z.string().optional(),
   pins: z.number().int().positive(),
   mating: z.object({ part_number: z.string(), contacts_part_number: z.string().optional() }),
+  /** The straight run a bundle needs out of the housing before it may bend. Unset means none. */
+  strain_relief_mm: mm.optional(),
   manufacturer: z.string().optional(),
   datasheet: z.string().optional(),
 });
@@ -55,6 +57,8 @@ export const WireSpecSchema = z.object({
   ampacity_a: z.number().nonnegative(),
   color: z.string(),
   part_number: z.string().optional(),
+  /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+  min_bend_radius_mm: mm.optional(),
 });
 
 export const CableSpecSchema = z
@@ -68,6 +72,8 @@ export const CableSpecSchema = z
     part_number: z.string().optional(),
     /** One colour per conductor inside the jacket, in order. Unset draws every conductor in the domain colour. */
     conductor_colors: z.array(z.string()).optional(),
+    /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+    min_bend_radius_mm: mm.optional(),
   })
   .refine((c) => c.conductor_colors === undefined || c.conductor_colors.length === c.conductors, {
     message: "conductor_colors lists one colour per conductor",
@@ -79,6 +85,8 @@ export const SheathSpecSchema = z.object({
   kind: z.enum(["braid", "spiral", "heatshrink"]),
   id_mm: z.number().nonnegative(),
   part_number: z.string().optional(),
+  /** The tightest radius this bends to without damage, in millimetres. Unset means none declared. */
+  min_bend_radius_mm: mm.optional(),
 });
 
 export const BreakoutSpecSchema = z.object({
@@ -319,6 +327,43 @@ export const TopologyCanvasSchema = z.object({
   endpoints: z.record(z.string(), PositionSchema),
 });
 
+/** A point in 3D in whole millimetres, or a turn in whole degrees: `[x, y, z]`. */
+export const Vec3Schema = z.tuple([z.number().int(), z.number().int(), z.number().int()]);
+
+/**
+ * One topology's placement, `canvas/<top>.3d.json`. Positions of placed
+ * endpoints and tie points in millimetres, and the rotation of placed
+ * connectors in degrees, Euler order XYZ. Nothing else: no camera, no sketch.
+ */
+export const PlacementSchema = z.object({
+  positions: z.record(z.string(), Vec3Schema),
+  rotations: z.record(z.string(), Vec3Schema),
+  ties: z.record(z.string(), Vec3Schema),
+});
+
+export const REFERENCE_UNITS = ["mm", "cm", "m", "in"] as const;
+
+/**
+ * The reference CAD model: a file inside the project's `reference/` folder,
+ * the unit it was drawn in, and where it sits in whole millimetres and
+ * degrees, Euler order XYZ. Every topology shares it.
+ */
+export const ReferenceModelSchema = z.object({
+  path: z.string().regex(/^reference\/[^/]+$/),
+  units: z.enum(REFERENCE_UNITS),
+  position: Vec3Schema,
+  rotation: Vec3Schema,
+});
+
+/**
+ * `canvas/reference.json`: the reference photo board and the reference CAD
+ * model, both optional. A project with neither has no file.
+ */
+export const ReferenceFileSchema = z.object({
+  photos: z.array(z.object({ path: z.string(), caption: z.string().optional() })).optional(),
+  model: ReferenceModelSchema.optional(),
+});
+
 export const DrcFileSchema = z.object({
   silences: z.array(z.object({ check: z.string(), target: z.string() })),
 });
@@ -342,5 +387,10 @@ export type ConnectivityCanvas = z.infer<typeof ConnectivityCanvasSchema>;
 export type PinLayout = z.infer<typeof PinLayoutSchema>;
 export type TopologyCanvas = z.infer<typeof TopologyCanvasSchema>;
 export type DrcFile = z.infer<typeof DrcFileSchema>;
+export type Vec3 = z.infer<typeof Vec3Schema>;
+export type Placement = z.infer<typeof PlacementSchema>;
+export type ReferenceModel = z.infer<typeof ReferenceModelSchema>;
+export type ReferenceFile = z.infer<typeof ReferenceFileSchema>;
+export type ReferenceUnits = ReferenceModel["units"];
 
 export const ALL_LAYER_ID = "all";

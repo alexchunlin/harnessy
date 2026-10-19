@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
 import { BomBlocked, buildBom, cutListCsv, summaryCsv } from "../../src/core/bom";
 import { runChecks } from "../../src/core/drc";
+import type { Project } from "../../src/core/project";
 import { twoNetProject } from "./fixture";
 
 /** Route the sensor net too so the topology has no errors. */
@@ -166,5 +167,26 @@ describe("BOM", () => {
     const summary = summaryCsv(bom);
     expect(summary.startsWith("warning,connector-idle,")).toBe(true);
     expect(summary).toContain("\n\nharness,row,ref,part_number,description,qty,length_mm\n");
+  });
+});
+
+describe("BOM from placement", () => {
+  const wires = (q: Project, top: string) => buildBom(q, q.topologies.get(top)!).cutList.filter((r) => r.harness === "Power harness" && r.row === "wire");
+
+  it("a placed harness's wire rows carry the derived length, and the typed length stays for an unplaced one", () => {
+    const { p, ids } = complete();
+    expect(wires(p, ids.top).map((r) => r.length_mm)).toEqual([300, 300]);
+    const placed = ops.placeParts(p, ids.top, { positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [0, 420, 0] } });
+    expect(wires(placed, ids.top).map((r) => r.length_mm)).toEqual([420, 420]);
+    // Placement never writes the typed length.
+    expect(placed.topologies.get(ids.top)!.segments.find((s) => s.id === ids.seg)!.length_mm).toBe(300);
+  });
+
+  it("a placed tie point's row reads its derived distance", () => {
+    const { p, ids } = complete();
+    const t = ops.addTiePoint(p, ids.top, ids.seg, "ties/zip-tie", 50, ids.batEnd);
+    const placed = ops.placeParts(t.project, ids.top, { positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [0, 420, 0] }, ties: { [t.id]: [0, 200, 0] } });
+    const tie = buildBom(placed, placed.topologies.get(ids.top)!).cutList.find((r) => r.row === "tie")!;
+    expect(tie.notes).toBe("200 mm from Battery OUT");
   });
 });

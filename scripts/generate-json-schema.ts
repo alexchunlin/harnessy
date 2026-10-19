@@ -7,7 +7,9 @@ import {
   DrcFileSchema,
   LIBRARY_SCHEMAS,
   NetsFileSchema,
+  PlacementSchema,
   ProjectFileSchema,
+  ReferenceFileSchema,
   TopologyCanvasSchema,
   TopologySchema,
 } from "../src/core/schema";
@@ -27,6 +29,8 @@ const files: Record<string, z.ZodTypeAny> = {
   "topology.schema.json": TopologySchema,
   "canvas-connectivity.schema.json": ConnectivityCanvasSchema,
   "canvas-topology.schema.json": TopologyCanvasSchema,
+  "canvas-placement.schema.json": PlacementSchema,
+  "canvas-reference.schema.json": ReferenceFileSchema,
   "drc.schema.json": DrcFileSchema,
 };
 for (const [folder, schema] of Object.entries(LIBRARY_SCHEMAS)) files[`library-${folder}.schema.json`] = schema;

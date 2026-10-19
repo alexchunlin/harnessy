@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, lengthsOf, moveEndpoint, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, segmentLength, setSegmentLength, updateTiePoint, type Position } from "../../core";
 import { useDoc, useProject } from "../store";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
@@ -187,7 +187,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
           if (n.type === "tie") {
             const t = topology.ties.find((t) => t.id === n.id);
             const seg = topology.segments.find((s) => s.id === t?.segment);
-            if (!t || !seg) continue;
+            // A tie point placed in 3D keeps its typed distance.
+            if (!t || !seg || lengthsOf(next, next.topologies.get(topologyId)!).ties.get(t.id)?.source === "3d") continue;
             const other = seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0];
             const fromE = topology.endpoints.find((e) => e.id === t.from);
             const toE = topology.endpoints.find((e) => e.id === other);
@@ -199,7 +200,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
             const dy = b.y - a.y;
             const len2 = dx * dx + dy * dy || 1;
             const f = Math.min(1, Math.max(0, ((px - a.x) * dx + (py - a.y) * dy) / len2));
-            const length = seg.length_mm ?? (seg.assembly ? (next.library.assemblies.get(seg.assembly.split("/")[1])?.length_mm ?? 0) : 0);
+            const length = segmentLength(lengthsOf(next, next.topologies.get(topologyId)!), seg.id) ?? 0;
             next = updateTiePoint(next, topologyId, t.id, { distance_mm: Math.round(f * length) });
           }
         }

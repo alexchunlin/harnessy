@@ -2,7 +2,8 @@ import type { Topology } from "./schema";
 import { allNets, componentConnectors, connectorLabel, netConductors, netSpec, type Project } from "./project";
 import { resolveRef, resolveSpec } from "./library";
 import { parseAddress } from "./refs";
-import { assemblyLengthOf, hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
+import { hasErrors, liveWarnings, runChecks, type Finding } from "./drc";
+import { lengthsOf, tieDistance, type Lengths } from "./lengths";
 import { buildGraph, harnesses, harnessLabelOf, isBuilt, legsOf, netLabeller, routeOf, PURCHASED, segmentLength, type Graph } from "./derive";
 
 export const CUT_LIST_COLUMNS = ["harness", "row", "ref", "part_number", "description", "color", "qty", "length_mm", "from", "to", "net", "domain", "notes"] as const;
@@ -50,7 +51,7 @@ function endpointName(project: Project, graph: Graph, id: string): string {
 export function buildRows(project: Project, topology: Topology): { cutList: CutListRow[]; summary: SummaryRow[] } {
   const graph = buildGraph(topology);
   const lib = project.library;
-  const assemblyLength = assemblyLengthOf(project);
+  const lengths = lengthsOf(project, topology);
   const allHarnesses = harnesses(project, graph);
   const harnessOf = (id: string) => harnessLabelOf(allHarnesses, id);
   const name = (id: string) => endpointName(project, graph, id);
@@ -61,7 +62,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
   const contactsAt = new Map<string, number>();
 
   for (const { net, domain } of allNets(project)) {
-    const route = routeOf(graph, net, domain);
+    const route = routeOf(graph, net, domain, lengths);
     const spec = netSpec(project, net, domain);
     const conductors = netConductors(project, net, domain);
     const resolved = spec.ref ? resolveSpec(lib, spec.ref) : undefined;
@@ -82,14 +83,14 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
         part_number: resolved.spec.part_number,
         description: resolved.spec.name,
         qty: 1,
-        length_mm: routeTotal(graph, route.segments, assemblyLength),
+        length_mm: routeTotal(lengths, route.segments),
         from: ends[0] ? name(ends[0]) : undefined,
         to: ends[1] ? name(ends[1]) : undefined,
         net: netLabel,
         domain,
       });
     } else {
-      for (const leg of legsOf(graph, route, assemblyLength)) {
+      for (const leg of legsOf(graph, route, lengths)) {
         // Each conductor is cut from its own spec, so a red and black pair lists as a red row and a black row.
         for (let i = 0; i < conductors.length; i++) {
           const own = conductors[i] ? resolveSpec(lib, conductors[i]!) : undefined;
@@ -147,7 +148,7 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
     let length: number | undefined = sh.overlap_mm;
     for (const id of sh.segments) {
       const seg = graph.segments.get(id);
-      const l = seg ? segmentLength(graph, seg, assemblyLength) : undefined;
+      const l = seg ? segmentLength(lengths, seg.id) : undefined;
       if (l === undefined) {
         length = undefined;
         break;
@@ -169,16 +170,16 @@ export function buildRows(project: Project, topology: Topology): { cutList: CutL
     });
   }
 
-  const ties = [...topology.ties].sort((x, y) => (x.segment === y.segment ? x.distance_mm - y.distance_mm : x.segment < y.segment ? -1 : 1));
+  const ties = [...topology.ties].sort((x, y) => (x.segment === y.segment ? (tieDistance(lengths, x.id) ?? 0) - (tieDistance(lengths, y.id) ?? 0) : x.segment < y.segment ? -1 : 1));
   for (const t of ties) {
     const spec = resolveRef(lib, t.spec, "ties");
-    row({ harness: harnessOf(t.segment), row: "tie", ref: t.spec, part_number: spec?.part_number, description: spec?.name, qty: 1, from: name(t.from), to: `segment ${t.segment}`, notes: `${t.distance_mm} mm from ${name(t.from)}` });
+    row({ harness: harnessOf(t.segment), row: "tie", ref: t.spec, part_number: spec?.part_number, description: spec?.name, qty: 1, from: name(t.from), to: `segment ${t.segment}`, notes: `${tieDistance(lengths, t.id)} mm from ${name(t.from)}` });
   }
 
   for (const s of topology.segments) {
     if (!s.assembly) continue;
     const a = resolveRef(lib, s.assembly, "assemblies");
-    row({ harness: harnessOf(s.id), row: "assembly", ref: s.assembly, part_number: a?.part_number, description: a?.name, qty: 1, length_mm: a?.length_mm, from: name(s.ends[0]), to: name(s.ends[1]) });
+    row({ harness: harnessOf(s.id), row: "assembly", ref: s.assembly, part_number: a?.part_number, description: a?.name, qty: 1, length_mm: segmentLength(lengths, s.id), from: name(s.ends[0]), to: name(s.ends[1]) });
   }
 
   rows.sort(compareRows);
@@ -216,10 +217,10 @@ function summarize(rows: CutListRow[]): SummaryRow[] {
   return [...groups.values()].sort(compareRows);
 }
 
-function routeTotal(graph: Graph, segments: Set<string>, assemblyLength: (ref: string) => number | undefined): number | undefined {
+function routeTotal(lengths: Lengths, segments: Set<string>): number | undefined {
   let total = 0;
   for (const id of segments) {
-    const l = segmentLength(graph, graph.segments.get(id)!, assemblyLength);
+    const l = segmentLength(lengths, id);
     if (l === undefined) return undefined;
     total += l;
   }

@@ -7,6 +7,9 @@ import {
   connectorLabel,
   degree,
   findNet,
+  lengthsOf,
+  segmentLength,
+  tieDistance,
   netConductors,
   netLabeller,
   netsThrough,
@@ -180,6 +183,8 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
   const nets = routes.filter((r) => r.segments.has(id));
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const ties = topology.ties.filter((t) => t.segment === id);
+  const lengths = lengthsOf(project, topology);
+  const length = lengths.segments.get(id);
   const [tieSpec, setTieSpec] = useState(() => [...project.library.ties.keys()][0] ?? "");
   return (
     <div className="pane pane-right">
@@ -190,7 +195,16 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
           {endpointName(project, ends[0])} to {endpointName(project, ends[1])}
         </span>
       </div>
-      {!s.assembly && (
+      {!s.assembly && length?.source === "3d" && (
+        <div className="field">
+          <label>Length (mm)</label>
+          {/* A placed segment measures its 3D curve. The typed length waits in the file for when it is unplaced. */}
+          <span className="segment-length" title="Placed in 3D. Move its ends in the 3D view to change it.">
+            {length.mm} mm <span className="muted">from 3D</span>
+          </span>
+        </div>
+      )}
+      {!s.assembly && length?.source !== "3d" && (
         <div className="field">
           <label>Length (mm)</label>
           <input
@@ -256,7 +270,7 @@ function SegmentInspector({ project, topology, routes, id, edit, onSelect }: Pro
         {ties.map((t) => (
           <li key={t.id} onClick={() => onSelect([t.id])}>
             <span>{resolveRef(project.library, t.spec, "ties")?.name ?? t.spec}</span>
-            <span className="muted">{t.distance_mm} mm</span>
+            <span className="muted">{tieDistance(lengths, t.id)} mm</span>
           </li>
         ))}
       </ul>
@@ -329,10 +343,10 @@ function SheathApply({ project, topology, segmentIds, edit, onSelect }: { projec
 
 function SheathInspector({ project, topology, id, edit }: Props & { id: string }) {
   const s = topology.sheaths.find((x) => x.id === id)!;
-  const graph = buildGraph(topology);
+  const lengths = lengthsOf(project, topology);
   let total: number | undefined = s.overlap_mm;
   for (const seg of s.segments) {
-    const l = graph.segments.get(seg)?.length_mm;
+    const l = segmentLength(lengths, seg);
     if (l === undefined) {
       total = undefined;
       break;
@@ -371,12 +385,20 @@ function TieInspector({ project, topology, id, edit }: Props & { id: string }) {
   const t = topology.ties.find((x) => x.id === id)!;
   const graph = buildGraph(topology);
   const seg = graph.segments.get(t.segment);
+  const distance = lengthsOf(project, topology).ties.get(id);
   return (
     <div className="pane pane-right">
       <h3>Tie point</h3>
       <div className="field">
         <label>Distance (mm)</label>
-        <input type="number" min={0} value={t.distance_mm} onChange={(e) => edit((p) => updateTiePoint(p, topology.id, id, { distance_mm: Number(e.target.value) || 0 }))} />
+        {/* A placed tie point measures the 3D curve. The typed distance waits in the file for when it is unplaced. */}
+        {distance?.source === "3d" ? (
+          <span className="tie-distance" title="Placed in 3D. Move it in the 3D view to change it.">
+            {distance.mm} mm <span className="muted">from 3D</span>
+          </span>
+        ) : (
+          <input type="number" min={0} value={t.distance_mm} onChange={(e) => edit((p) => updateTiePoint(p, topology.id, id, { distance_mm: Number(e.target.value) || 0 }))} />
+        )}
       </div>
       <div className="field">
         <label>Measured from</label>
