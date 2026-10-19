@@ -1,6 +1,7 @@
 import { mergeLibraries, resolveRef } from "./library";
-import type { Project } from "./project";
-import { designator, type Component, type ComponentDefinition, type DefinitionConnector } from "./schema";
+import { removeConnectorFromNet, removeEndpoint, removeNet } from "./ops";
+import { allNets, findNet, type Project } from "./project";
+import { designator, type Bridges, type Component, type ComponentDefinition, type DefinitionConnector } from "./schema";
 import type { DrawerOwner } from "./drawer";
 
 /**
@@ -176,4 +177,65 @@ export function publishDefinition(project: Project, componentId: string): { proj
   const components = new Map(p.components);
   components.set(componentId, { id: component.id, name: component.name, definition: `components/${id}` });
   return { project: { ...p, components }, id };
+}
+
+/**
+ * Take the wiring off one designator on each of these components: the nets
+ * that used it lose it and its pins, a net left under two connectors goes,
+ * its topology endpoints go with their segments, and the canvas forgets
+ * where its pin was drawn.
+ */
+function detachConnectorRefs(project: Project, componentIds: string[], designator: string): Project {
+  let p = project;
+  for (const componentId of componentIds) {
+    const address = `${componentId}/${designator}`;
+    for (const { net } of allNets(p)) {
+      if (!net.connectors.includes(address)) continue;
+      p = removeConnectorFromNet(p, net.id, address);
+      if ((findNet(p, net.id)?.net.connectors.length ?? 0) < 2) p = removeNet(p, net.id);
+    }
+    // An endpoint goes with its segments, and they take their ties and slack.
+    for (const t of [...p.topologies.values()]) {
+      for (const e of t.endpoints) if (e.kind === "connector" && e.connector === address) p = removeEndpoint(p, t.id, e.id);
+    }
+    const layout = p.connectivityCanvas.pins[componentId];
+    if (layout) {
+      const kept = Object.fromEntries(Object.entries(layout).map(([side, ds]) => [side, ds?.filter((d) => d !== designator)]));
+      p = { ...p, connectivityCanvas: { ...p.connectivityCanvas, pins: { ...p.connectivityCanvas.pins, [componentId]: kept } } };
+    }
+  }
+  return p;
+}
+
+/** Bridges without one designator. A bridge left joining fewer than two goes, and no bridges at all is undefined. */
+function bridgesWithout(bridges: Bridges | undefined, designator: string): Bridges | undefined {
+  if (!bridges) return undefined;
+  const kept = bridges.map((b) => b.filter((d) => d !== designator)).filter((b) => b.length >= 2);
+  return kept.length ? kept : undefined;
+}
+
+/** Remove a connector from a definition. Reaches every component sharing it. Shadows a shared definition. */
+export function removeDefinitionConnector(project: Project, id: string, designator: string): Project {
+  const def = definitionOrThrow(project, id);
+  if (!def.connectors.some((c) => c.designator === designator)) throw new Error(`no connector ${designator} on definition ${id}`);
+  const users = definitionUsers(project, id).map((c) => c.id);
+  const p = putDefinition(project, { ...def, connectors: def.connectors.filter((c) => c.designator !== designator), bridges: bridgesWithout(def.bridges, designator) });
+  return detachConnectorRefs(p, users, designator);
+}
+
+/** Remove an inline connector from a one-off component. */
+export function removeInlineConnector(project: Project, componentId: string, designator: string): Project {
+  const { component, connectors } = inlineOrThrow(project, componentId);
+  if (!connectors.some((c) => c.designator === designator)) throw new Error(`no connector ${designator} on component ${componentId}`);
+  const components = new Map(project.components);
+  components.set(componentId, { ...component, connectors: connectors.filter((c) => c.designator !== designator), bridges: bridgesWithout(component.bridges, designator) });
+  return detachConnectorRefs({ ...project, components }, [componentId], designator);
+}
+
+/**
+ * Remove a connector from whichever owns it, a definition or a one-off, and
+ * clean up after it on every component it reached. One call, so one undo step.
+ */
+export function removeConnector(project: Project, owner: DrawerOwner, designator: string): Project {
+  return owner.kind === "definition" ? removeDefinitionConnector(project, owner.id, designator) : removeInlineConnector(project, owner.id, designator);
 }

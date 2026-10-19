@@ -3,7 +3,7 @@ import { allNets, asksForPins, conductorColor, netLabeller, netPins, numberPinsI
 import { useState } from "react";
 import { NO_HOVER, useDoc, type Hover } from "../store";
 import { componentBridges, connectorTypeInventory } from "../../core";
-import { AddConnector, ConnectorRow, DefinitionStatus, retype } from "./ConnectorEditor";
+import { AddConnector, ConnectorRow, DefinitionStatus, RemoveConnectorButton, retype } from "./ConnectorEditor";
 import { ConductorList } from "../shell/ConductorList";
 import { DetachPublish } from "./DetachPublish";
 
@@ -166,12 +166,7 @@ function ComponentInspector({ project, id, edit }: { project: Project; id: strin
                   )
                 }
               >
-                {c.connectors && (
-                  // #58 replaces this with a removal that detaches the nets.
-                  <button onClick={() => edit((p) => setInlineConnectors(p, id, c.connectors!.filter((_, j) => j !== i)))} title="Remove connector">
-                    x
-                  </button>
-                )}
+                <RemoveConnectorButton project={project} component={c} designator={con.designator} edit={edit} />
               </ConnectorRow>
               <div className="insp-nets">
                 {attached.length === 0 && <span className="muted">no nets</span>}

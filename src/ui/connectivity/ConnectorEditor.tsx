@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { addConnector, connectorOwner, definitionUsers, revertDefinition, updateConnector, type Component, type ConnectorTypeUse, type DefinitionConnector, type Project } from "../../core";
+import { addConnector, allNets, connectorOwner, definitionUsers, removeConnector, revertDefinition, updateConnector, type Component, type ConnectorTypeUse, type DefinitionConnector, type Project } from "../../core";
 import { MissingTypeLine, TypePicker } from "./ConnectorDrawer";
 
 /**
@@ -108,6 +108,27 @@ export function ConnectorRow({
 /** Retype one connector of the component's owner, one undo step. */
 export function retype(edit: Edit, component: Component, designator: string, type: string): void {
   tryEdit(edit, (p) => updateConnector(p, connectorOwner(component), designator, { connector: type }));
+}
+
+/**
+ * Remove one connector from the component's owner, on every component that
+ * shares it. Asks first when nets use it there. One undo step.
+ */
+export function RemoveConnectorButton({ project, component, designator, edit }: { project: Project; component: Component; designator: string; edit: Edit }) {
+  const owner = connectorOwner(component);
+  const reached = owner.kind === "definition" ? definitionUsers(project, owner.id) : [component];
+  const addresses = new Set(reached.map((c) => `${c.id}/${designator}`));
+  const remove = () => {
+    const nets = allNets(project).filter(({ net }) => net.connectors.some((a) => addresses.has(a)));
+    const where = reached.length > 1 ? ` on all ${reached.length} components that share the definition` : "";
+    if (nets.length && !window.confirm(`Remove ${designator}${where}? ${nets.length} net${nets.length === 1 ? " uses" : "s use"} it, and a net left under two connectors goes too.`)) return;
+    tryEdit(edit, (p) => removeConnector(p, owner, designator));
+  };
+  return (
+    <button aria-label={`Remove ${designator}`} title="Remove connector, with its nets and topology endpoints" onClick={remove}>
+      x
+    </button>
+  );
 }
 
 /** A designator and a type, then Add. Refusals, such as a designator already taken, are said aloud. */
