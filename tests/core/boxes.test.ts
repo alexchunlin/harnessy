@@ -180,6 +180,16 @@ describe("box offset ops", () => {
     expect(b.canvas().pieces).toEqual({ [small.segs[0]]: { offset: { x: 200, y: 40 } } });
   });
 
+  it("joining drops the smaller piece's entry when the larger piece has none", () => {
+    const b = bench();
+    const big = b.star(4);
+    const small = b.star(2);
+    b.project = ops.setBoxOffset(b.project, b.top, small.segs[0], { x: 1, y: 1 });
+    b.project = ops.turnPiece(b.project, b.top, small.segs[0]);
+    b.join(small.ends[1], big.hub);
+    expect(b.canvas().pieces).toEqual({});
+  });
+
   it("splitting gives the entry to the part holding the most endpoints", () => {
     const b = bench();
     // A chain: a small star of two connectors, a bridge segment, then a big star of four.

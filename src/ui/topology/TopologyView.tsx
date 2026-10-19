@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, turnPiecesHolding, updateTiePoint, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, dropOffset, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, turnPiecesHolding, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
 import { isTyping, turnSelection } from "../keys";
 import { useTheme } from "../theme";
@@ -237,11 +237,11 @@ function Canvas({ topologyId }: { topologyId: string }) {
             // Only the offset from home is kept. The box starts its glide where it was dropped.
             const size = ENDPOINT_SIZE[endpoint.kind];
             const centre = { x: n.position.x + size.w / 2, y: n.position.y + size.h / 2 };
-            const home = layout.endpoints.get(n.id)?.home;
+            const offset = dropOffset(layout, n.id, centre);
             const was = drawn.get(n.id);
-            if (!home || (was && Math.round(was.x - centre.x) === 0 && Math.round(was.y - centre.y) === 0)) continue;
+            if (!offset || (was && Math.round(was.x - centre.x) === 0 && Math.round(was.y - centre.y) === 0)) continue;
             glideFrom.current.set(n.id, centre);
-            next = setEndpointOffset(next, topologyId, n.id, { x: centre.x - home.x, y: centre.y - home.y });
+            next = setEndpointOffset(next, topologyId, n.id, offset);
             continue;
           }
           if (n.type === "tie") {

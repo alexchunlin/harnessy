@@ -1,4 +1,5 @@
 import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
+import { parseAddress } from "./refs";
 import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
@@ -399,7 +400,7 @@ export function topologyLight(project: Project, topology: Topology, ids: string[
   const routes = allRoutes(project, graph);
   const onSegments = netsOnSegments(routes);
   const lightConnector = (address: string) => {
-    components.add(address.split("/")[0]);
+    components.add(parseAddress(address).component);
     for (const r of routes) if (r.net.connectors.includes(address)) nets.add(r.net.id);
   };
   for (const id of ids) {

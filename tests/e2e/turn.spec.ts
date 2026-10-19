@@ -60,3 +60,43 @@ test("R with a harness box selected turns that harness, and one undo takes the t
   await page.keyboard.press("ControlOrMeta+z");
   await waitForFile(folder, TOPOLOGY_CANVAS, (v) => (v as Canvas).pieces[piece.id] === undefined);
 });
+
+test("an endpoint dragged on a turned harness stays where it was dropped", async ({ page }) => {
+  const folder = await freshExample("turn-drag");
+  await openProject(page, folder);
+  await openTopology(page);
+  const piece = (await topologyPieces(folder, TOPOLOGY_ID)).find((p) => p.built && [...p.kinds.values()].includes("breakout"))!;
+  const breakout = [...piece.kinds].find(([, k]) => k === "breakout")![0];
+  const node = page.locator(`.react-flow__node[data-id="${breakout}"]`);
+  await node.click();
+  await page.keyboard.press("r");
+  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => (v as Canvas).pieces[piece.id]?.turns === 1);
+  // A selected endpoint lifts its segments over it, so let go of the selection before grabbing it.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+
+  // The fitted view is far out. Zoom in on the breakout so it is big enough to grab.
+  const far = (await node.boundingBox())!;
+  await page.mouse.move(far.x + far.width / 2, far.y + far.height / 2);
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(400);
+  const box = (await node.boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(cx + i * 4, cy + i);
+  const held = (await node.boundingBox())!;
+  expect(held.x - box.x).toBeGreaterThan(20);
+  await page.mouse.up();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => !!(v as { offsets?: Record<string, unknown> }).offsets?.[breakout]);
+  // Long enough for any glide to finish, so the box shows where the file puts it.
+  await page.waitForTimeout(800);
+
+  const after = (await node.boundingBox())!;
+  expect(Math.abs(after.x - held.x)).toBeLessThan(2);
+  expect(Math.abs(after.y - held.y)).toBeLessThan(2);
+});

@@ -140,7 +140,7 @@ export function boxSizeFor(data: ComponentNodeData, sides: Record<Side, string[]
 }
 
 /**
- * The line that draws a bridge inside a box:a stub from each bridged pin to
+ * The line that draws a bridge inside a box: a stub from each bridged pin to
  * a spine. The spine runs down the middle when the pins sit on both sides
  * and just inside the edge when they share one; a top or bottom pin reaches
  * the spine's nearest end with one bend.

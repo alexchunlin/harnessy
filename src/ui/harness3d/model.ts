@@ -3,7 +3,7 @@
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, harnesses, layoutTopology, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
+import { EMPTY_TOPOLOGY_CANVAS, allRoutes, buildGraph, connectorLabel, harnesses, layoutTopology, netLabeller, netSpec, netsOnSegments, resolveConnector, resolveRef, resolveSpec, type Project, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -122,7 +122,7 @@ export function extractAll(project: Project, topology: Topology): World3 {
   const parts = harnessNames(project, topology)
     .map((n) => extractHarness(project, topology, n))
     .filter((h): h is Harness3 => h !== undefined);
-  const drawn = layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? { offsets: {}, pieces: {}, roots: [] }).endpoints;
+  const drawn = layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_TOPOLOGY_CANVAS).endpoints;
   const p2 = (id: string) => drawn.get(id)?.drawn ?? { x: 0, y: 0 };
   const centre = (ids: string[]) => ({ x: ids.reduce((t, id) => t + p2(id).x, 0) / Math.max(1, ids.length), y: ids.reduce((t, id) => t + p2(id).y, 0) / Math.max(1, ids.length) });
   const own = parts.map((h) => {

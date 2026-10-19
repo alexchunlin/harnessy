@@ -1,9 +1,9 @@
 import { generateId } from "./ids";
 import { resolveRef } from "./library";
 import { findNet, pinLayout, type Project } from "./project";
-import { buildGraph, buses, busOf, degree, otherEnd, pieces } from "./derive";
+import { buildGraph, buses, busOf, degree, otherEnd, pieces, type Piece } from "./derive";
 import type { Bridges, Component, DefinitionConnector, Domain, Endpoint, Group, HarnessAnchor, Layer, Net, Note, Position, Segment, Sheath, Side, TiePoint, Topology, TopologyCanvas } from "./schema";
-import { ALL_LAYER_ID } from "./schema";
+import { ALL_LAYER_ID, EMPTY_TOPOLOGY_CANVAS } from "./schema";
 
 /**
  * Operations over a project. Each returns a new Project sharing unchanged
@@ -259,7 +259,7 @@ export function flipComponent(project: Project, id: string, axis: "horizontal" |
 /**
  * Turn a component a quarter clockwise, pins and outline together: left goes
  * to top reversed, top to right, right to bottom reversed, bottom to left.
- * The box keeps its centre on the same grid point. `sizeOf` gives the box a
+ * The component keeps its centre on the same grid point. `sizeOf` gives the box a
  * pin arrangement draws, which only the canvas knows.
  */
 export function turnComponent(project: Project, id: string, sizeOf: (sides: Record<Side, string[]>) => BoxSize): Project {
@@ -485,7 +485,7 @@ export function createTopology(project: Project, name: string): { project: Proje
   const topologies = new Map(project.topologies);
   topologies.set(id, { id, name, endpoints: [], segments: [], sheaths: [], ties: [] });
   const topologyCanvases = new Map(project.topologyCanvases);
-  topologyCanvases.set(id, { offsets: {}, pieces: {}, roots: [] });
+  topologyCanvases.set(id, EMPTY_TOPOLOGY_CANVAS);
   return { project: next(project, { topologies, topologyCanvases }), id };
 }
 
@@ -579,7 +579,7 @@ export function removeEndpoint(project: Project, topologyId: string, endpointId:
 function updateTopologyCanvas(project: Project, topologyId: string, fn: (c: TopologyCanvas) => TopologyCanvas): Project {
   if (!project.topologies.has(topologyId)) throw new Error(`no topology ${topologyId}`);
   const topologyCanvases = new Map(project.topologyCanvases);
-  topologyCanvases.set(topologyId, fn(project.topologyCanvases.get(topologyId) ?? { offsets: {}, pieces: {}, roots: [] }));
+  topologyCanvases.set(topologyId, fn(project.topologyCanvases.get(topologyId) ?? EMPTY_TOPOLOGY_CANVAS));
   return next(project, { topologyCanvases });
 }
 
@@ -759,7 +759,7 @@ export function removeTiePoint(project: Project, topologyId: string, tieId: stri
 type PieceEntry = TopologyCanvas["pieces"][string];
 
 function updatePieces(project: Project, topologyId: string, fn: (pieces: TopologyCanvas["pieces"]) => TopologyCanvas["pieces"]): Project {
-  const canvas = project.topologyCanvases.get(topologyId) ?? { offsets: {}, pieces: {}, roots: [] };
+  const canvas = project.topologyCanvases.get(topologyId) ?? EMPTY_TOPOLOGY_CANVAS;
   const topologyCanvases = new Map(project.topologyCanvases);
   topologyCanvases.set(topologyId, { ...canvas, pieces: fn(canvas.pieces) });
   return next(project, { topologyCanvases });
@@ -793,7 +793,7 @@ export function turnPiecesHolding(project: Project, topologyId: string, ids: str
   if (!t) return project;
   const all = pieces(buildGraph(t));
   const held = new Set<string>();
-  const holding = (test: (p: (typeof all)[number]) => boolean) => all.find(test)?.id;
+  const holding = (test: (p: Piece) => boolean) => all.find(test)?.id;
   for (const id of ids) {
     const segs = id.startsWith("harness:")
       ? [id.slice("harness:".length)]
@@ -822,8 +822,9 @@ export function resetBoxOffset(project: Project, topologyId: string, pieceId: st
 /**
  * Piece ids shift as segments come and go, so carry each `pieces` entry from
  * the topology in `before` to the piece in `after` that holds the most of its
- * endpoints. When two entries land on one piece, the one from the piece with
- * more endpoints wins. Entries left on no piece drop.
+ * endpoints. When two old pieces land on one new piece, the one with more
+ * endpoints wins and its entry, or its lack of one, carries. Entries left on
+ * no piece drop.
  */
 function carryPieces(before: Project, topologyId: string, after: Project): Project {
   const canvas = after.topologyCanvases.get(topologyId);
@@ -831,10 +832,10 @@ function carryPieces(before: Project, topologyId: string, after: Project): Proje
   const now = after.topologies.get(topologyId);
   if (!canvas || !was || !now || Object.keys(canvas.pieces).length === 0) return after;
   const newPieces = pieces(buildGraph(now));
-  const claims = new Map<string, { size: number; from: string; entry: PieceEntry }>();
+  // Every old piece claims a new one, entry or not, so a larger piece with no entry still beats a smaller one with an entry.
+  const claims = new Map<string, { size: number; from: string; entry?: PieceEntry }>();
   for (const old of pieces(buildGraph(was))) {
     const entry = canvas.pieces[old.id];
-    if (!entry) continue;
     let best: { id: string; shared: number } | undefined;
     for (const p of newPieces) {
       let shared = 0;
@@ -847,7 +848,7 @@ function carryPieces(before: Project, topologyId: string, after: Project): Proje
     if (!held || size > held.size || (size === held.size && old.id < held.from)) claims.set(best.id, { size, from: old.id, entry });
   }
   const carried: TopologyCanvas["pieces"] = {};
-  for (const [id, c] of claims) carried[id] = c.entry;
+  for (const [id, c] of claims) if (c.entry) carried[id] = c.entry;
   return updatePieces(after, topologyId, () => carried);
 }
 
