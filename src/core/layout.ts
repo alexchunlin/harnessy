@@ -6,13 +6,14 @@
  */
 import { buildGraph, degree, harnesses, otherEnd, pieces, type Graph, type Piece } from "./derive";
 import { allNets, type Project } from "./project";
+import { parseAddress } from "./refs";
 import type { Endpoint, Position, Segment, Topology, TopologyCanvas } from "./schema";
 
 /**
- * The drawn length of every logical edge, in canvas pixels. At this length,
- * children STEP_DEGREES apart sit about one SIBLING_PITCH apart, so connector
- * boxes on a fan do not overlap whichever way it faces. 350 is the least
- * that keeps the RAMMP example clear.
+ * The drawn length of every logical edge, in canvas pixels. At 400,
+ * children STEP_DEGREES apart sit about one SIBLING_PITCH apart
+ * (2 x 400 x sin 7.5 degrees is 104), so connector boxes on a fan do not
+ * overlap whichever way it faces.
  */
 export const UNIFORM_LENGTH = 400;
 /** The least distance between two siblings on a crowded arc: a connector box and a little air. */
@@ -114,7 +115,7 @@ export interface WaitingGroup {
   /** The component's name, drawn over its column. */
   name: string;
   /** The column, name included. */
-  rect: { x: number; y: number; w: number; h: number };
+  rect: Rect;
   /** By designator. */
   connectors: WaitingConnector[];
 }
@@ -165,10 +166,7 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
       const move = (p: Position) => ({ x: p.x - rect.x + placed.x, y: p.y - rect.y + placed.y });
       for (const [id, p] of local) home.set(id, move(p));
       for (const a of laid[i].arcs) arcs.push({ ...a, centre: move(a.centre) });
-      const h = named.get(piece.id);
-      // The box rect waits for the endpoint offsets below, since the box goes around every drawn endpoint.
-      const box = h && { rect: boxAround(placed), label: h.label, partNumber: h.partNumber, unnamed: h.anchors.length === 0, offset };
-      out.push({ id: piece.id, built: piece.built, rect: placed, ...(box ? { box } : {}) });
+      out.push({ id: piece.id, built: piece.built, rect: placed });
     },
   );
   const width = Math.max(0, ...out.map((p) => p.rect.x + p.rect.w));
@@ -177,10 +175,13 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   for (const g of waiting) for (const c of g.connectors) if (c.endpoint) home.set(c.endpoint, c.position);
 
   const { endpoints, anchor, callouts } = applyOffsets(graph, home, canvas.offsets, turnsOf);
+  // The box goes around every drawn endpoint, so it waits for the offsets.
   out.forEach((p, i) => {
-    if (!p.box) return;
+    const h = named.get(p.id);
+    if (!h) return;
     const members = [...laid[i].piece.endpoints].map((id) => ({ at: endpoints.get(id)!.drawn, size: ENDPOINT_SIZE[graph.endpoints.get(id)!.kind] }));
-    p.box.rect = harnessBoxRect(members);
+    const offset = canvas.pieces[p.id]?.offset ?? { x: 0, y: 0 };
+    p.box = { rect: harnessBoxRect(members), label: h.label, partNumber: h.partNumber, unnamed: h.anchors.length === 0, offset };
   });
   const calledOut = new Set(callouts.map((c) => c.endpoint));
   // A line meets the box where the box is. A called-out end stays at its home, where there is no box to meet.
@@ -306,7 +307,7 @@ function waitingGrid(project: Project, graph: Graph, top: number, width: number)
   const byComponent = new Map<string, Set<string>>();
   for (const { net } of allNets(project)) {
     for (const address of net.connectors) {
-      const component = address.split("/")[0];
+      const { component } = parseAddress(address);
       if (routed.has(address) || !project.components.has(component)) continue;
       if (!byComponent.has(component)) byComponent.set(component, new Set());
       byComponent.get(component)!.add(address);
@@ -323,7 +324,7 @@ function waitingGrid(project: Project, graph: Graph, top: number, width: number)
   let y = top;
   let rowHeight = 0;
   for (const g of groups) {
-    const designator = (a: string) => a.split("/")[1];
+    const designator = (a: string) => parseAddress(a).designator;
     g.addresses.sort((a, b) => byName(designator(a), designator(b)));
     const rect = { x, y, w, h: WAITING_LABEL + g.addresses.length * (h + WAITING_GAP) - WAITING_GAP };
     if (x > 0 && x + w > rowWidth) {
@@ -566,24 +567,22 @@ function boxAround(r: Rect): Rect {
 
 /** The harness box around endpoint boxes wherever they are drawn, so a view can redraw it mid-glide or mid-drag. */
 export function harnessBoxRect(endpoints: { at: Position; size: { w: number; h: number } }[]): Rect {
+  return boxAround(boxBounds(endpoints));
+}
+
+/** The bounds of every endpoint box of a piece laid out at `pos`. */
+function bounds(graph: Graph, pos: Positions): Rect {
+  return boxBounds([...pos].map(([id, at]) => ({ at, size: ENDPOINT_SIZE[graph.endpoints.get(id)?.kind ?? "point"] })));
+}
+
+/** The smallest rect around boxes centred on their `at`. */
+function boxBounds(boxes: { at: Position; size: { w: number; h: number } }[]): Rect {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const { at, size } of endpoints) {
+  for (const { at, size } of boxes) {
     minX = Math.min(minX, at.x - size.w / 2);
     maxX = Math.max(maxX, at.x + size.w / 2);
     minY = Math.min(minY, at.y - size.h / 2);
     maxY = Math.max(maxY, at.y + size.h / 2);
-  }
-  return boxAround({ x: minX, y: minY, w: maxX - minX, h: maxY - minY });
-}
-
-function bounds(graph: Graph, pos: Positions): Rect {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [id, p] of pos) {
-    const s = ENDPOINT_SIZE[graph.endpoints.get(id)?.kind ?? "point"];
-    minX = Math.min(minX, p.x - s.w / 2);
-    maxX = Math.max(maxX, p.x + s.w / 2);
-    minY = Math.min(minY, p.y - s.h / 2);
-    maxY = Math.max(maxY, p.y + s.h / 2);
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }

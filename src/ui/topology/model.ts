@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { CALLOUT_DISTANCE, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyCanvas, type TopologyLayout, type WaitingGroup } from "../../core";
+import { CALLOUT_DISTANCE, EMPTY_TOPOLOGY_CANVAS, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyLayout, type WaitingGroup } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
@@ -99,11 +99,9 @@ export interface TopologyModel {
   positions: Map<string, Position>;
 }
 
-const EMPTY_CANVAS: TopologyCanvas = { offsets: {}, pieces: {}, roots: [] };
-
 /** The layout of one topology from its canvas file. */
 export function topologyLayout(project: Project, topology: Topology): TopologyLayout {
-  return layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_CANVAS);
+  return layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_TOPOLOGY_CANVAS);
 }
 
 /** The key under which `drawnFrom` keeps the home of an endpoint the designer moved. */

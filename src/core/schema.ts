@@ -338,6 +338,9 @@ export const TopologyCanvasSchema = z.object({
   roots: z.array(projectId("end")).default([]),
 });
 
+/** The canvas file of a topology the designer has not arranged. Shared, so never mutate it. */
+export const EMPTY_TOPOLOGY_CANVAS: TopologyCanvas = { offsets: {}, pieces: {}, roots: [] };
+
 export const DrcFileSchema = z.object({
   silences: z.array(z.object({ check: z.string(), target: z.string() })),
 });
