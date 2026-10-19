@@ -1,5 +1,6 @@
 import type { Topology } from "./schema";
 import { allRoutes, buildGraph, type Route } from "./derive";
+import { NO_LENGTHS } from "./lengths";
 import { resolveRef, resolveSpec } from "./library";
 import { netConductors, type Project } from "./project";
 
@@ -8,9 +9,10 @@ import { netConductors, type Project } from "./project";
  * `min_bend_radius_mm` among the specs of every conductor routed over it and
  * every sheath covering it, since a bundle bends no tighter than its
  * stiffest member. Specs with no radius are skipped, and a segment where
- * none declares one is left out.
+ * none declares one is left out. Only the segments each route runs over
+ * count, so the routes need not be measured.
  */
-export function bundleMinimums(project: Project, topology: Topology, routes: Route[] = allRoutes(project, buildGraph(topology))): Map<string, number> {
+export function bundleMinimums(project: Project, topology: Topology, routes: Route[] = allRoutes(project, buildGraph(topology), NO_LENGTHS)): Map<string, number> {
   const out = new Map<string, number>();
   const raise = (segment: string, mm: number | undefined) => {
     if (mm !== undefined && mm > (out.get(segment) ?? 0)) out.set(segment, mm);

@@ -3,7 +3,7 @@
  * Endpoints carry positions in millimetres, segments a length and a bundle
  * diameter, and tie points a distance along their segment.
  */
-import { allRoutes, buildGraph, connectorLabel, fallbackLabel, harnesses, netLabeller, netSpec, netsOnSegments, pieces, resolveConnector, resolveRef, resolveSpec, type Graph, type Piece, type Project, type SegmentLength, type Topology } from "../../core";
+import { allRoutes, buildGraph, connectorLabel, fallbackLabel, harnesses, lengthsOf, netLabeller, netSpec, netsOnSegments, pieces, resolveConnector, resolveRef, resolveSpec, type Graph, type Piece, type Project, type SegmentLength, type Topology } from "../../core";
 
 export type Vec3 = [number, number, number];
 
@@ -79,7 +79,7 @@ function extractHarness(project: Project, topology: Topology, name: string): Har
   const graph = buildGraph(topology);
   const harness = drawnPieces(project, graph).find((h) => h.label === name);
   if (!harness) return undefined;
-  const routes = allRoutes(project, graph);
+  const routes = allRoutes(project, graph, lengthsOf(project, topology));
   const onSeg = netsOnSegments(routes);
   const domainColor = new Map(project.file.domains.map((d) => [d.id, d.color]));
   const label = netLabeller(project);

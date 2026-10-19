@@ -1,6 +1,6 @@
 import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
 import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
-import { lengthsOf, type Lengths } from "./lengths";
+import type { Lengths } from "./lengths";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
  * recomputed from the graph on demand.
@@ -352,7 +352,7 @@ export function isRouted(route: Route): boolean {
   return route.unplaced.length === 0 && !route.split && route.net.connectors.length >= 2;
 }
 
-export function allRoutes(project: Project, graph: Graph, lengths: Lengths = lengthsOf(project, graph.topology)): Route[] {
+export function allRoutes(project: Project, graph: Graph, lengths: Lengths): Route[] {
   return allNets(project).map(({ net, domain }) => routeOf(graph, net, domain, lengths));
 }
 

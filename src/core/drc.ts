@@ -2,7 +2,7 @@ import type { Topology } from "./schema";
 import { allNets, componentConnectors, netConductors, resolveConnector, type Project } from "./project";
 import { resolveRef } from "./library";
 import { allRoutes, bridgeProblems, buildGraph, buses, degree, harnesses, hasCycle, isBuilt, isContiguous, netLabeller, netsOnSegments, pieceOf, pieces, segmentLength } from "./derive";
-import { lengthsOf, tieDistance } from "./lengths";
+import { lengthsOf, NO_LENGTHS, tieDistance } from "./lengths";
 import { bundleMinimums } from "./bend";
 import { bundleCurves } from "./curve";
 import { placementOf } from "./placement";
@@ -194,7 +194,11 @@ const DEGREE_RULES = {
 
 function checkTopology(project: Project, topology: Topology, add: Add): void {
   const graph = buildGraph(topology);
-  const lengths = lengthsOf(project, topology);
+  // The bend radius reads the saved placement only, so it runs whether or not the 3D view is open.
+  // A net rides the same segments whatever their lengths, so the minimums come first and the curves are built once, for both the radius and the lengths.
+  const minimums = bundleMinimums(project, topology, allRoutes(project, graph, NO_LENGTHS));
+  const curves = minimums.size > 0 ? bundleCurves(project, topology, placementOf(project, topology.id), minimums) : undefined;
+  const lengths = lengthsOf(project, topology, curves);
   const routes = allRoutes(project, graph, lengths);
   const allPieces = pieces(graph);
   const allHarnesses = harnesses(project, graph);
@@ -273,16 +277,11 @@ function checkTopology(project: Project, topology: Topology, add: Add): void {
     if (h.anchors.length > 1) add("harness-two-anchors", h.piece.id, "topology", `one piece carries ${h.anchors.length} harness names: ${h.anchors.map((a) => a.harness!.name).join(", ")}`);
   }
 
-  // The bend radius reads the saved placement only, so it runs whether or not the 3D view is open.
-  const minimums = bundleMinimums(project, topology, routes);
-  if (minimums.size > 0) {
-    const curves = bundleCurves(project, topology, placementOf(project, topology.id), minimums);
-    for (const s of topology.segments) {
-      const c = curves.get(s.id);
-      const min = minimums.get(s.id);
-      if (!isBuilt(s) || !c || min === undefined || c.tight.length === 0 || c.minRadiusMm === undefined) continue;
-      add("bend-radius", s.id, "3d", `segment ${s.id} bends to R ${Math.floor(c.minRadiusMm)} mm, min ${min} mm`);
-    }
+  for (const s of curves ? topology.segments : []) {
+    const c = curves!.get(s.id);
+    const min = minimums.get(s.id);
+    if (!isBuilt(s) || !c || min === undefined || c.tight.length === 0 || c.minRadiusMm === undefined) continue;
+    add("bend-radius", s.id, "3d", `segment ${s.id} bends to R ${Math.floor(c.minRadiusMm)} mm, min ${min} mm`);
   }
 
   const keepApart = project.file.keep_apart ?? [];

@@ -1,5 +1,5 @@
 import type { Topology } from "./schema";
-import { bundleCurves } from "./curve";
+import { bundleCurves, type SegmentCurve } from "./curve";
 import { resolveRef } from "./library";
 import { placementOf } from "./placement";
 import type { Project } from "./project";
@@ -42,15 +42,22 @@ export interface Lengths {
   ties: Map<string, TieDistance>;
 }
 
+/** No lengths at all, for a route read only for the segments it runs over. */
+export const NO_LENGTHS: Lengths = { segments: new Map(), ties: new Map() };
+
 const cache = new WeakMap<Project, WeakMap<Topology, Lengths>>();
 
-/** Each segment's routed length and each tie point's distance in one topology, with their sources. */
-export function lengthsOf(project: Project, topology: Topology): Lengths {
+/**
+ * Each segment's routed length and each tie point's distance in one topology,
+ * with their sources. A caller that already has the bundle curves over the
+ * saved placement passes them, so they are not built twice.
+ */
+export function lengthsOf(project: Project, topology: Topology, measured?: Map<string, SegmentCurve>): Lengths {
   let byTopology = cache.get(project);
   if (!byTopology) cache.set(project, (byTopology = new WeakMap()));
   const hit = byTopology.get(topology);
   if (hit) return hit;
-  const curves = bundleCurves(project, topology, placementOf(project, topology.id));
+  const curves = measured ?? bundleCurves(project, topology, placementOf(project, topology.id));
   const segments = new Map<string, SegmentLength>();
   for (const s of topology.segments) {
     const curve = curves.get(s.id);
