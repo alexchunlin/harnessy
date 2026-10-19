@@ -822,8 +822,9 @@ export function resetBoxOffset(project: Project, topologyId: string, pieceId: st
 /**
  * Piece ids shift as segments come and go, so carry each `pieces` entry from
  * the topology in `before` to the piece in `after` that holds the most of its
- * endpoints. When two entries land on one piece, the one from the piece with
- * more endpoints wins. Entries left on no piece drop.
+ * endpoints. When two old pieces land on one new piece, the one with more
+ * endpoints wins and its entry, or its lack of one, carries. Entries left on
+ * no piece drop.
  */
 function carryPieces(before: Project, topologyId: string, after: Project): Project {
   const canvas = after.topologyCanvases.get(topologyId);
@@ -831,10 +832,10 @@ function carryPieces(before: Project, topologyId: string, after: Project): Proje
   const now = after.topologies.get(topologyId);
   if (!canvas || !was || !now || Object.keys(canvas.pieces).length === 0) return after;
   const newPieces = pieces(buildGraph(now));
-  const claims = new Map<string, { size: number; from: string; entry: PieceEntry }>();
+  // Every old piece claims a new one, entry or not, so a larger piece with no entry still beats a smaller one with an entry.
+  const claims = new Map<string, { size: number; from: string; entry?: PieceEntry }>();
   for (const old of pieces(buildGraph(was))) {
     const entry = canvas.pieces[old.id];
-    if (!entry) continue;
     let best: { id: string; shared: number } | undefined;
     for (const p of newPieces) {
       let shared = 0;
@@ -847,7 +848,7 @@ function carryPieces(before: Project, topologyId: string, after: Project): Proje
     if (!held || size > held.size || (size === held.size && old.id < held.from)) claims.set(best.id, { size, from: old.id, entry });
   }
   const carried: TopologyCanvas["pieces"] = {};
-  for (const [id, c] of claims) carried[id] = c.entry;
+  for (const [id, c] of claims) if (c.entry) carried[id] = c.entry;
   return updatePieces(after, topologyId, () => carried);
 }
 
