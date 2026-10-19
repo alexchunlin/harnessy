@@ -31,8 +31,8 @@ describe("renaming a connector on a shared definition", () => {
 
   it("carries the topology endpoints of every sharing component", () => {
     const { project, ids } = switchProject();
-    const a = placeConnector(project, ids.top, `${ids.a}/P1`, { x: 0, y: 200 });
-    const b = placeConnector(a.project, ids.top, `${ids.b}/P1`, { x: 300, y: 200 });
+    const a = placeConnector(project, ids.top, `${ids.a}/P1`);
+    const b = placeConnector(a.project, ids.top, `${ids.b}/P1`);
     const p = updateDefinitionConnector(addSegment(b.project, ids.top, a.id, b.id, 500).project, "switch", "P1", { designator: "UPLINK" });
     const endpoints: { id: string }[] = savedJson(p, `topologies/${ids.top}.json`).endpoints;
     const at = (id: string) => endpoints.find((e) => e.id === id);
@@ -100,8 +100,8 @@ describe("renaming a connector named in a definition's bridges", () => {
 describe("a rename and what reads it", () => {
   it("leaves the cut list as it was but for the designator", () => {
     let { project: p, ids } = twoNetProject();
-    const s = placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
-    const m = placeConnector(s.project, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+    const s = placeConnector(p, ids.top, `${ids.sensor}/J1`);
+    const m = placeConnector(s.project, ids.top, `${ids.mib}/J1`);
     const seg = addSegment(m.project, ids.top, s.id, m.id, 150);
     p = setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });
     const before = cutListCsv(buildBom(p, p.topologies.get(ids.top)!));

@@ -72,8 +72,8 @@ describe("pin-out-of-range", () => {
 /** Route the sensor net too, so the topology has no errors and the BOM exports. */
 function complete() {
   let { project: p, ids } = twoNetProject();
-  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
-  const m = ops.placeConnector(s.project, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
+  const m = ops.placeConnector(s.project, ids.top, `${ids.mib}/J1`);
   const seg = ops.addSegment(m.project, ids.top, s.id, m.id, 150);
   p = ops.setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });
   return { p, ids };
@@ -115,8 +115,8 @@ describe("pin-missing", () => {
     let { p, ids } = complete();
     const sw = ops.placeComponent(p, "components/switch", { x: 300, y: 300 });
     const eth = ops.createNet(sw.project, "ethernet", [`${ids.mib}/ETH`, `${sw.id}/P1`], "uplink");
-    const a = ops.placeConnector(eth.project, ids.top, `${ids.mib}/ETH`, { x: 0, y: 300 });
-    const b = ops.placeConnector(a.project, ids.top, `${sw.id}/P1`, { x: 300, y: 300 });
+    const a = ops.placeConnector(eth.project, ids.top, `${ids.mib}/ETH`);
+    const b = ops.placeConnector(a.project, ids.top, `${sw.id}/P1`);
     const seg = ops.addSegment(b.project, ids.top, a.id, b.id);
     p = ops.setSegmentAssembly(seg.project, ids.top, seg.id, "assemblies/rj45-patch-500");
     const uplink = (check: string) => of(p, check, ids.top).filter((f) => f.target.startsWith(`${eth.id}:`) || f.target.includes(sw.id) || f.target.includes(`${ids.mib}/ETH`));

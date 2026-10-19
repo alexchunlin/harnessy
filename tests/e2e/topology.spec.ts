@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
+import { canvasSettled, fanArcsOf, freshExample, openProject, pointOnAnEdge, viewportTransform, waitForFile } from "./helpers";
 
 /** Topology round two: the ratsnest, layer filtering, and the side by side view. */
 
@@ -54,6 +54,7 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   const a = (await from.boundingBox())!;
   const ring = (await from.locator(".ep-handle").boundingBox())!;
   const b = (await page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[1]}"]`).boundingBox())!;
+  const viewport = await viewportTransform(page);
   await page.mouse.move(a.x + a.width / 2, ring.y + 2);
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
@@ -61,6 +62,37 @@ test("an unrouted net draws as a ratsnest line until its segment is drawn back, 
   await expect(lines).toHaveCount(0);
   await waitForFile(folder, TOPOLOGY, (v) => (v as { segments: unknown[] }).segments.length === SEGMENT_COUNT);
   await expect(page.locator(".netlist .mark.unrouted")).toHaveCount(0);
+  // The two connectors leave the row under the pieces for a home in their new piece, and the viewport stays where it was.
+  await page.waitForTimeout(600);
+  expect(await viewportTransform(page)).toBe(viewport);
+  const moved = (await from.boundingBox())!;
+  expect(Math.hypot(moved.x - a.x, moved.y - a.y)).toBeGreaterThan(1);
+});
+
+test("connectors with no segment wait in the grid with a ratsnest line, drawing the segment back takes them out, and the left pane has no tray", async ({ page }) => {
+  const folder = await exampleWithoutSegment("waiting", BATTERY_SEGMENT);
+  await openTopology(page, folder);
+  await expect(page.locator(".tray, .tray-item")).toHaveCount(0);
+  await expect(page.getByText("Unplaced connectors")).toHaveCount(0);
+  const waiting = (id: string) => page.locator(`.react-flow__node.waiting[data-id="${id}"]`);
+  for (const id of BATTERY_ENDS) await expect(waiting(id)).toHaveCount(1);
+  // Each waiting column is labelled with its component's name.
+  await expect(page.locator(".waiting-group", { hasText: "48 V battery + BMS" })).toHaveCount(1);
+  await expect(page.locator(".react-flow__edge.ratsnest")).toHaveCount(1);
+
+  await page.locator(".netlist li", { hasText: "48 V battery + BMS MAIN to In-line switch / fuse IN" }).click();
+  await page.waitForTimeout(500);
+  const from = page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[0]}"]`);
+  const a = (await from.boundingBox())!;
+  const ring = (await from.locator(".ep-handle").boundingBox())!;
+  const b = (await page.locator(`.react-flow__node[data-id="${BATTERY_ENDS[1]}"]`).boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, ring.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await waitForFile(folder, TOPOLOGY, (v) => (v as { segments: unknown[] }).segments.length === SEGMENT_COUNT);
+  for (const id of BATTERY_ENDS) await expect(waiting(id)).toHaveCount(0);
+  await expect(page.locator(".react-flow__edge.ratsnest")).toHaveCount(0);
 });
 
 test("the layer control dims topology segments outside the layer, keeps shared bundles active, and hides their ratsnest", async ({ page }) => {
@@ -81,9 +113,7 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   expect(await page.locator(".react-flow__edge:not(.out-of-layer):not(.ratsnest)").count()).toBeGreaterThan(0);
   await expect(lines).toHaveCount(0);
 
-  // A dimmed endpoint cannot be dragged or selected.
-  type Positions = { endpoints: Record<string, { x: number; y: number }> };
-  const before = ((await readJson(folder, "canvas/top-222268.json")) as Positions).endpoints["end-22226c"];
+  // A dimmed endpoint cannot be moved or selected.
   const switchPort = page.locator('.react-flow__node[data-id="end-22226c"]');
   await expect(switchPort).toHaveClass(/out-of-layer/);
   const b = (await switchPort.boundingBox())!;
@@ -93,12 +123,41 @@ test("the layer control dims topology segments outside the layer, keeps shared b
   await page.mouse.up();
   await page.waitForTimeout(600);
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
-  const saved = (await readJson(folder, "canvas/top-222268.json")) as Positions;
-  expect(saved.endpoints["end-22226c"]).toEqual(before);
+  const a = (await switchPort.boundingBox())!;
+  expect([a.x, a.y]).toEqual([b.x, b.y]);
 
   await page.getByLabel("Layer").selectOption("all");
   await expect(dimmed).toHaveCount(0);
   await expect(lines).toHaveCount(1);
+});
+
+test("side by side: a connector endpoint lights its component and its own nets, and the topology selection stays", async ({ page }) => {
+  const folder = await freshExample("side-by-side-connector");
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Side by side" }).click();
+  await canvasSettled(page);
+  await page.waitForTimeout(400);
+  const left = page.getByTestId("connectivity-canvas");
+  const right = page.getByTestId("topology-canvas");
+  const viewports = () => Promise.all([left, right].map((c) => c.locator(".react-flow__viewport").evaluate((e) => (e as { style: { transform: string } }).style.transform)));
+  const before = await viewports();
+
+  // The in-line switch IN sits on the 48 V bus: its bridge joins the battery net to the net out of OUT.
+  const switchIn = right.locator('.react-flow__node[data-id="end-22228e"]');
+  await switchIn.click();
+
+  await expect(left.locator('.react-flow__node[data-id="cmp-22222n"] .cmp-node')).toHaveClass(/\blit\b/);
+  await expect(left.locator('.react-flow__node[data-id="cmp-22222k"] .cmp-node')).not.toHaveClass(/\blit\b/);
+  await expect(left.locator('.react-flow__edge[data-id="net-22223y"] .net-halo')).toHaveCount(1);
+  await expect(left.locator('.react-flow__edge[data-id="net-22223z"] .net-halo')).toHaveCount(0);
+
+  // The selection and the inspector stay on the endpoint, and neither viewport moved.
+  await expect(switchIn).toHaveClass(/selected/);
+  await expect(left.locator(".react-flow__node.selected")).toHaveCount(0);
+  // Side by side hides the inspectors, but the topology one still holds the endpoint.
+  await expect(page.locator(".side-pane-right .pane-right h3").first()).toHaveText("connector");
+  await page.waitForTimeout(400);
+  expect(await viewports()).toEqual(before);
 });
 
 test("side by side shows both canvases, a net picked on either side lights it on the other, and the divider is remembered", async ({ page }) => {
@@ -136,4 +195,71 @@ test("side by side shows both canvases, a net picked on either side lights it on
   await page.reload();
   await expect(page.getByRole("button", { name: "Side by side" })).toHaveClass(/active/);
   expect(await page.locator(".side-pane-left").evaluate((e) => (e as { style: { width: string } }).style.width)).toBe(width);
+});
+
+test("segments meet connector boxes at their edges, and each fan draws its faint arc", async ({ page }) => {
+  const folder = await freshExample("fan-arcs");
+  await openTopology(page, folder);
+  await page.waitForTimeout(600);
+
+  // Both ends of the battery lead sit on the edge of their connector box, not inside it and not at its top centre.
+  const ends = await page.evaluate((id) => {
+    type Path = { getAttribute(n: string): string | null; getScreenCTM(): { a: number; b: number; c: number; d: number; e: number; f: number } };
+    const doc = (globalThis as unknown as { document: { querySelector(sel: string): Path | null } }).document;
+    const path = doc.querySelector(`.react-flow__edge[data-id="${id}"] path.react-flow__edge-path`)!;
+    const n = path.getAttribute("d")!.match(/-?[\d.]+(e-?\d+)?/g)!.map(Number);
+    const c = path.getScreenCTM()!;
+    const screen = (x: number, y: number) => ({ x: x * c.a + y * c.c + c.e, y: x * c.b + y * c.d + c.f });
+    return [screen(n[0], n[1]), screen(n[2], n[3])];
+  }, BATTERY_SEGMENT);
+  for (const [i, end] of BATTERY_ENDS.entries()) {
+    const box = (await page.locator(`.react-flow__node[data-id="${end}"]`).boundingBox())!;
+    const p = ends[i];
+    const tol = 1.5;
+    expect(p.x).toBeGreaterThanOrEqual(box.x - tol);
+    expect(p.x).toBeLessThanOrEqual(box.x + box.width + tol);
+    expect(p.y).toBeGreaterThanOrEqual(box.y - tol);
+    expect(p.y).toBeLessThanOrEqual(box.y + box.height + tol);
+    const fromEdge = Math.min(Math.abs(p.x - box.x), Math.abs(p.x - box.x - box.width), Math.abs(p.y - box.y), Math.abs(p.y - box.y - box.height));
+    expect(fromEdge).toBeLessThan(tol);
+    expect(Math.hypot(p.x - (box.x + box.width / 2), p.y - box.y)).toBeGreaterThan(tol);
+  }
+
+  const arcs = await fanArcsOf(folder, "top-222268");
+  expect(arcs.length).toBeGreaterThan(0);
+  await expect(page.locator(".fan-arcs path")).toHaveCount(arcs.length);
+});
+
+test("the Root toggle marks and unmarks an endpoint in one undo step each, and survives a reload", async ({ page }) => {
+  const folder = await freshExample("roots");
+  await openTopology(page, folder);
+  const id = BATTERY_ENDS[0];
+  const canvas = "canvas/top-222268.json";
+  const roots = (want: string[]) => (v: unknown) => JSON.stringify((v as { roots: string[] }).roots) === JSON.stringify(want);
+  // Undo keys skip a focused field, so each undo clicks the inspector heading first.
+  const undo = async () => {
+    await page.locator(".pane-right h3").first().click();
+    await page.keyboard.press("ControlOrMeta+z");
+  };
+
+  await page.locator(`.react-flow__node[data-id="${id}"]`).click();
+  const toggle = page.getByRole("checkbox", { name: "Root" });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await waitForFile(folder, canvas, roots([id]));
+  await undo();
+  await waitForFile(folder, canvas, roots([]));
+  await expect(toggle).not.toBeChecked();
+
+  await toggle.check();
+  await waitForFile(folder, canvas, roots([id]));
+  await toggle.uncheck();
+  await waitForFile(folder, canvas, roots([]));
+  await undo();
+  await waitForFile(folder, canvas, roots([id]));
+
+  await page.reload();
+  await canvasSettled(page);
+  await page.locator(`.react-flow__node[data-id="${id}"]`).click();
+  await expect(page.getByRole("checkbox", { name: "Root" })).toBeChecked();
 });

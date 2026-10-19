@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
+import { buildGraph, layoutTopology, loadLibrary, loadProject, pieces, type FanArc, type Files, type PieceLayout, type Position } from "../../src/core";
 
 export const E2E_HOME = process.env.HARNESSY_E2E_HOME ?? "/tmp/harnessy-e2e";
 const REPO = process.cwd();
@@ -75,4 +76,59 @@ export async function pointOnAnEdge(page: Page): Promise<{ x: number; y: number;
     }
     throw new Error("no uncovered edge");
   });
+}
+
+async function readTree(top: string, dir: string, into: Files): Promise<void> {
+  for (const entry of await fs.readdir(path.join(top, dir), { withFileTypes: true })) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) await readTree(top, rel, into);
+    else if (entry.name.endsWith(".json")) into.set(rel, await fs.readFile(path.join(top, rel), "utf8"));
+  }
+}
+
+/** Where core's layout draws each endpoint's centre for the project as saved in `folder`, in canvas pixels. */
+export async function drawnLayout(folder: string, topologyId: string): Promise<Map<string, Position>> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  const layout = layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!);
+  return new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+}
+
+/** The fan arcs core's layout draws for the project as saved in `folder`. */
+export async function fanArcsOf(folder: string, topologyId: string): Promise<FanArc[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  return layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!).arcs;
+}
+
+/** The viewport's transform, which an edit must leave alone. */
+export async function viewportTransform(page: Page): Promise<string> {
+  return (await page.locator(".react-flow__viewport").getAttribute("style")) ?? "";
+}
+
+/** Core's harness boxes for the project as saved in `folder`, piece by piece, purchased cables with none. */
+export async function harnessBoxes(folder: string, topologyId: string): Promise<PieceLayout[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  return layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!).pieces;
+}
+
+/** Core's pieces of one topology for the project as saved in `folder`, each with its endpoints and their kinds. */
+export async function topologyPieces(folder: string, topologyId: string): Promise<{ id: string; built: boolean; kinds: Map<string, string> }[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  const graph = buildGraph(project.topologies.get(topologyId)!);
+  return pieces(graph).map((p) => ({ id: p.id, built: p.built, kinds: new Map([...p.endpoints].sort().map((e) => [e, graph.endpoints.get(e)!.kind])) }));
 }

@@ -77,7 +77,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .app-view { flex: 1; min-width: 0; display: flex; }
 .placeholder { flex: 1; display: grid; place-items: center; color: var(--muted); }
 
-/* Side by side: connectivity left, topology right, a draggable divider between. The left side is canvas only; the right keeps its tray and net list. */
+/* Side by side: connectivity left, topology right, a draggable divider between. The left side is canvas only; the right keeps its net list. */
 .side-by-side { display: flex; flex: 1; min-width: 0; }
 .side-pane { display: flex; min-width: 0; overflow: hidden; }
 .side-pane-right { flex: 1; }

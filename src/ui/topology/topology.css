@@ -26,14 +26,28 @@
 
 /* The ratsnest: what is left to route, drawn thin and faint under the segments. */
 .ratsnest-line { filter: var(--edge-lift); }
+.callout { fill: none; stroke: var(--muted, #888); stroke-width: 1; pointer-events: none; }
+.react-flow__edge.callout-edge { pointer-events: none; }
 
 .tie { width: 12px; height: 12px; background: var(--box); border: 2px solid #1a7f37; border-radius: 2px; cursor: ew-resize; }
 .tie.selected { box-shadow: 0 0 0 3px rgba(43,108,176,0.45); }
 
-.harness-label { font-size: 12px; font-weight: 600; background: var(--panel); border: 1px solid var(--muted); border-radius: 10px; padding: 1px 8px; pointer-events: none; white-space: nowrap; }
-.harness-label.unnamed { color: var(--warning); border-color: var(--warning); font-style: italic; font-weight: 400; }
-.harness-label.doubled { color: var(--error); border-color: var(--error); }
-.harness-label.out-of-layer { opacity: 0.4; }
+/* A harness box: an outline the canvas shows through. Only the title band on its top edge takes the pointer, so marquee and clicks inside still reach the canvas. */
+.harness-box { width: 100%; height: 100%; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--panel) 25%, transparent); pointer-events: none; }
+.harness-box-title { height: 24px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12px; white-space: nowrap; overflow: hidden; pointer-events: all; cursor: grab; }
+.react-flow__node.dragging .harness-box-title { cursor: grabbing; }
+.harness-box-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.harness-box-pn { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.harness-box.unnamed .harness-box-name { color: var(--warning); font-style: italic; font-weight: 400; }
+.harness-box.doubled { border-color: var(--error); }
+.harness-box.doubled .harness-box-name { color: var(--error); }
+.harness-box.out-of-layer { opacity: 0.4; }
+.box-selected .harness-box { border-color: var(--accent, #2b6cb0); box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
+.harness-box.out-of-layer .harness-box-title { pointer-events: none; }
+
+.topo-menu { position: fixed; z-index: 50; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px; box-shadow: 0 4px 12px var(--shadow); display: flex; flex-direction: column; }
+.topo-menu button { border: none; text-align: left; background: transparent; }
+.topo-menu button:hover { background: var(--panel-hover); }
 
 .seg-label { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 11px; display: flex; gap: 6px; align-items: center; pointer-events: all; }
 .seg-label.missing { border-color: var(--error); color: var(--error); font-weight: 700; }
@@ -43,11 +57,10 @@
 .seg-label.faded { opacity: 0.35; }
 .seg-length input { border: none; border-bottom: 1px solid var(--accent); padding: 0 2px; text-align: right; font-size: 11px; background: transparent; min-width: 8ch; color: var(--text); }
 .seg-length input:focus { outline: none; border-bottom-color: var(--accent); }
-.seg-harness { color: var(--text); font-weight: 600; }
 
-.tray { max-height: 40vh; overflow: auto; }
-.tray-cmp { font-weight: 600; margin-top: 4px; }
-.tray-item { cursor: grab; padding-left: 10px; }
+/* The waiting grid: connectors with nets and no segment, one column per component. */
+.waiting-group { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; pointer-events: none; }
+.react-flow__node.waiting .ep-connector { border-style: dashed; }
 .netlist { max-height: 40vh; overflow: auto; }
 .netlist li { display: flex; gap: 6px; align-items: center; }
 .netlist .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
@@ -64,3 +77,7 @@
 .strand.dim .strand-line, .strand.dim .strand-outline { opacity: 0.25; }
 .strand.lit .strand-outline { stroke-opacity: 0.8; }
 .seg-badge { color: var(--muted); font-size: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 0 4px; }
+
+/* The faint arc through each fan's children, under every segment and box. */
+.fan-arcs { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: -1; }
+.fan-arcs path { fill: none; stroke: var(--muted); stroke-width: 1; stroke-opacity: 0.35; }

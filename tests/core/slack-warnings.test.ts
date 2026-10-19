@@ -11,8 +11,8 @@ function withAssembly() {
   let { project: p, ids } = twoNetProject();
   const sw = ops.placeComponent(p, "components/switch", { x: 0, y: 0 });
   p = ops.createNet(sw.project, "ethernet", [`${ids.mib}/ETH`, `${sw.id}/P1`], "uplink").project;
-  const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`, { x: 0, y: 0 });
-  const e2 = ops.placeConnector(e1.project, ids.top, `${sw.id}/P1`, { x: 0, y: 0 });
+  const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`);
+  const e2 = ops.placeConnector(e1.project, ids.top, `${sw.id}/P1`);
   const s = ops.addSegment(e2.project, ids.top, e1.id, e2.id);
   return { p: s.project, ids, patch: s.id };
 }

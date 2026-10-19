@@ -7,11 +7,13 @@ import {
   connectorLabel,
   degree,
   findNet,
+  markRoot,
   netConductors,
   netLabeller,
   netsThrough,
   parseConductor,
   removeEndpoint,
+  resetEndpointOffset,
   removeSegment,
   removeSheath,
   removeTiePoint,
@@ -25,6 +27,7 @@ import {
   setStretchSlack,
   sheathCut,
   stretchesOf,
+  unmarkRoot,
   updateSheath,
   updateTiePoint,
   type Project,
@@ -77,7 +80,7 @@ function Overview({ project, topology, onSelect }: Props) {
       <p>
         {topology.name}: {topology.endpoints.length} endpoints, {topology.segments.length} segments.
       </p>
-      <p className="muted">Drag a connector from the tray to place it. Drag from an endpoint to another to join them, or into empty space to grow a point. Shift-click segments, then apply a sheath.</p>
+      <p className="muted">Connectors with nets and no segment wait in the grid under the harnesses. Drag from a ring to another endpoint to join them, or into empty space to grow a point. Shift-click segments, then apply a sheath.</p>
       <h3>Sheaths</h3>
       <ul className="list insp-list">
         {topology.sheaths.map((s, i) => (
@@ -101,6 +104,8 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
   const graph = buildGraph(topology);
   const d = degree(graph, id);
   const through = netsThrough(routes, id);
+  const moved = project.topologyCanvases.get(topology.id)?.offsets[id] !== undefined;
+  const isRoot = project.topologyCanvases.get(topology.id)?.roots.includes(id) ?? false;
   return (
     <div className="pane pane-right">
       <h3>{e.kind}</h3>
@@ -111,6 +116,15 @@ function EndpointInspector({ project, topology, routes, id, edit }: Props & { id
       <div className="field">
         <label>Segments</label>
         <span>{d}</span>
+      </div>
+      <div className="row">
+        <label className="row" title="The harness grows from its roots. Two or more roots lie flat as a trunk.">
+          <input type="checkbox" checked={isRoot} onChange={(ev) => edit((p) => (ev.target.checked ? markRoot : unmarkRoot)(p, topology.id, id))} />
+          Root
+        </label>
+        <button disabled={!moved} title={moved ? "Back to where the layout puts it" : "At its home"} onClick={() => edit((p) => resetEndpointOffset(p, topology.id, id))}>
+          Reset position
+        </button>
       </div>
       {e.kind !== "connector" && (
         <div className="field">
@@ -475,7 +489,7 @@ function NetInspector({ project, routes, id, onSelect }: Props & { id: string })
         <div className="field">
           <label>Route</label>
           <span>
-            {route.unplaced.length ? `${route.unplaced.length} connector${route.unplaced.length === 1 ? "" : "s"} not placed` : route.split ? "connectors in different pieces" : `${route.segments.size} segments, ${route.missingLength ? "length incomplete" : `${route.lengthMm} mm`}`}
+            {route.unplaced.length ? `${route.unplaced.length} connector${route.unplaced.length === 1 ? "" : "s"} with no segment yet` : route.split ? "connectors in different pieces" : `${route.segments.size} segments, ${route.missingLength ? "length incomplete" : `${route.lengthMm} mm`}`}
           </span>
         </div>
       )}
@@ -520,7 +534,7 @@ function ConductorInspector({ project, topology, routes, id, onSelect }: Props &
           ))}
           {route?.route.unplaced.map((a) => (
             <li key={a} className="muted">
-              {connectorLabel(project, a)} (not placed)
+              {connectorLabel(project, a)} (no segment yet)
             </li>
           ))}
         </ul>

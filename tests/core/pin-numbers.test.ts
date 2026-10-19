@@ -11,9 +11,9 @@ function netIn(files: Map<string, string>, domain: string, id: string) {
 /** Route the sensor net too so the topology has no errors. */
 function complete() {
   let { project: p, ids } = twoNetProject();
-  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
   p = s.project;
-  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
   p = m.project;
   const seg = ops.addSegment(p, ids.top, s.id, m.id, 150);
   p = ops.setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });
@@ -148,18 +148,20 @@ describe("pins on the cut list", () => {
   });
 
   it("a splice end of a wire leg is blank", () => {
-    let { p, ids, sensorEnd, mibEnd, sensorSeg } = complete();
+    let { p, ids, sensorSeg } = complete();
     p = ops.removeSegment(p, ids.top, sensorSeg);
-    const mid = ops.addEndpoint(p, ids.top, "splice", { x: 0, y: 0 });
+    const mid = ops.addEndpoint(p, ids.top, "splice");
     p = mid.project;
-    const a1 = ops.addSegment(p, ids.top, mibEnd, mid.id, 100);
+    const a1 = ops.addSegment(p, ids.top, `${ids.mib}/J1`, mid.id, 100);
     p = ops.setHarnessAnchor(a1.project, ids.top, a1.id, { name: "Sensor harness" });
-    p = ops.addSegment(p, ids.top, mid.id, sensorEnd, 200).project;
+    p = ops.addSegment(p, ids.top, mid.id, `${ids.sensor}/J1`, 200).project;
     p = ops.setSpliceNets(p, ids.top, mid.id, [ids.sig], "splices/solder-sleeve");
     p = ops.numberPinsInOrder(p, ids.sig, `${ids.mib}/J1`);
     p = ops.numberPinsInOrder(p, ids.sig, `${ids.sensor}/J1`);
     const wires = buildBom(p, p.topologies.get(ids.top)!).cutList.filter((r) => r.row === "wire" && r.harness === "Sensor harness");
-    expect(wires.map((r) => [r.from, r.from_pin, r.to, r.to_pin, r.length_mm])).toEqual([
+    // A leg may run either way; put its connector end first.
+    const legs = wires.map((r) => (String(r.from).startsWith("splice") ? [r.to, r.to_pin, r.from, r.from_pin, r.length_mm] : [r.from, r.from_pin, r.to, r.to_pin, r.length_mm]));
+    expect(legs).toEqual([
       ["MIB J1", 1, `splice ${mid.id}`, undefined, 100],
       ["MIB J1", 2, `splice ${mid.id}`, undefined, 100],
       ["Sensor J1", 1, `splice ${mid.id}`, undefined, 200],

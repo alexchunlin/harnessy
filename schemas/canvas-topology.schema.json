@@ -3,10 +3,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "endpoints": {
+    "offsets": {
+      "default": {},
       "type": "object",
       "propertyNames": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^end-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
       },
       "additionalProperties": {
         "type": "object",
@@ -27,9 +29,51 @@
           "y"
         ]
       }
+    },
+    "pieces": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^seg-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ]
+          },
+          "turns": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        }
+      }
+    },
+    "roots": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^end-[23456789abcdefghjkmnpqrstuvwxyz]{6}$"
+      }
     }
-  },
-  "required": [
-    "endpoints"
-  ]
+  }
 }

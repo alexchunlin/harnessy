@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { canvasSettled, freshExample, openProject, pointOnAnEdge, readJson, waitForFile } from "./helpers";
+import { canvasSettled, drawnLayout, freshExample, openProject, pointOnAnEdge, readJson, viewportTransform, waitForFile } from "./helpers";
 
 /** Canvas feel: the behaviours from the "canvas feel, round one" spec. */
 
@@ -200,6 +200,57 @@ test("flipping a component and dragging a pin label rewrite the pin arrangement 
   await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(1);
 });
 
+test("R turns selected components a quarter under the canvas, each about its own centre, in one undo step", async ({ page }) => {
+  const folder = await freshExample("feel-turn");
+  await openProject(page, folder);
+  await canvasSettled(page);
+  type Pins = Record<string, { left: string[]; right: string[]; top: string[]; bottom: string[] }>;
+  const pinsFile = async () => ((await readJson(folder, "canvas/connectivity.json")) as { pins: Pins }).pins;
+
+  const dcdc = page.locator(".react-flow__node-component", { hasText: "24 V DC/DC" }).first();
+  const id = (await dcdc.getAttribute("data-id"))!;
+  expect((await pinsFile())[id]).toBeUndefined();
+  const centreOf = async () => {
+    const b = (await dcdc.locator(".cmp-node").boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const before = await centreOf();
+
+  await dcdc.locator(".cmp-title").click();
+  await page.keyboard.press("r");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.top?.join() === "IN");
+  expect((await pinsFile())[id]).toEqual({ left: [], right: [], top: ["IN"], bottom: ["OUT4", "OUT3", "OUT2", "OUT1"] });
+  await expect(dcdc.locator(".cmp-connector.top")).toHaveCount(1);
+  await expect(dcdc.locator(".cmp-connector.bottom")).toHaveCount(4);
+  // The component file did not change.
+  expect(await readJson(folder, `components/${id}.json`)).toEqual(await readJson(`${process.cwd()}/examples/rammp-gen1.5`, `components/${id}.json`));
+  // The box turned about its centre, give or take the grid and the zoom.
+  const after = await centreOf();
+  expect(Math.abs(after.x - before.x)).toBeLessThan(8);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(8);
+
+  // R typed into a field turns nothing.
+  const name = page.locator(".pane-right input").first();
+  await name.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("R");
+  await waitForFile(folder, `components/${id}.json`, (v) => (v as { name: string }).name.endsWith("R"));
+  expect((await pinsFile())[id]).toEqual({ left: [], right: [], top: ["IN"], bottom: ["OUT4", "OUT3", "OUT2", "OUT1"] });
+
+  // Two selected components each turn once, and one undo puts both back.
+  const camera = page.locator(".react-flow__node-component", { hasText: "Fisheye camera 1" }).first();
+  const cameraId = (await camera.getAttribute("data-id"))!;
+  const cameraPins = await camera.locator(".cmp-connector.left").count();
+  expect(cameraPins).toBeGreaterThan(0);
+  await dcdc.locator(".cmp-title").click();
+  await camera.locator(".cmp-title").click({ modifiers: ["Shift"] });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
+  await page.keyboard.press("r");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.right?.join() === "IN" && (v as { pins: Pins }).pins[cameraId]?.top?.length === cameraPins);
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, "canvas/connectivity.json", (v) => (v as { pins: Pins }).pins[id]?.top?.join() === "IN" && (v as { pins: Pins }).pins[cameraId] === undefined);
+});
+
 test("boxes snap to the grid, size to their labels, and arrange in a row one pitch apart", async ({ page }) => {
   const folder = await freshExample("feel-grid");
   await openProject(page, folder);
@@ -258,46 +309,98 @@ test("reloading the page reopens the last project, and Close returns to the fold
 });
 
 /**
- * A topology endpoint carries a connect ring just outside its box. Before this,
- * the handle covered the whole endpoint, so every drag grew a segment and no
- * endpoint could be moved at all.
+ * A topology endpoint carries a connect ring just outside its box. A drag
+ * from the ring grows a segment. The endpoint itself sits at the home the
+ * layout derives and does not move by drag.
  */
 const TOPOLOGY = "topologies/top-222268.json";
+const TOPOLOGY_ID = "top-222268";
 const TOPOLOGY_CANVAS = "canvas/top-222268.json";
-type Topo = { endpoints: { id: string }[]; segments: { id: string }[] };
-type Placed = { endpoints: Record<string, { x: number; y: number }> };
+type Topo = { endpoints: { id: string }[]; segments: { id: string; ends: [string, string] }[] };
 
-test("dragging a topology endpoint moves it and grows no segment", async ({ page }) => {
-  const folder = await freshExample("feel-endpoint-move");
+type Offsets = { offsets: Record<string, { x: number; y: number }> };
+
+test("dragging a connector box far from home writes only an offset and draws a call-out line; Reset position takes both away, each one undo step", async ({ page }) => {
+  const folder = await freshExample("feel-endpoint-offset");
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
   await canvasSettled(page);
 
   const before = (await readJson(folder, TOPOLOGY)) as Topo;
-  const node = page.locator(".react-flow__node-endpoint").first();
-  const id = (await node.getAttribute("data-id"))!;
-  const from = ((await readJson(folder, TOPOLOGY_CANVAS)) as Placed).endpoints[id];
-  const b = (await node.boundingBox())!;
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.mouse.down();
-  for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 10, b.y + b.height / 2 + i * 8);
-  await page.mouse.up();
+  expect(((await readJson(folder, TOPOLOGY_CANVAS)) as Offsets).offsets).toEqual({});
+  for (let i = 0; i < 4; i++) await page.locator(".react-flow__controls-zoomin").click();
+  await page.waitForTimeout(400);
+  // A connector that ends a segment, sits in the clear away from the panes, and has no label lying over its middle.
+  const size = page.viewportSize()!;
+  const joined = new Set(before.segments.flatMap((s) => s.ends));
+  const all = page.locator(".react-flow__node-endpoint:has(.ep-connector)");
+  let id = "";
+  for (let i = 0; i < (await all.count()); i++) {
+    const box = await all.nth(i).boundingBox();
+    const candidate = (await all.nth(i).getAttribute("data-id"))!;
+    if (!joined.has(candidate) || !box || box.x < 260 || box.y < 120 || box.x + box.width > size.width - 420 || box.y + box.height > size.height - 160) continue;
+    type Hit = { closest(s: string): { getAttribute(a: string): string | null } | null };
+    type Doc = { elementFromPoint(x: number, y: number): Hit | null };
+    const hit = await page.evaluate(([x, y]) => (globalThis as unknown as { document: Doc }).document.elementFromPoint(x, y)?.closest(".react-flow__node")?.getAttribute("data-id"), [box.x + box.width / 2, box.y + box.height / 2]);
+    if (hit === candidate) {
+      id = candidate;
+      break;
+    }
+  }
+  expect(id).not.toBe("");
+  const node = page.locator(`.react-flow__node-endpoint[data-id="${id}"]`);
+  const callout = page.locator(`.callout[data-endpoint="${id}"]`);
 
-  await waitForFile(folder, TOPOLOGY_CANVAS, (v) => {
-    const to = (v as Placed).endpoints[id];
-    return to.x !== from.x || to.y !== from.y;
-  });
+  const drag = async () => {
+    const b = (await node.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, b.y + b.height / 2 + i * 9);
+    await page.mouse.up();
+    return b;
+  };
+  const b = await drag();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
+  await page.waitForTimeout(600);
+
+  const a = (await node.boundingBox())!;
+  // React Flow starts the drag on the first step, so the box trails the pointer by up to one step.
+  expect(a.x - b.x).toBeGreaterThan(100);
+  expect(a.y - b.y).toBeGreaterThan(75);
+  await expect(callout).toHaveCount(1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
-  expect(after.segments).toHaveLength(before.segments.length);
-  expect(after.endpoints).toHaveLength(before.endpoints.length);
+  expect(after).toEqual(before);
+  expect(Object.keys(((await readJson(folder, TOPOLOGY_CANVAS)) as Offsets).offsets)).toEqual([id]);
+
+  // One undo takes the drag back whole.
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => !(id in (c as Offsets).offsets));
+  await expect(callout).toHaveCount(0);
+
+  await drag();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
+  // The drag selected the box, so the inspector is already its own.
+  await page.getByRole("button", { name: "Reset position" }).click();
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => !(id in (c as Offsets).offsets));
+  await expect(callout).toHaveCount(0);
+  await page.waitForTimeout(600);
+  const home = (await node.boundingBox())!;
+  expect(Math.abs(home.x - b.x)).toBeLessThan(1);
+  expect(Math.abs(home.y - b.y)).toBeLessThan(1);
+
+  // One undo brings the reset offset back.
+  await page.keyboard.press("ControlOrMeta+z");
+  await waitForFile(folder, TOPOLOGY_CANVAS, (c) => id in (c as Offsets).offsets);
+  await expect(callout).toHaveCount(1);
 });
 
-test("dragging from the ring around an endpoint still grows a segment", async ({ page }) => {
+test("dragging from the ring into empty canvas grows a point that glides to its derived home, and the viewport stays put", async ({ page }) => {
   const folder = await freshExample("feel-endpoint-grow");
   await openProject(page, folder);
   await page.getByRole("button", { name: "Topology" }).click();
   await canvasSettled(page);
-  for (let i = 0; i < 6; i++) await page.locator(".react-flow__controls-zoomin").click();
+  // Zoom in until a connector box is big enough that the drag starts on its ring rather than its body.
+  for (let i = 0; i < 11; i++) await page.locator(".react-flow__controls-zoomin").click();
   await page.waitForTimeout(400);
 
   const before = (await readJson(folder, TOPOLOGY)) as Topo;
@@ -311,16 +414,34 @@ test("dragging from the ring around an endpoint still grows a segment", async ({
       break;
     }
   }
+  const from = (await node.getAttribute("data-id"))!;
   const b = (await node.boundingBox())!;
   const ring = (await node.locator(".ep-handle").boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, ring.y + 2);
   await page.mouse.down();
   for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width / 2 + i * 12, ring.y + 2 - i * 9);
+  // The canvas may pan while a line is drawn near its edge; from the drop on, the viewport must hold still.
+  const viewport = await viewportTransform(page);
   await page.mouse.up();
 
   await waitForFile(folder, TOPOLOGY, (v) => (v as Topo).segments.length === before.segments.length + 1);
   const after = (await readJson(folder, TOPOLOGY)) as Topo;
   expect(after.endpoints).toHaveLength(before.endpoints.length + 1);
+  await page.waitForTimeout(600);
+  expect(await viewportTransform(page)).toBe(viewport);
+
+  // The new point ignores the drop and sits where core's layout puts it, measured from the endpoint it grew from.
+  const grown = after.segments.find((s) => !before.segments.some((x) => x.id === s.id))!;
+  const point = grown.ends[0] === from ? grown.ends[1] : grown.ends[0];
+  const homes = await drawnLayout(folder, TOPOLOGY_ID);
+  const scale = Number(/scale\(([\d.]+)\)/.exec(viewport)![1]);
+  const centre = async (id: string) => {
+    const r = (await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox())!;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  };
+  const [p, q] = [await centre(from), await centre(point)];
+  expect((q.x - p.x) / scale).toBeCloseTo(homes.get(point)!.x - homes.get(from)!.x, 0);
+  expect((q.y - p.y) / scale).toBeCloseTo(homes.get(point)!.y - homes.get(from)!.y, 0);
 });
 
 /**

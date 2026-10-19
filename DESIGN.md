@@ -40,7 +40,7 @@ Checks run continuously and show in a KiCad-style panel. Errors are anything tha
 
 Connectivity canvas: library panel, canvas, inspector. Drag a definition from the library to place a component; drag from one connector handle to another to draw a net, choosing its domain on drop. A net with three or more connectors draws as a star around a net hub. Layers hide edges of other domains and dim components with nothing in the layer. Groups wrap a selection and take members by drag. Session undo and autosave.
 
-Topology view: one topology at a time. A tray lists connectors not yet placed; drag to place. Drag from an endpoint to empty canvas to grow a point, which becomes a breakout at three segments or a splice on request. Lengths are typed inline. Shift-click a chain of segments to apply a sheath, drop tie points on a segment and drag them along it, name a harness from any of its segments. Selecting a net highlights its route.
+Topology view: one topology at a time. The app lays it out: each endpoint has a home derived from the graph, each harness sits in a packed box, and the designer stores only offsets, turns and roots. Connectors with nets and no segment wait in a grid under the harnesses; drawing the first segment from one places it. Drag from an endpoint to empty canvas to grow a point, which becomes a breakout at three segments or a splice on request. Lengths are typed inline. Shift-click a chain of segments to apply a sheath, drop tie points on a segment and drag them along it, name a harness from any of its segments. Selecting a net highlights its route.
 
 These two models were decided on paper rather than prototyped, at Alex's request. The first working build is where the feel gets checked.
 

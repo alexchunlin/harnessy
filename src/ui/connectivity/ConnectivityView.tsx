@@ -18,10 +18,11 @@ import {
   type EdgeChange,
   type Position as FlowPosition,
 } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addConnectorToNet, allRoutes, buildGraph, netsOnSegments, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, updateGroup, type BoxSize, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, activeDomains, addConnectorToNet, topologyLight, arrangeComponents, createGroup, createNet, createNote, distributeComponents, moveComponent, moveHub, netsOnlyOn, placeBlankComponent, placeComponent, removeComponent, removeGroup, removeNet, removeNote, turnComponent, updateGroup, type BoxSize, type Position, type Project } from "../../core";
 import { NO_HOVER, useDoc, useProject } from "../store";
+import { isTyping, turnSelection } from "../keys";
 import { useTheme } from "../theme";
-import { deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
+import { boxSizeFor, deriveFlow, NODE_WIDTH, reconcile, type ComponentNodeData, type FlowNode, type NetEdgeData } from "./model";
 import { GRID, snap } from "./orthogonal";
 import { ComponentNode, GroupNode, HubNode, NoteNode } from "./nodes";
 import { NetEdge, NoteLinkEdge } from "./edges";
@@ -34,7 +35,7 @@ import "./connectivity.css";
 const nodeTypes = { component: ComponentNode, hub: HubNode, group: GroupNode, note: NoteNode };
 const edgeTypes = { net: NetEdge, notelink: NoteLinkEdge };
 const LAST_DOMAIN_KEY = "harnessy.lastDomain";
-const NO_NETS: Set<string> = new Set();
+const NO_LIGHT: { nets: Set<string>; components: Set<string> } = { nets: new Set(), components: new Set() };
 
 export function ConnectivityView() {
   return (
@@ -70,21 +71,15 @@ function Canvas() {
   const lastLocalSelection = useRef<string[]>([]);
 
   const selected = useMemo(() => new Set(selection.view === "connectivity" ? selection.ids : []), [selection]);
-  // A selection on the topology canvas lights its nets here, read-only: a net by itself, a segment by the nets routed through it.
-  const litNets = useMemo(() => {
-    if (selection.view !== "topology" || selection.ids.length === 0) return NO_NETS;
+  // A selection on the topology canvas lights its counterparts here, read-only: nets, and the components of selected connector endpoints.
+  const light = useMemo(() => {
+    if (selection.view !== "topology" || selection.ids.length === 0) return NO_LIGHT;
     const topology = activeTopology ? project.topologies.get(activeTopology) : undefined;
-    if (!topology) return NO_NETS;
-    const routes = allRoutes(project, buildGraph(topology));
-    const onSegments = netsOnSegments(routes);
-    const out = new Set<string>();
-    for (const id of selection.ids) {
-      if (routes.some((r) => r.net.id === id)) out.add(id);
-      for (const r of onSegments.get(id) ?? []) out.add(r.net.id);
-    }
-    return out.size ? out : NO_NETS;
+    if (!topology) return NO_LIGHT;
+    const out = topologyLight(project, topology, selection.ids);
+    return out.nets.size || out.components.size ? out : NO_LIGHT;
   }, [selection, project, activeTopology]);
-  const derived = useMemo(() => deriveFlow(project, activeLayer, selected, litNets), [project, activeLayer, selected, litNets]);
+  const derived = useMemo(() => deriveFlow(project, activeLayer, selected, light.nets, light.components), [project, activeLayer, selected, light]);
 
   // React Flow owns the nodes and edges it draws, so a drag in flight lives
   // there and never touches the project. When the derivation changes, the
@@ -336,11 +331,29 @@ function Canvas() {
   const arrange = useCallback((how: "row" | "column") => edit((p) => arrangeComponents(p, selectedComponents, how, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
   const distribute = useCallback(() => edit((p) => distributeComponents(p, selectedComponents, sizesOf(selectedComponents))), [edit, selectedComponents, sizesOf]);
 
+  // R turns every selected component a quarter, each about its own centre, in one edit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const ids = turnSelection(e, useDoc.getState().selection, "connectivity").filter((id) => useDoc.getState().project?.components.has(id));
+      if (ids.length === 0) return;
+      e.preventDefault();
+      edit((p) => {
+        let next = p;
+        for (const id of ids) {
+          const data = flow.getNode(id)?.data as ComponentNodeData | undefined;
+          if (data) next = turnComponent(next, id, (sides) => boxSizeFor(data, sides));
+        }
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [edit, flow]);
+
   // Delete and Escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (isTyping(e.target)) return;
       const current = useDoc.getState().selection;
       if (current.view !== "connectivity") return;
       if (e.key === "Escape") {

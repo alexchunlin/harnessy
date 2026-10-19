@@ -48,9 +48,9 @@ function zRun(p: Project, top: string, seg: string) {
 /** Both nets routed, the sensor net as a sheathed cable on a 150 mm segment. */
 function complete() {
   let { project: p, ids } = twoNetProject();
-  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
   p = s.project;
-  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
   p = m.project;
   const seg = ops.addSegment(p, ids.top, s.id, m.id, 150);
   p = ops.setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });
@@ -93,8 +93,8 @@ describe("slack on the cut list", () => {
     const sw = ops.placeComponent(p, "components/switch", { x: 0, y: 0 });
     p = sw.project;
     p = ops.createNet(p, "ethernet", [`${ids.mib}/ETH`, `${sw.id}/P1`], "uplink").project;
-    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`, { x: 0, y: 0 });
-    const e2 = ops.placeConnector(e1.project, ids.top, `${sw.id}/P1`, { x: 0, y: 0 });
+    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`);
+    const e2 = ops.placeConnector(e1.project, ids.top, `${sw.id}/P1`);
     const s = ops.addSegment(e2.project, ids.top, e1.id, e2.id);
     p = ops.setStretchSlack(s.project, ids.top, { kind: "segment", id: s.id }, 40);
     p = ops.setSegmentAssembly(p, ids.top, s.id, "assemblies/rj45-patch-500");

@@ -1,11 +1,12 @@
 import type { Edge, Node } from "@xyflow/react";
-import { allRoutes, assemblyLengthOf, buildGraph, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentLength, type Endpoint, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology } from "../../core";
+import { CALLOUT_DISTANCE, EMPTY_TOPOLOGY_CANVAS, ENDPOINT_SIZE, allRoutes, harnessBoxRect, assemblyLengthOf, buildGraph, layoutTopology, conductorAddress, conductorColor, connectorLabel, connectorShortName, degree, harnesses, netConductors, netLabeller, netsOnSegments, parseConductor, ratsnestPairs, resolveConnector, resolveRef, resolveSpec, segmentEnd, segmentLength, type Endpoint, type FanArc, type Harness, type Position, type Project, type Route, type Segment, type Sheath, type TiePoint, type Topology, type TopologyLayout, type WaitingGroup } from "../../core";
 
 /** Derive React Flow nodes and edges for one topology. */
 
-export interface EndpointNodeData { endpoint: Endpoint; label: string; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** the connector's component is selected on the connectivity canvas */ lit: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+export interface EndpointNodeData { endpoint: Endpoint; label: string; /** waits in the grid for its first segment */ waiting: boolean; /** the component name, for hover */ title: string; degree: number; onRoute: boolean; /** the connector's component is selected on the connectivity canvas */ lit: boolean; /** every segment here is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
 export interface TieNodeData { tie: TiePoint; label: string; outOfLayer: boolean; [key: string]: unknown }
-export interface LabelNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+export interface BoxNodeData { harness: Harness; /** every segment of the harness is outside the active layer */ outOfLayer: boolean; [key: string]: unknown }
+export interface WaitingGroupNodeData { name: string; [key: string]: unknown }
 /** One conductor's strand in the fan at a segment's ends. */
 export interface Strand {
   /** `<net id>#<index>` */
@@ -43,6 +44,10 @@ export interface SegmentEdgeData {
   fanAt: [boolean, boolean];
   /** The box each end sits in, so the fan starts past its edge. */
   endSizes: [{ w: number; h: number }, { w: number; h: number }];
+  /** Where the line ends at each endpoint: a connector's box edge, the centre of anything smaller, or the home of a called-out end. */
+  ends: [Position, Position];
+  /** Each end's box centre, or its home when called out. */
+  centres: [Position, Position];
   /** true when some conductor is selected or hovered: strands not lit dim */
   anyLit: boolean;
   [key: string]: unknown;
@@ -57,8 +62,16 @@ export interface RatsnestEdgeData {
   [key: string]: unknown;
 }
 
-export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<LabelNodeData, "harness">;
-export type TopoEdge = Edge<SegmentEdgeData, "segment"> | Edge<RatsnestEdgeData, "ratsnest">;
+export type TopoNode = Node<EndpointNodeData, "endpoint"> | Node<TieNodeData, "tie"> | Node<BoxNodeData, "harness"> | Node<WaitingGroupNodeData, "waitingGroup">;
+/** A thin line from an endpoint's home to its box, once the box sits past the call-out distance. */
+export interface CalloutEdgeData {
+  endpoint: string;
+  from: Position;
+  to: Position;
+  [key: string]: unknown;
+}
+
+export type TopoEdge = Edge<SegmentEdgeData, "segment"> | Edge<RatsnestEdgeData, "ratsnest"> | Edge<CalloutEdgeData, "callout">;
 
 export interface TopologyOptions {
   /** Draw the ratsnest of unrouted nets. */
@@ -71,33 +84,64 @@ export interface TopologyOptions {
   highlightComponents: Set<string>;
   /** A strand under the pointer: previews the conductor's highlight without changing the selection. */
   hoverConductor?: string;
+  /** The waiting grid from the layout, for its column labels and to mark the connectors in it. */
+  waiting?: WaitingGroup[];
 }
 
 export const SHEATH_PALETTE = ["#7e57c2", "#26a69a", "#ef6c00", "#5c6bc0", "#8d6e63", "#43a047"];
-
-export const ENDPOINT_SIZE: Record<Endpoint["kind"], { w: number; h: number }> = {
-  connector: { w: 88, h: 22 },
-  point: { w: 12, h: 12 },
-  breakout: { w: 20, h: 20 },
-  splice: { w: 22, h: 22 },
-};
-
-export function endpointCentre(kind: Endpoint["kind"], pos: Position): Position {
-  const s = ENDPOINT_SIZE[kind];
-  return { x: pos.x + s.w / 2, y: pos.y + s.h / 2 };
-}
 
 export interface TopologyModel {
   nodes: TopoNode[];
   edges: TopoEdge[];
   routes: Route[];
   harnesses: Harness[];
+  /** Endpoint centres as drawn. */
   positions: Map<string, Position>;
 }
 
-export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
+/** The layout of one topology from its canvas file. */
+export function topologyLayout(project: Project, topology: Topology): TopologyLayout {
+  return layoutTopology(project, topology, project.topologyCanvases.get(topology.id) ?? EMPTY_TOPOLOGY_CANVAS);
+}
+
+/** The key under which `drawnFrom` keeps the home of an endpoint the designer moved. */
+export const homeKey = (id: string) => `home:${id}`;
+
+/**
+ * Where the layout draws each endpoint's centre. A waiting connector with no
+ * endpoint record draws under its address. An endpoint with an offset also
+ * has its home, under `homeKey`, so the home glides with everything else and
+ * its segments can stay there. Nothing here reads a stored position.
+ */
+export function drawnFrom(layout: TopologyLayout): Map<string, Position> {
+  const out = new Map([...layout.endpoints].map(([id, e]) => [id, e.drawn]));
+  for (const [id, e] of layout.endpoints) if (e.drawn !== e.home) out.set(homeKey(id), e.home);
+  for (const g of layout.waiting) for (const c of g.connectors) if (!c.endpoint) out.set(c.address, c.position);
+  return out;
+}
+
+export function drawnPositions(project: Project, topology: Topology): Map<string, Position> {
+  return drawnFrom(topologyLayout(project, topology));
+}
+
+/** An SVG path for one fan arc. A whole circle is drawn as two halves, since one SVG arc cannot close on itself. */
+export function arcPath(a: FanArc): string {
+  const at = (deg: number) => {
+    const r = (deg * Math.PI) / 180;
+    return `${a.centre.x + Math.cos(r) * a.radius} ${a.centre.y + Math.sin(r) * a.radius}`;
+  };
+  const sweep = a.to - a.from;
+  if (sweep >= 360) return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from + 180)} A ${a.radius} ${a.radius} 0 1 1 ${at(a.from)}`;
+  return `M ${at(a.from)} A ${a.radius} ${a.radius} 0 ${sweep > 180 ? 1 : 0} 1 ${at(a.to)}`;
+}
+
+/**
+ * Derive React Flow nodes and edges for one topology. `drawn` holds each
+ * endpoint's centre, from `drawnPositions` or a glide towards it; `drafts`
+ * holds the top-left of an endpoint or tie point mid-drag.
+ */
+export function deriveTopology(project: Project, topology: Topology, selected: Set<string>, drawn: Map<string, Position>, drafts: Map<string, Position>, options: TopologyOptions): TopologyModel {
   const graph = buildGraph(topology);
-  const canvas = project.topologyCanvases.get(topology.id) ?? { endpoints: {} };
   const assemblyLength = assemblyLengthOf(project);
   const routes = allRoutes(project, graph);
   const onSegments = netsOnSegments(routes);
@@ -117,8 +161,26 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const selectedSheaths = topology.sheaths.filter((s) => selected.has(s.id));
   const highlightSegments = new Set(selectedSheaths.flatMap((s) => s.segments));
 
+  // An endpoint the layout leaves out, like a connector with no nets and no segment, draws nowhere.
+  const waitingIds = new Set((options.waiting ?? []).flatMap((g) => g.connectors.map((c) => c.endpoint ?? c.address)));
+  const shown: Endpoint[] = topology.endpoints.filter((e) => drawn.has(e.id));
+  for (const id of waitingIds) if (!graph.endpoints.has(id)) shown.push({ id, kind: "connector", connector: id });
   const positions = new Map<string, Position>();
-  for (const e of topology.endpoints) positions.set(e.id, drafts.get(e.id) ?? canvas.endpoints[e.id] ?? { x: 0, y: 0 });
+  const homes = new Map<string, Position>();
+  for (const e of shown) {
+    const at = drawn.get(e.id) ?? { x: 0, y: 0 };
+    const draft = drafts.get(e.id);
+    const size = ENDPOINT_SIZE[e.kind];
+    positions.set(e.id, draft ? { x: draft.x + size.w / 2, y: draft.y + size.h / 2 } : at);
+    homes.set(e.id, drawn.get(homeKey(e.id)) ?? at);
+  }
+  // Past the call-out distance an endpoint's segments stay at its home, so the arc stays true; a call-out line points to the box.
+  const calledOut = new Set<string>();
+  for (const [id, p] of positions) {
+    const h = homes.get(id)!;
+    if (degree(graph, id) > 0 && Math.hypot(p.x - h.x, p.y - h.y) > CALLOUT_DISTANCE) calledOut.add(id);
+  }
+  const anchorOf = (id: string) => (calledOut.has(id) ? homes.get(id) : positions.get(id));
 
   // A segment is in the layer when any net routed through it is, or when it
   // carries no net at all. An endpoint follows its segments; a lone connector
@@ -145,17 +207,20 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   };
 
   const nodes: TopoNode[] = [];
-  for (const e of topology.endpoints) {
+  for (const e of shown) {
     // Connectors show their type and designator, as the component box does; the component name is the hover title and in the inspector.
     const label = e.kind === "connector" ? connectorEndpointLabel(project, e.connector) : e.kind === "breakout" ? (e.spec ? resolveRef(project.library, e.spec, "breakouts")?.name ?? e.spec : "") : e.kind === "splice" ? `${e.nets.length}` : "";
     const title = e.kind === "connector" ? connectorLabel(project, e.connector) : "";
     const outOfLayer = endpointOut(e);
+    const waiting = waitingIds.has(e.id);
     const lit = e.kind === "connector" && options.highlightComponents.has(e.connector.split("/")[0]);
     // `measured` is set up front: React Flow keeps a node's handle bounds across a re-render only when it is, and without them every edge drops out for a frame.
+    // A drag on the body moves the box off its home; a drag from the ring grows a segment. A waiting connector has no home to leave.
     const size = ENDPOINT_SIZE[e.kind];
+    const centre = positions.get(e.id)!;
     nodes.push({
-      id: e.id, type: "endpoint", position: positions.get(e.id)!, data: { endpoint: e, label, title, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
-      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer, connectable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined,
+      id: e.id, type: "endpoint", position: { x: centre.x - size.w / 2, y: centre.y - size.h / 2 }, data: { endpoint: e, label, title, waiting, degree: degree(graph, e.id), onRoute: routeEndpoints.has(e.id), lit, outOfLayer },
+      selected: selected.has(e.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer && !waiting && degree(graph, e.id) > 0, connectable: !outOfLayer, className: [waiting ? "waiting" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ") || undefined,
       zIndex: e.kind === "connector" ? 2 : 3, width: size.w, height: size.h, measured: { width: size.w, height: size.h },
     });
   }
@@ -172,7 +237,8 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
   const anySelectedNet = selectedRoutes.length > 0;
   const edges: TopoEdge[] = [];
   for (const s of topology.segments) {
-    if (!graph.endpoints.has(s.ends[0]) || !graph.endpoints.has(s.ends[1])) continue;
+    // An end that draws nowhere yet, such as one the glide has not reached, has no node for the line to meet.
+    if (!positions.has(s.ends[0]) || !positions.has(s.ends[1])) continue;
     const onHere = onSegments.get(s.id) ?? [];
     const nets = onHere.map((r) => ({ id: r.net.id, label: label(r.net), domain: r.domain, color: domains.get(r.domain)?.color ?? "#888", conductors: netConductors(project, r.net, r.domain).length }));
     const assembly = s.assembly ? resolveRef(project.library, s.assembly, "assemblies") : undefined;
@@ -181,12 +247,16 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const classes = [routeColor ? "on-route" : "", outOfLayer ? "out-of-layer" : ""].filter(Boolean).join(" ");
     const { strands, badge } = s.assembly ? { strands: [], badge: undefined } : strandsOf(project, onHere, domains, label, litConductors);
     const kinds = s.ends.map((e) => graph.endpoints.get(e)!.kind);
+    // A called-out end stays at its home, where no box sits; any other end meets its box.
+    const centres: [Position, Position] = [anchorOf(s.ends[0])!, anchorOf(s.ends[1])!];
+    const endAt = (i: 0 | 1) => (calledOut.has(s.ends[i]) ? centres[i] : segmentEnd(kinds[i], centres[i], centres[1 - i]));
+    const ends: [Position, Position] = [endAt(0), endAt(1)];
     edges.push({
       id: s.id, type: "segment", source: s.ends[0], target: s.ends[1], sourceHandle: "h", targetHandle: "h",
       data: {
         segment: s, lengthMm: segmentLength(graph, s, assemblyLength), assemblyName: assembly?.name, nets, routeColor,
         faded: (anySelectedNet && !routeColor) || (highlightSegments.size > 0 && !highlightSegments.has(s.id)), outOfLayer, sheaths: sheathIndex.get(s.id) ?? [],
-        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], anyLit: litConductors.size > 0,
+        strands, badge, fanAt: [kinds[0] !== "point", kinds[1] !== "point"], endSizes: [ENDPOINT_SIZE[kinds[0]], ENDPOINT_SIZE[kinds[1]]], ends, centres, anyLit: litConductors.size > 0,
       },
       selected: (selected.has(s.id) || highlightSegments.has(s.id)) && !outOfLayer, selectable: !outOfLayer, focusable: !outOfLayer, className: classes || undefined,
       zIndex: routeColor ? 4 : 1, interactionWidth: outOfLayer ? 0 : 16,
@@ -201,7 +271,8 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
       const color = domains.get(r.domain)?.color ?? "#888";
       ratsnestPairs(r, positions).forEach(([from, to], i) => {
         // An unnamed net's label already names its ends.
-        const title = r.net.name ? `${r.net.name}: ${endpointName(project, graph.endpoints.get(from))} to ${endpointName(project, graph.endpoints.get(to))}` : label(r.net);
+        const name = (id: string) => (graph.endpoints.has(id) ? endpointName(project, graph.endpoints.get(id)) : connectorLabel(project, id));
+        const title = r.net.name ? `${r.net.name}: ${name(from)} to ${name(to)}` : label(r.net);
         edges.push({
           id: `ratsnest:${r.net.id}:${i}`, type: "ratsnest", source: from, target: to, sourceHandle: "h", targetHandle: "h", className: "ratsnest",
           data: { netId: r.net.id, color, title }, selectable: false, focusable: false, deletable: false, interactionWidth: 8, zIndex: 0,
@@ -210,14 +281,20 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     }
   }
 
+  for (const id of [...calledOut].sort()) {
+    edges.push({
+      id: `callout:${id}`, type: "callout", source: id, target: id, sourceHandle: "h", targetHandle: "h", className: "callout-edge",
+      data: { endpoint: id, from: homes.get(id)!, to: positions.get(id)! }, selectable: false, focusable: false, deletable: false, interactionWidth: 0, zIndex: 0,
+    });
+  }
+
   for (const t of topology.ties) {
     const seg = graph.segments.get(t.segment);
     if (!seg) continue;
-    const from = positions.get(t.from);
-    const to = positions.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
-    if (!from || !to) continue;
-    const a = endpointCentre(graph.endpoints.get(t.from)!.kind, from);
-    const b = endpointCentre(graph.endpoints.get(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0])!.kind, to);
+    // A tie point draws at its fraction of the way along the drawn segment.
+    const a = anchorOf(t.from);
+    const b = anchorOf(seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0]);
+    if (!a || !b) continue;
     const len = segmentLength(graph, seg, assemblyLength) ?? 0;
     const f = len > 0 ? Math.min(1, Math.max(0, t.distance_mm / len)) : 0.5;
     const pos = drafts.get(t.id) ?? { x: a.x + (b.x - a.x) * f - 6, y: a.y + (b.y - a.y) * f - 6 };
@@ -229,16 +306,19 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     });
   }
 
+  // Each harness draws in a box around its endpoints as drawn, so the box glides and drags with them. Only its title band takes the pointer.
   for (const h of hs) {
-    const anchor = h.anchors[0] ?? graph.segments.get(h.piece.id);
-    let at: Position;
-    if (anchor) {
-      const a = positions.get(anchor.ends[0]) ?? { x: 0, y: 0 };
-      const b = positions.get(anchor.ends[1]) ?? { x: 0, y: 0 };
-      at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 28 };
-    } else at = { x: 0, y: 0 };
+    const rect = harnessBoxRect([...h.piece.endpoints].map((id) => ({ at: positions.get(id) ?? { x: 0, y: 0 }, size: ENDPOINT_SIZE[graph.endpoints.get(id)?.kind ?? "point"] })));
     const outOfLayer = [...h.piece.segments].every((id) => segmentOut.has(id));
-    nodes.push({ id: `harness:${h.piece.id}`, type: "harness", position: at, data: { harness: h, outOfLayer }, selectable: false, draggable: false, className: outOfLayer ? "out-of-layer" : undefined, zIndex: 6 });
+    nodes.push({
+      id: `harness:${h.piece.id}`, type: "harness", position: { x: rect.x, y: rect.y }, data: { harness: h, outOfLayer }, selectable: false, draggable: !outOfLayer, dragHandle: ".harness-box-title",
+      className: [outOfLayer && "out-of-layer", selected.has(`harness:${h.piece.id}`) && "box-selected"].filter(Boolean).join(" ") || undefined, style: { pointerEvents: "none" }, zIndex: 0, width: rect.w, height: rect.h, measured: { width: rect.w, height: rect.h },
+    });
+  }
+
+  // Each column of the waiting grid carries its component's name.
+  for (const g of options.waiting ?? []) {
+    nodes.push({ id: `waiting:${g.component}`, type: "waitingGroup", position: { x: g.rect.x, y: g.rect.y }, data: { name: g.name }, selectable: false, draggable: false, connectable: false, zIndex: 1 });
   }
 
   return { nodes, edges, routes, harnesses: hs, positions };

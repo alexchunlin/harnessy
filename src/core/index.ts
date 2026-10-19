@@ -5,6 +5,7 @@ export * from "./serialize";
 export * from "./library";
 export * from "./project";
 export * from "./derive";
+export * from "./layout";
 export * from "./drc";
 export * from "./pin-checks";
 export * from "./bom";

@@ -15,9 +15,9 @@ function powerWires(p: Project, top: string) {
 /** Both nets routed: Power harness on a 300 mm segment, Sensor harness on a 150 mm one. */
 function complete() {
   let { project: p, ids } = twoNetProject();
-  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
   p = s.project;
-  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
   p = m.project;
   const seg = ops.addSegment(p, ids.top, s.id, m.id, 150);
   p = ops.setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });

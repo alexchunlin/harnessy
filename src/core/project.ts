@@ -26,6 +26,7 @@ import {
 import { emptyLibrary, explain, loadLibrary, mergeLibraries, resolveRef, resolveSpec, type FileProblem, type Files, type Library } from "./library";
 import { serialize } from "./serialize";
 import { parseAddress } from "./refs";
+import { buildGraph, pieces } from "./derive";
 
 /** A loaded project. Nets are keyed by domain id, matching the file split. */
 export interface Project {
@@ -148,7 +149,7 @@ export function saveProject(project: Project): Files {
   for (const [domain, nets] of project.nets) files.set(`nets/${domain}.json`, serialize(NetsFileSchema, nets));
   for (const t of project.topologies.values()) files.set(`topologies/${t.id}.json`, serialize(TopologySchema, t));
   files.set("canvas/connectivity.json", serialize(ConnectivityCanvasSchema, project.connectivityCanvas));
-  for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, c));
+  for (const [id, c] of project.topologyCanvases) files.set(`canvas/${id}.json`, serialize(TopologyCanvasSchema, liveCanvas(project.topologies.get(id), c)));
   files.set("drc.json", serialize(DrcFileSchema, project.drc));
   for (const folder of LIBRARY_FOLDERS) {
     for (const entry of project.projectLibrary[folder].values()) {
@@ -156,6 +157,15 @@ export function saveProject(project: Project): Files {
     }
   }
   return files;
+}
+
+/** The canvas file as saved: roots, offsets and `pieces` entries for endpoints and pieces the topology no longer has are dead weight, so they drop. In memory they outlive their endpoint, so undo can bring them back. */
+function liveCanvas(topology: Topology | undefined, canvas: TopologyCanvas): TopologyCanvas {
+  const ends = new Set(topology?.endpoints.map((e) => e.id));
+  const live = new Set(topology ? pieces(buildGraph(topology)).map((p) => p.id) : []);
+  const kept = Object.entries(canvas.pieces).filter(([id]) => live.has(id));
+  const offsets = Object.entries(canvas.offsets).filter(([e]) => ends.has(e));
+  return { ...canvas, roots: canvas.roots.filter((r) => ends.has(r)), offsets: Object.fromEntries(offsets), pieces: Object.fromEntries(kept) };
 }
 
 /** Paths that `saveProject` would write which `previous` has and `next` lacks. */
