@@ -226,9 +226,11 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const pos = drafts.get(t.id) ?? { x: a.x + (b.x - a.x) * f - 6, y: a.y + (b.y - a.y) * f - 6 };
     const spec = resolveRef(project.library, t.spec, "ties");
     const outOfLayer = segmentOut.has(seg.id);
+    // A tie point placed in 3D takes its distance from the curve, so a drag here would only rewrite the typed number behind it.
+    const measured = lengths.ties.get(t.id)?.source === "3d";
     nodes.push({
       id: t.id, type: "tie", position: pos, data: { tie: t, label: `${spec?.name ?? t.spec}, ${distance} mm from ${endpointName(project, graph.endpoints.get(t.from))}`, outOfLayer },
-      selected: selected.has(t.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer, className: outOfLayer ? "out-of-layer" : undefined, zIndex: 5, width: 12, height: 12, measured: { width: 12, height: 12 },
+      selected: selected.has(t.id) && !outOfLayer, selectable: !outOfLayer, draggable: !outOfLayer && !measured, className: outOfLayer ? "out-of-layer" : undefined, zIndex: 5, width: 12, height: 12, measured: { width: 12, height: 12 },
     });
   }
 

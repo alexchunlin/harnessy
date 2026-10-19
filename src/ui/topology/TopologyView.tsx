@@ -187,7 +187,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
           if (n.type === "tie") {
             const t = topology.ties.find((t) => t.id === n.id);
             const seg = topology.segments.find((s) => s.id === t?.segment);
-            if (!t || !seg) continue;
+            // A tie point placed in 3D keeps its typed distance.
+            if (!t || !seg || lengthsOf(next, next.topologies.get(topologyId)!).ties.get(t.id)?.source === "3d") continue;
             const other = seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0];
             const fromE = topology.endpoints.find((e) => e.id === t.from);
             const toE = topology.endpoints.find((e) => e.id === other);
