@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
-import { layoutTopology } from "../../src/core/layout";
+import { dropOffset, layoutTopology } from "../../src/core/layout";
 import type { Position } from "../../src/core/schema";
 import type { Project } from "../../src/core/project";
 import { freshProject } from "./fixture";
@@ -121,6 +121,18 @@ describe("turning a harness", () => {
     const e = b.layout().endpoints.get(moved)!;
     close(sub(e.drawn, e.home), { x: -10, y: 40 });
     expect(b.project.topologyCanvases.get(b.top)!.offsets[moved]).toEqual({ x: 40, y: 10 });
+  });
+
+  it("an endpoint dropped on a turned harness stays where it was dropped", () => {
+    const b = bench();
+    const { ends } = b.tree(3);
+    const moved = ends[3];
+    b.project = ops.turnPiece(b.project, b.top, b.piece());
+    const before = b.layout();
+    const home = before.endpoints.get(moved)!.home;
+    const at = { x: home.x + 30, y: home.y + 8 };
+    b.project = ops.setEndpointOffset(b.project, b.top, moved, dropOffset(before, moved, at)!);
+    close(b.layout().endpoints.get(moved)!.drawn, at);
   });
 
   it("four turns give back the original picture and leave no turn in the file", () => {

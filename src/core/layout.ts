@@ -45,6 +45,8 @@ export interface EndpointLayout {
   home: Position;
   /** Where it draws: home plus the designer's offset. */
   drawn: Position;
+  /** Quarter turns of its harness. The stored offset is in the harness's frame and turns with it. */
+  turns: number;
 }
 
 export interface PieceLayout {
@@ -231,16 +233,17 @@ function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["of
   const anchor: Positions = new Map();
   const callouts: Callout[] = [];
   for (const [id, p] of home) {
+    const turns = turnsOf.get(id) ?? 0;
     const stored = degree(graph, id) > 0 ? offsets[id] : undefined;
     if (!stored) {
-      endpoints.set(id, { home: p, drawn: p });
+      endpoints.set(id, { home: p, drawn: p, turns });
       anchor.set(id, p);
       continue;
     }
     // The offset is in its harness's frame, so it turns with the harness before it lands on the canvas.
-    const offset = quarterTurns(stored, turnsOf.get(id) ?? 0);
+    const offset = quarterTurns(stored, turns);
     const drawn = { x: p.x + offset.x, y: p.y + offset.y };
-    endpoints.set(id, { home: p, drawn });
+    endpoints.set(id, { home: p, drawn, turns });
     if (Math.hypot(offset.x, offset.y) > CALLOUT_DISTANCE) {
       callouts.push({ endpoint: id, from: p, to: drawn });
       anchor.set(id, p);
@@ -248,6 +251,17 @@ function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["of
   }
   callouts.sort((a, b) => (a.endpoint < b.endpoint ? -1 : a.endpoint > b.endpoint ? 1 : 0));
   return { endpoints, anchor, callouts };
+}
+
+/**
+ * The offset to store so an endpoint draws centred on `centre`. The drop is
+ * on screen, so it turns back by the harness's turns into the harness's frame.
+ * Undefined when the endpoint has no home.
+ */
+export function dropOffset(layout: TopologyLayout, id: string, centre: Position): Position | undefined {
+  const e = layout.endpoints.get(id);
+  if (!e) return undefined;
+  return quarterTurns({ x: centre.x - e.home.x, y: centre.y - e.home.y }, (4 - (e.turns % 4)) % 4);
 }
 
 // Turns -------------------------------------------------------------------------
