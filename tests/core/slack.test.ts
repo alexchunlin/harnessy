@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "../../src/core/ops";
 import { buildGraph, segmentSlack, stretchesOf } from "../../src/core/derive";
-import { buildBom, cutListCsv } from "../../src/core/bom";
+import { buildBom, cutListCsv, sheathCut } from "../../src/core/bom";
 import { loadProject, saveProject, type Project } from "../../src/core/project";
 import { testLibrary, twoNetProject } from "./fixture";
 
@@ -79,6 +79,13 @@ describe("slack on the cut list", () => {
     const csv = cutListCsv(bom).split("\n");
     expect(csv[0]).toContain(",length_mm,slack_mm,");
     expect(bom.summary.find((r) => r.row === "cable")?.length_mm).toBe(180);
+  });
+
+  it("gives the sheath inspector the same cut length as the sheath row, slack included", () => {
+    let { p, ids, sensorSeg } = complete();
+    p = zRun(p, ids.top, sensorSeg).p;
+    const topology = p.topologies.get(ids.top)!;
+    expect(sheathCut(p, buildGraph(topology), topology.sheaths[0])).toEqual({ length_mm: 210, slack_mm: 30 });
   });
 
   it("gives a purchased assembly row no slack", () => {
