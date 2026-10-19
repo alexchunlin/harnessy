@@ -1,4 +1,4 @@
-import { CatmullRomCurve3, Euler, MathUtils, Vector3 } from "three";
+import { Euler, MathUtils, Vector3 } from "three";
 import type { Segment, Topology, Vec3 } from "./schema";
 import { buildGraph, otherEnd, type Graph } from "./derive";
 import { resolveRef } from "./library";
@@ -13,12 +13,12 @@ import { resolveConnector, type Project } from "./project";
  * a connector, a breakout or a splice. Each chain is one curve: a straight
  * stub out of each connector end, as long as its type's strain relief, then
  * a centripetal Catmull-Rom spline through the stub ends, each segment's tie
- * points and each point endpoint, in chain order. A phantom point a little
- * way back along each stub keeps the tangent smooth where the stub meets the
- * spline. A connector type with no strain relief has no stub, and its bundle
- * still leaves along the exit.
+ * points and each point endpoint, in chain order. At a stub end the spline
+ * leaves along the stub, with a tangent as long as the span to the next
+ * control point, so the bundle carries on smoothly and turns over the whole
+ * span rather than right at the stub. A connector type with no strain relief
+ * has no stub, and its bundle still leaves along the exit.
  */
-
 
 export interface SegmentCurve {
   segment: string;
@@ -36,8 +36,6 @@ export interface SegmentCurve {
   tight: [number, number][];
 }
 
-/** How far behind a stub end the phantom point sits. */
-const PHANTOM_MM = 10;
 /** Samples per span between two control points. */
 const SAMPLES = 32;
 /** Curvature samples sit at most this far apart, so the measured radius settles. */
@@ -111,7 +109,7 @@ export function bundleCurves(project: Project, topology: Topology, pose: Pose, m
 function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Pose, segments: Segment[], endpoints: string[], minimums: ReadonlyMap<string, number>): SegmentCurve[] {
   const v = (p: Vec3) => new Vector3(...p);
   const ctrl: Vector3[] = [];
-  // A connector end: its position, its stub length and the stub end, with the phantom point behind it.
+  // A connector end: its position, its stub length, the stub end and the exit direction.
   const stub = (end: string, next: string) => {
     const p = v(pose.positions[end]);
     if (graph.endpoints.get(end)?.kind !== "connector") return undefined;
@@ -120,14 +118,13 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
     const dir = rotation ? v(exitDirection(rotation)) : toward.lengthSq() > 1e-9 ? toward.normalize() : new Vector3(0, -1, 0);
     const length = strainReliefOf(project, topology, end);
     const tip = p.clone().addScaledVector(dir, length);
-    return { from: p, length, tip, phantom: tip.clone().addScaledVector(dir, -PHANTOM_MM) };
+    return { from: p, length, tip, dir };
   };
   const last = endpoints.length - 1;
   const head = stub(endpoints[0], endpoints[1]);
   const tail = stub(endpoints[last], endpoints[last - 1]);
 
-  if (head) ctrl.push(head.phantom, head.tip);
-  else ctrl.push(v(pose.positions[endpoints[0]]));
+  ctrl.push(head ? head.tip : v(pose.positions[endpoints[0]]));
   const starts: number[] = [];
   const ends: number[] = [];
   const tieAt = new Map<string, { segment: number; index: number }>();
@@ -146,13 +143,13 @@ function chainCurve(project: Project, topology: Topology, graph: Graph, pose: Po
       tieAt.set(id, { segment: i, index: ctrl.length });
       ctrl.push(v(pose.ties[id]));
     }
-    if (i === segments.length - 1 && tail) ctrl.push(tail.tip, tail.phantom);
-    else ctrl.push(v(pose.positions[endpoints[i + 1]]));
-    ends.push(tail && i === segments.length - 1 ? ctrl.length - 2 : ctrl.length - 1);
+    ctrl.push(i === segments.length - 1 && tail ? tail.tip : v(pose.positions[endpoints[i + 1]]));
+    ends.push(ctrl.length - 1);
   });
 
   // Arc length at each control point, and the samples of each span, measured along the spline.
-  const spline = new CatmullRomCurve3(ctrl, false, "centripetal");
+  // The tail stub's exit points into the chain, so the spline arrives against it.
+  const spline = chainSpline(ctrl, head?.dir, tail?.dir.clone().negate());
   const n = ctrl.length;
   const arc: number[] = [0];
   const samples: Vector3[][] = [];
@@ -207,7 +204,7 @@ interface Bend {
  * is resampled at an even arc spacing well under the smallest minimum, and
  * the radius at each sample is the circumradius of it and its two neighbours.
  */
-function bendsOf(spline: CatmullRomCurve3, n: number, parts: { from: number; to: number; min: number | undefined }[]): Bend[] {
+function bendsOf(spline: Spline, n: number, parts: { from: number; to: number; min: number | undefined }[]): Bend[] {
   const out: Bend[] = parts.map(() => ({ tight: [] }));
   const mins = parts.map((p) => p.min).filter((m): m is number => m !== undefined && m > 0);
   if (mins.length === 0 || n < 2) return out;
@@ -267,6 +264,54 @@ function bendsOf(spline: CatmullRomCurve3, n: number, parts: { from: number; to:
     else bend.tight.push([from, to]);
   }
   return out;
+}
+
+interface Spline {
+  /** The point at `t` from 0 to 1; control point `j` of `n` sits at `j / (n - 1)`. */
+  getPoint(t: number): Vector3;
+}
+
+/**
+ * A centripetal Catmull-Rom spline through `ctrl`, as three.js builds one, as
+ * cubic Hermite spans. A given start or end direction replaces the end
+ * tangent, scaled to the length of the end span.
+ */
+function chainSpline(ctrl: Vector3[], start: Vector3 | undefined, end: Vector3 | undefined): Spline {
+  const n = ctrl.length;
+  // Beyond an end with no direction, three.js mirrors the neighbour through the end point.
+  const at = (i: number) => (i < 0 ? ctrl[0].clone().multiplyScalar(2).sub(ctrl[Math.min(1, n - 1)]) : i >= n ? ctrl[n - 1].clone().multiplyScalar(2).sub(ctrl[Math.max(n - 2, 0)]) : ctrl[i]);
+  const spans: [Vector3, Vector3, Vector3, Vector3][] = [];
+  for (let j = 0; j < n - 1; j++) {
+    const [x0, x1, x2, x3] = [at(j - 1), at(j), at(j + 1), at(j + 2)];
+    let dt0 = Math.pow(x0.distanceToSquared(x1), 0.25);
+    let dt1 = Math.pow(x1.distanceToSquared(x2), 0.25);
+    let dt2 = Math.pow(x2.distanceToSquared(x3), 0.25);
+    if (dt1 < 1e-4) dt1 = 1;
+    if (dt0 < 1e-4) dt0 = dt1;
+    if (dt2 < 1e-4) dt2 = dt1;
+    const tangent = (a: Vector3, b: Vector3, c: Vector3, da: number, db: number) =>
+      new Vector3().addScaledVector(b.clone().sub(a), 1 / da).addScaledVector(c.clone().sub(a), -1 / (da + db)).addScaledVector(c.clone().sub(b), 1 / db).multiplyScalar(dt1);
+    const chord = x1.distanceTo(x2);
+    const m1 = j === 0 && start ? start.clone().setLength(chord) : tangent(x0, x1, x2, dt0, dt1);
+    const m2 = j === n - 2 && end ? end.clone().setLength(chord) : tangent(x1, x2, x3, dt1, dt2);
+    spans.push([x1, x2, m1, m2]);
+  }
+  return {
+    getPoint(t: number) {
+      if (n === 1) return ctrl[0].clone();
+      const p = (n - 1) * Math.min(1, Math.max(0, t));
+      const j = Math.min(n - 2, Math.floor(p));
+      const s = p - j;
+      const [a, b, ma, mb] = spans[j];
+      const s2 = s * s;
+      const s3 = s2 * s;
+      return new Vector3()
+        .addScaledVector(a, 2 * s3 - 3 * s2 + 1)
+        .addScaledVector(ma, s3 - 2 * s2 + s)
+        .addScaledVector(b, -2 * s3 + 3 * s2)
+        .addScaledVector(mb, s3 - s2);
+    },
+  };
 }
 
 /** The radius of the circle through three points, infinite when they line up. */

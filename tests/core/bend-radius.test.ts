@@ -79,13 +79,16 @@ describe("bend radius on the bundle curve", () => {
     const connectors = new Map(project.library.connectors);
     connectors.set("xt60", { ...connectors.get("xt60")!, strain_relief_mm: 30 });
     // The battery exits 30 degrees off the line to the far connector, so the bundle turns where its stub ends.
-    const p = ops.placeParts({ ...project, library: { ...project.library, connectors } }, ids.top, {
-      positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [1000, 0, 0] },
-      rotations: { [ids.batEnd]: [0, 0, 120] },
-    });
-    expect(await bends(withRadius(p, "wires", both), ids.top)).toEqual([]);
+    const lib = { ...project, library: { ...project.library, connectors } };
+    const at = (x: number) =>
+      ops.placeParts(lib, ids.top, {
+        positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [x, 0, 0] },
+        rotations: { [ids.batEnd]: [0, 0, 120] },
+      });
+    expect(await bends(withRadius(at(1000), "wires", both), ids.top)).toEqual([]);
 
-    // Under a stiffer bundle the turn is too tight, and every tight stretch starts past the stub.
+    // Over a 100 mm run the turn is too tight for a stiff bundle, and every tight run starts past the stub.
+    const p = at(100);
     const top = p.topologies.get(ids.top)!;
     const curve = bundleCurves(p, top, placementOf(p, ids.top), new Map([[ids.seg, 40]])).get(ids.seg)!;
     expect(curve.tight.length).toBeGreaterThan(0);
@@ -96,7 +99,27 @@ describe("bend radius on the bundle curve", () => {
     expect(await bends(withRadius(p, "wires", { "awg12-red": 40 }), ids.top)).toHaveLength(1);
   });
 
-  it("the curve reports the tight stretches from the segment's first end, whichever way it runs", () => {
+  it("a stub that exits sideways into a long run turns gently, and a short run still turns tight", async () => {
+    const { project, ids } = twoNetProject();
+    const connectors = new Map(project.library.connectors);
+    connectors.set("xt60", { ...connectors.get("xt60")!, strain_relief_mm: 20 });
+    const lib = { ...project, library: { ...project.library, connectors } };
+    // The battery exits along -Y; the far connector sits 300 mm to the side, level with the battery's stub end.
+    const at = (sideways: number) =>
+      ops.placeParts(lib, ids.top, {
+        positions: { [ids.batEnd]: [0, 0, 0], [ids.mibEnd]: [sideways, -20, 0] },
+        rotations: { [ids.batEnd]: [0, 0, 0] },
+      });
+    const long = at(300);
+    expect(await bends(withRadius(long, "wires", both), ids.top)).toEqual([]);
+    const curve = bundleCurves(long, long.topologies.get(ids.top)!, placementOf(long, ids.top), new Map([[ids.seg, 25]])).get(ids.seg)!;
+    expect(curve.minRadiusMm).toBeGreaterThan(25);
+
+    // The same turn made in 40 mm is tight.
+    expect(await bends(withRadius(at(40), "wires", both), ids.top)).toHaveLength(1);
+  });
+
+  it("the curve reports the tight runs from the segment's first end, whichever way it runs", () => {
     const { project, ids } = placed(true);
     const top = project.topologies.get(ids.top)!;
     const forward = bundleCurves(project, top, placementOf(project, ids.top), new Map([[ids.seg, 25]])).get(ids.seg)!;
