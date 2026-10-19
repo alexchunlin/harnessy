@@ -8,7 +8,7 @@ KiCad splits a schematic from a board layout. Harnesses have the same split. The
 
 Layers are a named set of domains and change only what the connectivity canvas shows. Component positions are shared, so switching from the power layer to the Ethernet layer keeps every box where it was. Components with nothing in the active layer keep a dimmed outline and lose their text, like KiCad's dimmed inactive layers.
 
-A net in the MVP connects connectors, not pins. Pin assignment is a later refinement, and the design rule check will list nets that lack it once it exists. A connector can carry several nets from different domains, which is how PoE on an RJ45 and SPI plus 3.3 V on a JST-SH are represented: two nets between the same two connectors.
+A net connects connectors. Each conductor of a net lands on one numbered pin at each of its connectors, and the net stores that as a map from connector address to one pin per conductor, blank where nobody has chosen one yet. Pins are set in the net inspector; the canvas draws connectors, not pins. ADR-0008 records the choice. A connector can carry several nets from different domains, which is how PoE on an RJ45 and SPI plus 3.3 V on a JST-SH are represented: two nets between the same two connectors.
 
 ## Topology and the BOM
 
@@ -26,15 +26,15 @@ A project folder holds `project.json` (schema version, name, domains, layers), o
 
 ## Library
 
-The repo carries a library, and a project `library/` mirrors it: one folder per kind (`components`, `connectors`, `wires`, `cables`, `sheaths`, `breakouts`, `splices`, `ties`, `assemblies`), one file per entry, filename equals id. A project file at the same path shadows the repo file whole. Library ids are typed slugs (`jst-gh-6`, `xt60`) rather than generated, because the part is the natural key and a readable catalogue tree matters for hand editing. Every reference to a library entry is spelled `<folder>/<id>`, so a domain default or a net override can name either a wire or a cable. A library component is a component definition whose connectors carry designators; a project component references one live, or declares connectors inline for a one-off. Removing a designator a net still uses leaves a dangling reference for the design rule check to list. Zod schemas in the app define every file, and generated JSON Schema is checked in for editor validation. ADR-0002 records the id split.
+The repo carries a library, and a project `library/` mirrors it: one folder per kind (`components`, `connectors`, `wires`, `cables`, `sheaths`, `breakouts`, `splices`, `ties`, `assemblies`), one file per entry, filename equals id. A project file at the same path shadows the repo file whole. Library ids are typed slugs (`jst-gh-6`, `xt60`) rather than generated, because the part is the natural key and a readable library tree matters for hand editing. Every reference to a library entry is spelled `<folder>/<id>`, so a domain default or a net override can name either a wire or a cable. A library component is a component definition whose connectors carry designators; a project component references one live, or declares connectors inline for a one-off. Removing a designator a net still uses leaves a dangling reference for the design rule check to list. Zod schemas in the app define every file, and generated JSON Schema is checked in for editor validation. ADR-0002 records the id split.
 
 ## BOM export
 
-One export per topology, downloaded as two CSV files. The cut list has one row per physical piece: housing and contacts per connector end, one wire row per conductor per leg (a spliced net has a leg per connector), one cable row per net, sheaths with their overlap, tie points with segment and distance, splices per net joined, breakouts, and purchased assemblies. Every row carries the harness, so builders filter and buyers sum. The summary aggregates by library reference. No slack allowance; rope-mockup lengths carry their own margin. Export is refused while the topology has design rule errors.
+One export per topology, downloaded as two CSV files. The cut list has one row per physical piece: housing and contacts per connector end, one wire row per conductor per leg (a spliced net has a leg per connector), one cable row per net, sheaths with their overlap, tie points with segment and distance, splices per net joined, breakouts, and purchased assemblies. Every row carries the harness, so builders filter and buyers sum. The summary aggregates by library reference. Wire rows carry a from-pin and a to-pin; a cable row lists its pairs in its notes. A stored length is the routed length, and slack sits on each stretch between fixed points: a segment's ends and its tie points bound the stretches. A stretch with no slack of its own takes the harness default, then the project default, which starts at zero. A wire, cable or sheath row's cut length is its routed length plus the slack of every stretch it crosses, and the row shows the slack in its own column. A purchased assembly takes no slack. ADR-0006 records the choice. Export is refused while the topology has design rule errors.
 
 ## Design rule checks
 
-Checks run continuously and show in a KiCad-style panel. Errors are anything that would make the BOM wrong: unrouted or single-connector nets, a route branching without a splice, broken endpoint degree rules, missing lengths, sheath gaps or sheaths across two harnesses, two harness anchors in one piece, dangling references. Warnings cover idle connectors and components, an unnamed harness, a tie point past its segment, two domains from the project's optional `keep_apart` list sharing a segment, and a net with no spec. Warnings can be silenced per item in `drc.json`; errors cannot.
+Checks run continuously and show in a KiCad-style panel. Errors are anything that would make the BOM wrong: unrouted or single-connector nets, a route branching without a splice, broken endpoint degree rules, missing lengths, sheath gaps or sheaths across two harnesses, two harness anchors in one piece, dangling references, two conductors on one pin, a pin above its connector type's count. Warnings cover idle connectors and components, an unnamed harness, a tie point past its segment, two domains from the project's optional `keep_apart` list sharing a segment, a net with no spec, a conductor with no pin, slack on a purchased assembly, and a stretch with more slack than route. Warnings can be silenced per item in `drc.json`; errors cannot.
 
 ## Interaction
 
@@ -50,7 +50,7 @@ RAMMP Gen 1.5. Roughly 45 components across thirteen domains: 48 V, 24 V, CAN, E
 
 ## Ruled out for now
 
-Onshape export (a future plugin will take segment endpoints and tie points as coordinates), SVG or PDF export for review, KiCad netlist import, volumetric bundle checks, and 3D routing. Deferred past the MVP: pin-level assignment, collapsing groups, CAD length import, PoE port budgets, wire sizing help, persistent undo and multi-user editing.
+Onshape export (a future plugin will take segment endpoints and tie points as coordinates), SVG or PDF export for review, KiCad netlist import, volumetric bundle checks, and 3D routing. Deferred past the MVP: collapsing groups, CAD length import, PoE port budgets, wire sizing help, persistent undo and multi-user editing.
 
 ## Prior art
 
