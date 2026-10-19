@@ -51,3 +51,25 @@ test("a bend tighter than the bundle allows warns, draws red, and the finding op
   await page.keyboard.press("Escape");
   await expect(page.locator(".h3d-panel .h3d-row span").first()).toHaveText("Nothing selected");
 });
+
+test("with all harnesses shown, a segment selected from a finding can have its harness's placement cleared", async ({ page }) => {
+  const folder = await freshExample("bend-radius-clear");
+  await declareRadius(folder, 25);
+  await fs.writeFile(
+    path.join(folder, "canvas", "top-222268.3d.json"),
+    JSON.stringify({ positions: { [BATTERY_ENDS[0]]: [0, 0, 0], [BATTERY_ENDS[1]]: [0, 30, 0] }, rotations: { [BATTERY_ENDS[0]]: [0, 0, 90], [BATTERY_ENDS[1]]: [0, 0, 90] }, ties: {} }) + "\n",
+  );
+  await openProject(page, folder);
+  await page.getByRole("button", { name: "Topology", exact: true }).click();
+  await canvasSettled(page);
+  await page.getByRole("button", { name: /DRC/ }).click();
+  await page.locator(".drc-row", { hasText: "bend-radius" }).locator(".drc-jump").click();
+  await page.locator(".h3d-workspace canvas").waitFor();
+  await expect(page.locator(`.h3d-label [data-segment="${BATTERY_SEGMENT}"]`)).toHaveAttribute("data-selected", "true");
+
+  const clear = page.getByRole("button", { name: "Clear placement" });
+  await expect(clear).toBeEnabled();
+  await clear.click();
+  // With the placement gone the lead is a sketch again, so nothing is measured and nothing draws red.
+  await expect(page.locator(".h3d-label [data-tight]")).toHaveCount(0);
+});

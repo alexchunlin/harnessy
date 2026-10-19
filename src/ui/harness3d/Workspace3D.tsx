@@ -277,8 +277,8 @@ export function Workspace3D({ world, show, topologyId, referenceModel }: { world
     useDoc.getState().edit((p) => placeParts(p, topologyId, parts), "Place in 3D");
   }
 
-  /** The harness "Clear placement" acts on: the shown one, or with all shown, the one holding the selected part. */
-  const clearTarget = show !== ALL ? [...(world.members[show]?.nodes ?? [])][0] : (harness.nodes.some((n) => n.id === selected) || harness.ties.some((t) => t.id === selected) ? selected : undefined);
+  /** The harness "Clear placement" acts on: the shown one, or with all shown, the one holding the selected part or segment. */
+  const clearTarget = show !== ALL ? [...(world.members[show]?.nodes ?? [])][0] : (harness.nodes.some((n) => n.id === selected) || harness.ties.some((t) => t.id === selected) ? selected : selectedSegment);
   function clearShown() {
     if (clearTarget) useDoc.getState().edit((p) => clearPlacement(p, topologyId, clearTarget), "Clear placement");
   }
