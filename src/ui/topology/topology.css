@@ -42,6 +42,7 @@
 .harness-box.doubled { border-color: var(--error); }
 .harness-box.doubled .harness-box-name { color: var(--error); }
 .harness-box.out-of-layer { opacity: 0.4; }
+.box-selected .harness-box { border-color: var(--accent, #2b6cb0); box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
 .harness-box.out-of-layer .harness-box-title { pointer-events: none; }
 
 .topo-menu { position: fixed; z-index: 50; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px; box-shadow: 0 4px 12px var(--shadow); display: flex; flex-direction: column; }

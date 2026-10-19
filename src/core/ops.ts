@@ -770,6 +770,44 @@ export function setBoxOffset(project: Project, topologyId: string, pieceId: stri
   return updatePieces(project, topologyId, (pieces) => ({ ...pieces, [pieceId]: { ...pieces[pieceId], offset: round(offset) } }));
 }
 
+/** Turn a harness a quarter clockwise. The fourth turn brings it back, so the entry stores 0 to 3 and drops `turns` at 0. */
+export function turnPiece(project: Project, topologyId: string, pieceId: string): Project {
+  return updatePieces(project, topologyId, (pieces) => {
+    const { turns, ...kept } = pieces[pieceId] ?? {};
+    const next = ((turns ?? 0) + 1) % 4;
+    const entry = next ? { ...kept, turns: next } : kept;
+    const rest = { ...pieces };
+    if (Object.keys(entry).length) rest[pieceId] = entry;
+    else delete rest[pieceId];
+    return rest;
+  });
+}
+
+/**
+ * R in the topology view: turn each piece holding a selected endpoint,
+ * segment, sheath, tie point or harness box (`harness:<piece id>`) once.
+ * Ids that sit in no piece turn nothing.
+ */
+export function turnPiecesHolding(project: Project, topologyId: string, ids: string[]): Project {
+  const t = project.topologies.get(topologyId);
+  if (!t) return project;
+  const all = pieces(buildGraph(t));
+  const held = new Set<string>();
+  const holding = (test: (p: (typeof all)[number]) => boolean) => all.find(test)?.id;
+  for (const id of ids) {
+    const segs = id.startsWith("harness:")
+      ? [id.slice("harness:".length)]
+      : (t.sheaths.find((s) => s.id === id)?.segments ?? [t.ties.find((x) => x.id === id)?.segment ?? id]);
+    for (const s of segs) {
+      const piece = holding((p) => p.segments.has(s) || p.endpoints.has(id));
+      if (piece) held.add(piece);
+    }
+  }
+  let next = project;
+  for (const piece of held) next = turnPiece(next, topologyId, piece);
+  return next;
+}
+
 /** Send a harness box back to its packed place. Its turn stays. */
 export function resetBoxOffset(project: Project, topologyId: string, pieceId: string): Project {
   return updatePieces(project, topologyId, (pieces) => {
