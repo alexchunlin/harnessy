@@ -142,9 +142,12 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   const ordered = [...all.filter((p) => p.built), ...all.filter((p) => !p.built)];
   const roots = new Set(canvas.roots);
   const named = new Map(harnesses(project, graph).map((h) => [h.piece.id, h]));
-  // Each piece in its own frame first. A turn about the piece's centre belongs here, before the bounds are taken.
+  // Each piece in its own frame first, turned about its centre before the bounds are taken.
+  const turnsOf = new Map<string, number>();
   const laid = ordered.map((piece) => {
-    const { pos: local, arcs } = layoutPiece(graph, piece, roots);
+    const turns = canvas.pieces[piece.id]?.turns ?? 0;
+    for (const id of piece.endpoints) turnsOf.set(id, turns);
+    const { pos: local, arcs } = turnAboutCentre(layoutPiece(graph, piece, roots), turns);
     return { piece, local, arcs, rect: bounds(graph, local) };
   });
   const home: Positions = new Map();
@@ -171,7 +174,7 @@ export function layoutTopology(project: Project, topology: Topology, canvas: Top
   // A waiting connector with an endpoint record draws where the grid puts it. Other endpoints with no segment have no home.
   for (const g of waiting) for (const c of g.connectors) if (c.endpoint) home.set(c.endpoint, c.position);
 
-  const { endpoints, anchor, callouts } = applyOffsets(graph, home, canvas.offsets);
+  const { endpoints, anchor, callouts } = applyOffsets(graph, home, canvas.offsets, turnsOf);
   out.forEach((p, i) => {
     if (!p.box) return;
     const members = [...laid[i].piece.endpoints].map((id) => ({ at: endpoints.get(id)!.drawn, size: ENDPOINT_SIZE[graph.endpoints.get(id)!.kind] }));
@@ -223,18 +226,19 @@ export function segmentEnd(kind: Endpoint["kind"], centre: Position, other: Posi
  * stay true at home and a call-out line points to the box. A waiting
  * endpoint has no offset. `anchor` is where each endpoint's segments aim.
  */
-function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["offsets"]) {
+function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["offsets"], turnsOf: Map<string, number>) {
   const endpoints = new Map<string, EndpointLayout>();
   const anchor: Positions = new Map();
   const callouts: Callout[] = [];
   for (const [id, p] of home) {
-    const offset = degree(graph, id) > 0 ? offsets[id] : undefined;
-    if (!offset) {
+    const stored = degree(graph, id) > 0 ? offsets[id] : undefined;
+    if (!stored) {
       endpoints.set(id, { home: p, drawn: p });
       anchor.set(id, p);
       continue;
     }
-    // The offset is in its harness's frame. A turned harness rotates it here before it lands on the canvas.
+    // The offset is in its harness's frame, so it turns with the harness before it lands on the canvas.
+    const offset = quarterTurns(stored, turnsOf.get(id) ?? 0);
     const drawn = { x: p.x + offset.x, y: p.y + offset.y };
     endpoints.set(id, { home: p, drawn });
     if (Math.hypot(offset.x, offset.y) > CALLOUT_DISTANCE) {
@@ -244,6 +248,35 @@ function applyOffsets(graph: Graph, home: Positions, offsets: TopologyCanvas["of
   }
   callouts.sort((a, b) => (a.endpoint < b.endpoint ? -1 : a.endpoint > b.endpoint ? 1 : 0));
   return { endpoints, anchor, callouts };
+}
+
+// Turns -------------------------------------------------------------------------
+
+/** A vector turned a quarter clockwise `turns` times, on a screen where y points down. */
+function quarterTurns(v: Position, turns: number): Position {
+  let { x, y } = v;
+  for (let i = 0; i < turns; i++) [x, y] = [-y, x];
+  return { x, y };
+}
+
+/**
+ * Turn a piece's homes and fan arcs about the centre of the homes' bounds.
+ * Endpoint boxes and labels stay upright, so only centres and arc angles move.
+ */
+function turnAboutCentre(piece: { pos: Positions; arcs: FanArc[] }, turns: number): { pos: Positions; arcs: FanArc[] } {
+  if (!turns || piece.pos.size === 0) return piece;
+  const xs = [...piece.pos.values()].map((p) => p.x);
+  const ys = [...piece.pos.values()].map((p) => p.y);
+  const c = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const turn = (p: Position) => {
+    const v = quarterTurns({ x: p.x - c.x, y: p.y - c.y }, turns);
+    return { x: c.x + v.x, y: c.y + v.y };
+  };
+  const pos: Positions = new Map();
+  for (const [id, p] of piece.pos) pos.set(id, turn(p));
+  // Angles run clockwise with screen y down, so each quarter turn adds 90 degrees.
+  const arcs = piece.arcs.map((a) => ({ ...a, centre: turn(a.centre), from: a.from + 90 * turns, to: a.to + 90 * turns }));
+  return { pos, arcs };
 }
 
 // The waiting grid ------------------------------------------------------------------

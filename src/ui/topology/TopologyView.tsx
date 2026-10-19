@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, updateTiePoint, type Position, type Project } from "../../core";
+import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, turnPiecesHolding, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
+import { isTyping, turnSelection } from "../keys";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
@@ -321,10 +322,21 @@ function Canvas({ topologyId }: { topologyId: string }) {
     [flow, edit, topologyId, selectIds, startFromGrid],
   );
 
+  // R turns each harness holding the selection a quarter, in one edit.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const ids = turnSelection(e, useDoc.getState().selection, "topology");
+      if (ids.length === 0) return;
+      e.preventDefault();
+      edit((p) => turnPiecesHolding(p, topologyId, ids));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [edit, topologyId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e.target)) return;
       const current = useDoc.getState().selection;
       if (current.view !== "topology") return;
       if (e.key === "Escape" && current.ids.length) selectIds([]);
@@ -368,6 +380,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
             e.preventDefault();
             setMenu({ x: e.clientX, y: e.clientY, piece: node.id.slice("harness:".length) });
           }}
+          onNodeClick={(_, node) => node.type === "harness" && selectIds([node.id])}
           onPaneClick={() => setMenu(null)}
           onMoveStart={() => setMenu(null)}
           onConnect={onConnect}

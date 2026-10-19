@@ -314,7 +314,7 @@ export function deriveTopology(project: Project, topology: Topology, selected: S
     const outOfLayer = [...h.piece.segments].every((id) => segmentOut.has(id));
     nodes.push({
       id: `harness:${h.piece.id}`, type: "harness", position: { x: rect.x, y: rect.y }, data: { harness: h, outOfLayer }, selectable: false, draggable: !outOfLayer, dragHandle: ".harness-box-title",
-      className: outOfLayer ? "out-of-layer" : undefined, style: { pointerEvents: "none" }, zIndex: 0, width: rect.w, height: rect.h, measured: { width: rect.w, height: rect.h },
+      className: [outOfLayer && "out-of-layer", selected.has(`harness:${h.piece.id}`) && "box-selected"].filter(Boolean).join(" ") || undefined, style: { pointerEvents: "none" }, zIndex: 0, width: rect.w, height: rect.h, measured: { width: rect.w, height: rect.h },
     });
   }
 

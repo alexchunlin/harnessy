@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
-import { layoutTopology, loadLibrary, loadProject, type FanArc, type Files, type PieceLayout, type Position } from "../../src/core";
+import { buildGraph, layoutTopology, loadLibrary, loadProject, pieces, type FanArc, type Files, type PieceLayout, type Position } from "../../src/core";
 
 export const E2E_HOME = process.env.HARNESSY_E2E_HOME ?? "/tmp/harnessy-e2e";
 const REPO = process.cwd();
@@ -120,4 +120,15 @@ export async function harnessBoxes(folder: string, topologyId: string): Promise<
   await readTree(folder, "", files);
   const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
   return layoutTopology(project, project.topologies.get(topologyId)!, project.topologyCanvases.get(topologyId)!).pieces;
+}
+
+/** Core's pieces of one topology for the project as saved in `folder`, each with its endpoints and their kinds. */
+export async function topologyPieces(folder: string, topologyId: string): Promise<{ id: string; built: boolean; kinds: Map<string, string> }[]> {
+  const libraryFiles: Files = new Map();
+  await readTree(REPO, "library", libraryFiles);
+  const files: Files = new Map();
+  await readTree(folder, "", files);
+  const { project } = loadProject(files, loadLibrary(libraryFiles, "library/").library);
+  const graph = buildGraph(project.topologies.get(topologyId)!);
+  return pieces(graph).map((p) => ({ id: p.id, built: p.built, kinds: new Map([...p.endpoints].sort().map((e) => [e, graph.endpoints.get(e)!.kind])) }));
 }
