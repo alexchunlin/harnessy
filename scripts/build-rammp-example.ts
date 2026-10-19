@@ -15,9 +15,8 @@ import { starterProject } from "../src/core/starter";
 import * as ops from "../src/core/ops";
 import { runChecks } from "../src/core/drc";
 import { buildBom } from "../src/core/bom";
-import type { Endpoint, Net, Position, Side, Topology } from "../src/core/schema";
+import type { Net, Position, Side } from "../src/core/schema";
 import { boxGeometry, fittedWidth } from "../src/ui/connectivity/model";
-import { ENDPOINT_SIZE } from "../src/ui/topology/model";
 
 setIdSource(sequentialIdSource());
 
@@ -231,15 +230,15 @@ const topology = ops.createTopology(p, "Gen 1.5 as built");
 p = topology.project;
 const top = topology.id;
 
-function connector(address: string, pos: Position): string {
-  const r = ops.placeConnector(p, top, address, pos);
+function connector(address: string): string {
+  const r = ops.placeConnector(p, top, address);
   p = r.project;
   return r.id;
 }
 
 /** Grow a point from an endpoint. The point becomes a breakout once a third segment lands on it. */
-function grow(from: string, pos: Position, lengthMm: number): { segment: string; endpoint: string } {
-  const r = ops.growSegment(p, top, from, pos);
+function grow(from: string, lengthMm: number): { segment: string; endpoint: string } {
+  const r = ops.growSegment(p, top, from);
   p = ops.setSegmentLength(r.project, top, r.segment, lengthMm);
   return { segment: r.segment, endpoint: r.endpoint };
 }
@@ -267,9 +266,9 @@ function tie(segment: string, spec: string, distanceMm: number): void {
 }
 
 /** Place a purchased cable between two connectors. It is its own piece, never part of a harness. */
-function purchased(a: string, b: string, assembly: string, pos: Position): void {
-  const ea = connector(a, pos);
-  const eb = connector(b, { x: pos.x + 200, y: pos.y });
+function purchased(a: string, b: string, assembly: string): void {
+  const ea = connector(a);
+  const eb = connector(b);
   const seg = join2(ea, eb, 0);
   p = ops.setSegmentAssembly(p, top, seg, `assemblies/${assembly}`);
 }
@@ -278,56 +277,54 @@ function purchased(a: string, b: string, assembly: string, pos: Position): void 
  * Stubs from a row of connectors into one breakout. The first connector grows
  * the point; the rest join it, which promotes it to a breakout.
  */
-function fan(addresses: string[], origin: Position, hub: Position, stubMm: number): string {
+function fan(addresses: string[], stubMm: number): string {
   let hubId = "";
   addresses.forEach((address, i) => {
-    const ep = connector(address, { x: origin.x + i * 60, y: origin.y });
-    if (i === 0) hubId = grow(ep, hub, stubMm).endpoint;
+    const ep = connector(address);
+    if (i === 0) hubId = grow(ep, stubMm).endpoint;
     else join2(ep, hubId, stubMm);
   });
   return hubId;
 }
 
-/** Leaves hanging off a breakout, laid out in a row. */
-function leaves(from: string, items: { address: string; lengthMm: number }[], origin: Position): void {
-  items.forEach((item, i) => {
-    const ep = connector(item.address, { x: origin.x + i * 60, y: origin.y });
+/** Leaves hanging off a breakout. */
+function leaves(from: string, items: { address: string; lengthMm: number }[]): void {
+  items.forEach((item) => {
+    const ep = connector(item.address);
     join2(from, ep, item.lengthMm);
   });
 }
 
-// Purchased cables, laid out in rows on the right of the topology canvas.
-let row = 0;
-const purchasedRow = (x: number) => ({ x, y: 40 + row++ * 50 });
-for (const n of ethNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
-for (const n of canNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
-for (const n of usbNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
-purchased(hdmiNet.a, hdmiNet.b, hdmiNet.assembly, purchasedRow(2400));
-for (const n of gmslNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
+// Purchased cables.
+for (const n of ethNets) purchased(n.a, n.b, n.assembly);
+for (const n of canNets) purchased(n.a, n.b, n.assembly);
+for (const n of usbNets) purchased(n.a, n.b, n.assembly);
+purchased(hdmiNet.a, hdmiNet.b, hdmiNet.assembly);
+for (const n of gmslNets) purchased(n.a, n.b, n.assembly);
 
 // Battery leads: three single-segment harnesses.
 {
-  const a = connector(at(battery, "MAIN"), { x: 40, y: 40 });
-  const b = connector(at(inlineSwitch, "IN"), { x: 240, y: 40 });
+  const a = connector(at(battery, "MAIN"));
+  const b = connector(at(inlineSwitch, "IN"));
   anchor(join2(a, b, 300), "Battery lead");
-  const c = connector(at(inlineSwitch, "OUT"), { x: 40, y: 100 });
-  const d = connector(at(busBar, "BAT"), { x: 240, y: 100 });
+  const c = connector(at(inlineSwitch, "OUT"));
+  const d = connector(at(busBar, "BAT"));
   anchor(join2(c, d, 250), "Bus bar feed");
-  const e = connector(at(battery, "CHG"), { x: 40, y: 160 });
-  const f = connector(at(chargePort, "J1"), { x: 240, y: 160 });
+  const e = connector(at(battery, "CHG"));
+  const f = connector(at(chargePort, "J1"));
   anchor(join2(e, f, 400), "Charge lead");
 }
 
 // Power harness, front: bus bar L1 to L5 through a sheathed trunk to the front loads.
 {
-  const b0 = fan(["L1", "L2", "L3", "L4", "L5"].map((d) => at(busBar, d)), { x: 40, y: 300 }, { x: 160, y: 380 }, 80);
+  const b0 = fan(["L1", "L2", "L3", "L4", "L5"].map((d) => at(busBar, d)), 80);
   breakoutSpec(b0, "tape-transition");
-  const p1 = grow(b0, { x: 160, y: 480 }, 400);
-  const b1 = grow(p1.endpoint, { x: 160, y: 580 }, 350);
-  leaves(b1.endpoint, [{ address: at(drive[0].racer, "PWR"), lengthMm: 500 }, { address: at(drive[1].racer, "PWR"), lengthMm: 500 }], { x: 40, y: 660 });
-  const p2 = grow(b1.endpoint, { x: 280, y: 580 }, 300);
-  const b2 = grow(p2.endpoint, { x: 380, y: 580 }, 200);
-  leaves(b2.endpoint, [{ address: at(eth, "PWR"), lengthMm: 300 }, { address: at(dcdc, "IN"), lengthMm: 400 }, { address: at(mib, "PWR"), lengthMm: 350 }], { x: 320, y: 660 });
+  const p1 = grow(b0, 400);
+  const b1 = grow(p1.endpoint, 350);
+  leaves(b1.endpoint, [{ address: at(drive[0].racer, "PWR"), lengthMm: 500 }, { address: at(drive[1].racer, "PWR"), lengthMm: 500 }]);
+  const p2 = grow(b1.endpoint, 300);
+  const b2 = grow(p2.endpoint, 200);
+  leaves(b2.endpoint, [{ address: at(eth, "PWR"), lengthMm: 300 }, { address: at(dcdc, "IN"), lengthMm: 400 }, { address: at(mib, "PWR"), lengthMm: 350 }]);
   breakoutSpec(b1.endpoint, "heatshrink-transition");
   breakoutSpec(b2.endpoint, "heatshrink-transition");
   anchor(p1.segment, "Power harness, front");
@@ -339,14 +336,14 @@ for (const n of gmslNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
 
 // Power harness, rear: bus bar L6 to L10 to the rear drive corners and the RoboClaws.
 {
-  const b3 = fan(["L6", "L7", "L8", "L9", "L10"].map((d) => at(busBar, d)), { x: 40, y: 800 }, { x: 160, y: 880 }, 80);
+  const b3 = fan(["L6", "L7", "L8", "L9", "L10"].map((d) => at(busBar, d)), 80);
   breakoutSpec(b3, "tape-transition");
-  const p1 = grow(b3, { x: 160, y: 980 }, 300);
-  const b4 = grow(p1.endpoint, { x: 160, y: 1080 }, 300);
-  leaves(b4.endpoint, [{ address: at(drive[2].racer, "PWR"), lengthMm: 450 }, { address: at(drive[3].racer, "PWR"), lengthMm: 900 }], { x: 40, y: 1160 });
-  const p2 = grow(b4.endpoint, { x: 280, y: 1080 }, 250);
-  const b5 = grow(p2.endpoint, { x: 380, y: 1080 }, 200);
-  leaves(b5.endpoint, [{ address: at(rcL, "PWR"), lengthMm: 400 }, { address: at(rcR, "PWR"), lengthMm: 700 }, { address: at(rcRear, "PWR"), lengthMm: 250 }], { x: 320, y: 1160 });
+  const p1 = grow(b3, 300);
+  const b4 = grow(p1.endpoint, 300);
+  leaves(b4.endpoint, [{ address: at(drive[2].racer, "PWR"), lengthMm: 450 }, { address: at(drive[3].racer, "PWR"), lengthMm: 900 }]);
+  const p2 = grow(b4.endpoint, 250);
+  const b5 = grow(p2.endpoint, 200);
+  leaves(b5.endpoint, [{ address: at(rcL, "PWR"), lengthMm: 400 }, { address: at(rcR, "PWR"), lengthMm: 700 }, { address: at(rcRear, "PWR"), lengthMm: 250 }]);
   breakoutSpec(b4.endpoint, "heatshrink-transition");
   breakoutSpec(b5.endpoint, "heatshrink-transition");
   anchor(p1.segment, "Power harness, rear");
@@ -356,16 +353,15 @@ for (const n of gmslNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
 // MIB sensor harness: twelve MIB connectors through one trunk to four sensor clusters.
 {
   const mibAddresses = [1, 2, 3, 4].flatMap((n) => [at(mib, `AIN${n}`), at(mib, `ENC${n}`), at(mib, `DIO${n}`)]);
-  const bm = fan(mibAddresses, { x: 700, y: 300 }, { x: 1030, y: 400 }, 60);
+  const bm = fan(mibAddresses, 60);
   breakoutSpec(bm, "heatshrink-transition");
-  const p1 = grow(bm, { x: 1030, y: 500 }, 250);
-  const bc = grow(p1.endpoint, { x: 1030, y: 600 }, 200);
+  const p1 = grow(bm, 250);
+  const bc = grow(p1.endpoint, 200);
   breakoutSpec(bc.endpoint, "tape-transition");
   const legMm: Record<string, number> = { front: 600, left: 500, right: 500, rear: 400 };
-  clusters.forEach((c, i) => {
-    const x = 760 + i * 200;
-    const leg = grow(bc.endpoint, { x, y: 700 }, legMm[c.tag]);
-    leaves(leg.endpoint, [{ address: at(c.strain, "J1"), lengthMm: 150 }, { address: at(c.pwm, "J1"), lengthMm: 150 }, { address: at(c.limit, "J1"), lengthMm: 200 }], { x: x - 60, y: 780 });
+  clusters.forEach((c) => {
+    const leg = grow(bc.endpoint, legMm[c.tag]);
+    leaves(leg.endpoint, [{ address: at(c.strain, "J1"), lengthMm: 150 }, { address: at(c.pwm, "J1"), lengthMm: 150 }, { address: at(c.limit, "J1"), lengthMm: 200 }]);
     breakoutSpec(leg.endpoint, "tape-transition");
   });
   anchor(p1.segment, "MIB sensor harness");
@@ -374,26 +370,25 @@ for (const n of gmslNets) purchased(n.a, n.b, n.assembly, purchasedRow(2400));
 }
 
 // RoboClaw axis harnesses: motor and encoder for both channels of one controller.
-function roboclawHarness(rc: string, name: string, axesOf: Axis[], origin: Position, legMm: [number, number]): void {
-  const stubs = fan([at(rc, "M1"), at(rc, "ENC1"), at(rc, "M2"), at(rc, "ENC2")], origin, { x: origin.x + 90, y: origin.y + 80 }, 100);
+function roboclawHarness(rc: string, name: string, axesOf: Axis[], legMm: [number, number]): void {
+  const stubs = fan([at(rc, "M1"), at(rc, "ENC1"), at(rc, "M2"), at(rc, "ENC2")], 100);
   breakoutSpec(stubs, "heatshrink-transition");
   axesOf.forEach((axis, i) => {
-    const leg = grow(stubs, { x: origin.x + i * 180, y: origin.y + 180 }, legMm[i]);
-    leaves(leg.endpoint, [{ address: at(axis.motor, "MOT"), lengthMm: 150 }, { address: at(axis.enc, "J1"), lengthMm: 150 }], { x: origin.x + i * 180 - 30, y: origin.y + 260 });
+    const leg = grow(stubs, legMm[i]);
+    leaves(leg.endpoint, [{ address: at(axis.motor, "MOT"), lengthMm: 150 }, { address: at(axis.enc, "J1"), lengthMm: 150 }]);
     breakoutSpec(leg.endpoint, "y-boot");
     if (i === 0) anchor(leg.segment, name);
   });
 }
-roboclawHarness(rcL, "RoboClaw L axis harness", axes.filter((a) => a.rc === rcL), { x: 700, y: 900 }, [300, 350]);
-roboclawHarness(rcR, "RoboClaw R axis harness", axes.filter((a) => a.rc === rcR), { x: 1100, y: 900 }, [300, 350]);
-roboclawHarness(rcRear, "RoboClaw rear axis harness", axes.filter((a) => a.rc === rcRear), { x: 1500, y: 900 }, [250, 900]);
+roboclawHarness(rcL, "RoboClaw L axis harness", axes.filter((a) => a.rc === rcL), [300, 350]);
+roboclawHarness(rcR, "RoboClaw R axis harness", axes.filter((a) => a.rc === rcR), [300, 350]);
+roboclawHarness(rcRear, "RoboClaw rear axis harness", axes.filter((a) => a.rc === rcRear), [250, 900]);
 
 // Drive corner harnesses: three-phase plus SPI encoder from a PACE RACER to its motor.
-drive.forEach((d, i) => {
-  const origin = { x: 700 + i * 300, y: 1250 };
-  const stubs = fan([at(d.racer, "MOT"), at(d.racer, "ENC")], origin, { x: origin.x + 30, y: origin.y + 80 }, 100);
-  const leg = grow(stubs, { x: origin.x + 30, y: origin.y + 180 }, 250);
-  leaves(leg.endpoint, [{ address: at(d.motor, "MOT"), lengthMm: 100 }, { address: at(d.enc, "J1"), lengthMm: 100 }], { x: origin.x, y: origin.y + 260 });
+drive.forEach((d) => {
+  const stubs = fan([at(d.racer, "MOT"), at(d.racer, "ENC")], 100);
+  const leg = grow(stubs, 250);
+  leaves(leg.endpoint, [{ address: at(d.motor, "MOT"), lengthMm: 100 }, { address: at(d.enc, "J1"), lengthMm: 100 }]);
   breakoutSpec(stubs, "y-boot");
   breakoutSpec(leg.endpoint, "y-boot");
   anchor(leg.segment, `Drive corner ${d.tag} harness`);
@@ -402,10 +397,10 @@ drive.forEach((d, i) => {
 
 // 24 V harness from the DC/DC to the four 24 V loads.
 {
-  const b = fan([1, 2, 3, 4].map((n) => at(dcdc, `OUT${n}`)), { x: 1900, y: 300 }, { x: 1990, y: 380 }, 80);
+  const b = fan([1, 2, 3, 4].map((n) => at(dcdc, `OUT${n}`)), 80);
   breakoutSpec(b, "heatshrink-transition");
-  const p1 = grow(b, { x: 1990, y: 480 }, 300);
-  const b2 = grow(p1.endpoint, { x: 1990, y: 580 }, 200);
+  const p1 = grow(b, 300);
+  const b2 = grow(p1.endpoint, 200);
   breakoutSpec(b2.endpoint, "tape-transition");
   leaves(
     b2.endpoint,
@@ -415,7 +410,6 @@ drive.forEach((d, i) => {
       { address: at(jetson, "PWR"), lengthMm: 500 },
       { address: at(joystick, "PWR"), lengthMm: 900 },
     ],
-    { x: 1900, y: 660 },
   );
   anchor(p1.segment, "24 V harness");
   sheath([p1.segment, b2.segment], "braid-6mm");
@@ -424,7 +418,7 @@ drive.forEach((d, i) => {
 
 // Drawn in the app, after everything else so the earlier ids stay put:
 // a 100 mm run from the MIB's spare CAN-B to the rear RoboClaw's CAN-B, with no net on it yet.
-join2(connector(at(mib, "CAN-B"), { x: 538, y: 104 }), connector(at(rcRear, "CAN-B"), { x: 556, y: 324 }), 100);
+join2(connector(at(mib, "CAN-B")), connector(at(rcRear, "CAN-B")), 100);
 
 // Keep the layout already on disk ----------------------------------------------------
 
@@ -435,7 +429,8 @@ join2(connector(at(mib, "CAN-B"), { x: 538, y: 104 }), connector(at(rcRear, "CAN
  * component is matched by its name, a net by the connectors it joins, a
  * connector endpoint by its address, and a breakout or point by the
  * connectors hanging directly off it. Anything left takes the position
- * typed above.
+ * typed above. The topology view lays itself out, so its canvas keeps
+ * nothing to carry over.
  */
 
 /** `cmp-k3f9qa/CAN-A` as `MIB/CAN-A`: stable while the component keeps its name. */
@@ -451,33 +446,7 @@ function netKey(project: Project, net: Net): string {
     .join("|");
 }
 
-/**
- * A stable key per endpoint: its address for a connector, else the keys of
- * its neighbours, worked outward from the connectors so a point deep in a
- * harness still has one. Keys two endpoints share are left out.
- */
-function endpointKeys(project: Project, t: Topology): [string, Endpoint][] {
-  const byId = new Map(t.endpoints.map((e) => [e.id, e]));
-  const neighbours = (id: string) => t.segments.filter((s) => s.ends.includes(id)).map((s) => byId.get(s.ends[0] === id ? s.ends[1] : s.ends[0])).filter((n): n is Endpoint => n !== undefined);
-  let keys = new Map<string, string>();
-  for (const e of t.endpoints) if (e.kind === "connector") keys.set(e.id, addressKey(project, e.connector));
-  for (let pass = 0; pass < t.endpoints.length; pass++) {
-    // Each pass reads the previous one, so the result does not depend on endpoint order.
-    const next = new Map(keys);
-    for (const e of t.endpoints) {
-      if (keys.has(e.id)) continue;
-      const near = neighbours(e.id).filter((n) => keys.has(n.id)).map((n) => keys.get(n.id)!).sort();
-      if (near.length) next.set(e.id, `via ${near.join("|")}`);
-    }
-    if (next.size === keys.size) break;
-    keys = next;
-  }
-  const seen = new Map<string, number>();
-  for (const key of keys.values()) seen.set(key, (seen.get(key) ?? 0) + 1);
-  return t.endpoints.filter((e) => keys.has(e.id) && seen.get(keys.get(e.id)!) === 1).map((e) => [keys.get(e.id)!, e]);
-}
-
-const kept = { components: new Set<string>(), endpoints: new Set<string>() };
+const kept = { components: new Set<string>() };
 if (existsSync(join(OUT, "project.json"))) {
   const files: Files = new Map();
   const walkOut = (dir: string) => {
@@ -512,15 +481,6 @@ if (existsSync(join(OUT, "project.json"))) {
       if (spoke) bends.set(`${key}@${addressKey(old, a)}`, spoke);
     }
   }
-  const endpoints = new Map<string, Position>();
-  for (const [id, t] of old.topologies) {
-    const c = old.topologyCanvases.get(id);
-    if (!c) continue;
-    for (const [key, e] of endpointKeys(old, t)) {
-      const pos = c.endpoints[e.id];
-      if (pos) endpoints.set(key, pos);
-    }
-  }
 
   for (const c of [...p.components.values()]) {
     const pos = positions.get(c.name);
@@ -540,13 +500,6 @@ if (existsSync(join(OUT, "project.json"))) {
     for (const a of net.connectors) {
       const spoke = bends.get(`${key}@${addressKey(p, a)}`);
       if (spoke) p = ops.setBends(p, ops.bendsKey(net.id, a), spoke);
-    }
-  }
-  for (const [key, e] of endpointKeys(p, p.topologies.get(top)!)) {
-    const pos = endpoints.get(key);
-    if (pos) {
-      p = ops.moveEndpoint(p, top, e.id, pos);
-      kept.endpoints.add(e.id);
     }
   }
 }
@@ -612,12 +565,6 @@ function spreadOut(boxes: Box[], move: (id: string, pos: Position) => void): voi
     return { id: c.id, x: pos.x, y: pos.y, w: g.width, h: g.height, kept: kept.components.has(c.id) };
   });
   spreadOut(boxes, (id, pos) => (p = ops.moveComponent(p, id, pos)));
-}
-{
-  const t0 = p.topologies.get(top)!;
-  const canvas = p.topologyCanvases.get(top)!;
-  const boxes: Box[] = t0.endpoints.map((e) => ({ id: e.id, ...canvas.endpoints[e.id], ...ENDPOINT_SIZE[e.kind], kept: kept.endpoints.has(e.id) }));
-  spreadOut(boxes, (id, pos) => (p = ops.moveEndpoint(p, top, id, pos)));
 }
 
 // Check, report, write ----------------------------------------------------------------

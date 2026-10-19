@@ -10,6 +10,8 @@ export interface ComponentNodeData {
   types: Record<string, string>;
   geometry: BoxGeometry;
   dimmed: boolean;
+  /** Glows like a hovered box: a connector of this component is selected on the topology canvas. */
+  lit: boolean;
   /** designator to the nets attached there, with their display labels, for handle tooltips */
   netsAt: Record<string, { net: Net; domain: Domain; label: string }[]>;
   /** designator to domain colour, for pins on a net lit from the topology canvas */
@@ -129,6 +131,14 @@ export function boxGeometry(sides: Record<Side, string[]>, width = NODE_WIDTH): 
   return { width: w, height, header: topBand, sides, pins };
 }
 
+/** The size a component's box would draw at with its pins arranged as `sides`, for an op that rearranges them. */
+export function boxSizeFor(data: ComponentNodeData, sides: Record<Side, string[]>): { w: number; h: number } {
+  const dots: Record<string, number> = {};
+  for (const [d, nets] of Object.entries(data.netsAt)) dots[d] = nets.length;
+  const g = boxGeometry(sides, fittedWidth(data.component.name, sides, dots, data.component.definition === undefined, data.types));
+  return { w: g.width, h: g.height };
+}
+
 /**
  * The line that draws a bridge inside a box: a stub from each bridged pin to
  * a spine. The spine runs down the middle when the pins sit on both sides
@@ -190,8 +200,11 @@ export function hubDefaultPosition(project: Project, net: Net): Position {
   return { x: Math.round(pts.reduce((s, p) => s + p.x, 0) / pts.length + NODE_WIDTH / 2), y: Math.round(pts.reduce((s, p) => s + p.y, 0) / pts.length + 60) };
 }
 
-/** Derive the canvas. `lit` holds nets selected on the topology canvas, which glow here without being selected. */
-export function deriveFlow(project: Project, layerId: string, selected: Set<string>, lit: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
+/**
+ * Derive the canvas. `lit` holds nets and `litBoxes` components that a
+ * topology selection lights, which glow here without being selected.
+ */
+export function deriveFlow(project: Project, layerId: string, selected: Set<string>, lit: Set<string>, litBoxes: Set<string>): { nodes: FlowNode[]; edges: Edge<NetEdgeData>[] } {
   const domains = new Map(project.file.domains.map((d) => [d.id, d]));
   const visible = activeDomains(project, layerId);
   const nets = allNets(project);
@@ -247,7 +260,7 @@ export function deriveFlow(project: Project, layerId: string, selected: Set<stri
       id: c.id,
       type: "component",
       position: project.connectivityCanvas.components[c.id] ?? { x: 0, y: 0 },
-      data: { component: c, connectors, types, geometry, dimmed, netsAt: at, litPins, busNets, bridges },
+      data: { component: c, connectors, types, geometry, dimmed, lit: litBoxes.has(c.id), netsAt: at, litPins, busNets, bridges },
       selected: selected.has(c.id),
       selectable: !dimmed,
       connectable: !dimmed,

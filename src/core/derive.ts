@@ -1,4 +1,5 @@
 import type { Component, Endpoint, Net, Position, Segment, Topology } from "./schema";
+import { parseAddress } from "./refs";
 import { allNets, componentBridges, componentConnectors, connectorLabel, netLabel, type Project } from "./project";
 /**
  * Derivations over one topology. Nothing here is stored; every result is
@@ -365,7 +366,8 @@ export function allRoutes(project: Project, graph: Graph): Route[] {
  */
 export function ratsnestPairs(route: Route, positions: Map<string, Position>): [string, string][] {
   if (isRouted(route)) return [];
-  const placed = route.placedEndpoints.filter((e) => positions.has(e));
+  // A waiting connector with no endpoint record draws at its address, and the ratsnest reaches it there too.
+  const placed = [...route.placedEndpoints, ...route.unplaced].filter((e) => positions.has(e));
   if (placed.length < 2) return [];
   const at = (e: string) => positions.get(e)!;
   const ordered = [...placed].sort((a, b) => at(a).x - at(b).x || at(a).y - at(b).y || (a < b ? -1 : 1));
@@ -382,6 +384,34 @@ export function netsOnSegments(routes: Route[]): Map<string, Route[]> {
     out.get(s)!.push(r);
   }
   return out;
+}
+
+/**
+ * What a topology selection lights on the connectivity canvas, read-only.
+ * A net lights itself and a segment lights the nets routed through it. A
+ * connector endpoint lights its component and the nets that end on that
+ * connector. On a bus that means its own nets, never the whole bus (ADR 0004).
+ */
+export function topologyLight(project: Project, topology: Topology, ids: string[]): { nets: Set<string>; components: Set<string> } {
+  const nets = new Set<string>();
+  const components = new Set<string>();
+  if (ids.length === 0) return { nets, components };
+  const graph = buildGraph(topology);
+  const routes = allRoutes(project, graph);
+  const onSegments = netsOnSegments(routes);
+  const lightConnector = (address: string) => {
+    components.add(parseAddress(address).component);
+    for (const r of routes) if (r.net.connectors.includes(address)) nets.add(r.net.id);
+  };
+  for (const id of ids) {
+    if (routes.some((r) => r.net.id === id)) nets.add(id);
+    for (const r of onSegments.get(id) ?? []) nets.add(r.net.id);
+    const end = graph.endpoints.get(id);
+    if (end?.kind === "connector") lightConnector(end.connector);
+    // A waiting connector with no endpoint record is selected by its address.
+    else if (!end && project.components.has(id.split("/")[0])) lightConnector(id);
+  }
+  return { nets, components };
 }
 
 /** Nets whose route passes through an endpoint. */

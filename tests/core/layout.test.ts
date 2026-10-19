@@ -1,0 +1,517 @@
+import { describe, expect, it } from "vitest";
+import * as ops from "../../src/core/ops";
+import { CALLOUT_DISTANCE, ENDPOINT_SIZE, layoutTopology, SIBLING_PITCH, STEP_DEGREES, UNIFORM_LENGTH } from "../../src/core/layout";
+import type { Position, TopologyCanvas } from "../../src/core/schema";
+import type { Project } from "../../src/core/project";
+import { freshProject, loadExample } from "./fixture";
+
+const EMPTY: TopologyCanvas = { offsets: {}, pieces: {}, roots: [] };
+
+/** A topology to grow by hand. Connectors come from MIB components, four apiece, made as needed. */
+function bench() {
+  let p: Project = freshProject();
+  const t = ops.createTopology(p, "Bench");
+  p = t.project;
+  const top = t.id;
+  const free: string[] = [];
+  const b = {
+    get project() {
+      return p;
+    },
+    top,
+    connector(): string {
+      if (free.length === 0) {
+        const c = ops.placeComponent(p, "components/mib", { x: 0, y: 0 });
+        p = c.project;
+        free.push(...["P1", "J1", "J2", "ETH"].map((d) => `${c.id}/${d}`));
+      }
+      const r = ops.placeConnector(p, top, free.shift()!);
+      p = r.project;
+      return r.id;
+    },
+    splice(): string {
+      const r = ops.addEndpoint(p, top, "splice");
+      p = r.project;
+      return r.id;
+    },
+    point(): string {
+      const r = ops.addEndpoint(p, top, "point");
+      p = r.project;
+      return r.id;
+    },
+    join(a: string, z: string): string {
+      const r = ops.addSegment(p, top, a, z, 100);
+      p = r.project;
+      return r.id;
+    },
+    purchased(a: string, z: string): string {
+      const id = b.join(a, z);
+      p = ops.setSegmentAssembly(p, top, id, "assemblies/rj45-patch-500");
+      return id;
+    },
+    layout(canvas: TopologyCanvas = EMPTY) {
+      return layoutTopology(p, p.topologies.get(top)!, canvas);
+    },
+  };
+  return b;
+}
+
+const dist = (a: Position, b: Position) => Math.hypot(a.x - b.x, a.y - b.y);
+const angle = (from: Position, to: Position) => (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI;
+/** The signed difference a - b in degrees, folded into (-180, 180]. */
+const turn = (a: number, b: number) => {
+  const d = (((a - b) % 360) + 360) % 360;
+  return d > 180 ? d - 360 : d;
+};
+
+describe("topology layout", () => {
+  it("a breakout spreads three children 15 degrees apart around the away direction, each at the uniform length", () => {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    b.join(start, hub);
+    const kids = [b.connector(), b.connector(), b.connector()];
+    for (const k of kids) b.join(hub, k);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    expect(dist(at(start), at(hub))).toBeCloseTo(UNIFORM_LENGTH);
+    const away = angle(at(start), at(hub));
+    const spread = kids.map((k) => turn(angle(at(hub), at(k)), away)).sort((x, y) => x - y);
+    expect(STEP_DEGREES).toBe(15);
+    expect(spread[0]).toBeCloseTo(-15);
+    expect(spread[1]).toBeCloseTo(0);
+    expect(spread[2]).toBeCloseTo(15);
+    for (const k of kids) expect(dist(at(hub), at(k))).toBeCloseTo(UNIFORM_LENGTH);
+  });
+
+  it("a marked root spreads its children evenly over the full circle", () => {
+    const b = bench();
+    const hub = b.point();
+    const kids = [b.connector(), b.connector(), b.connector(), b.connector()];
+    for (const k of kids) b.join(hub, k);
+    const out = b.layout({ ...EMPTY, roots: [hub] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    const angles = kids.map((k) => angle(at(hub), at(k))).sort((x, y) => x - y);
+    for (let i = 1; i < angles.length; i++) expect(angles[i] - angles[i - 1]).toBeCloseTo(90);
+    for (const k of kids) expect(dist(at(hub), at(k))).toBeCloseTo(UNIFORM_LENGTH);
+  });
+
+  it("with no root marked, the root is the middle of the longest path", () => {
+    // c1 - h1 - h2 - h3 - c4, with a leaf on each breakout. The longest path runs c1 to c4 through five nodes; h2 is its middle.
+    const b = bench();
+    const [h1, h2, h3] = [b.point(), b.point(), b.point()];
+    const c1 = b.connector();
+    const c4 = b.connector();
+    b.join(c1, h1);
+    b.join(h1, h2);
+    b.join(h2, h3);
+    b.join(h3, c4);
+    for (const h of [h1, h2, h3]) b.join(h, b.connector());
+    const out = b.layout();
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    // Only the root spreads over the full circle: its three children sit 120 degrees apart.
+    const spread = [h1, h3, ...[...out.endpoints.keys()].filter((id) => ![c1, c4, h1, h2, h3].includes(id) && dist(at(id), at(h2)) < UNIFORM_LENGTH + 1)];
+    expect(spread).toHaveLength(3);
+    const angles = spread.map((id) => angle(at(h2), at(id))).sort((x, y) => x - y);
+    expect(angles[1] - angles[0]).toBeCloseTo(120);
+    expect(angles[2] - angles[1]).toBeCloseTo(120);
+  });
+
+  it("a chain of points sits evenly on one straight line and takes no step, and each point is still there", () => {
+    const b = bench();
+    const start = b.connector();
+    const chain = [b.point(), b.point(), b.point()];
+    const hub = b.point();
+    b.join(start, chain[0]);
+    b.join(chain[0], chain[1]);
+    b.join(chain[1], chain[2]);
+    b.join(chain[2], hub);
+    const leaves = [b.connector(), b.connector()];
+    for (const l of leaves) b.join(hub, l);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    // The whole chain is one logical edge at the uniform length.
+    expect(dist(at(start), at(hub))).toBeCloseTo(UNIFORM_LENGTH);
+    chain.forEach((id, i) => {
+      const f = (i + 1) / 4;
+      expect(at(id).x).toBeCloseTo(at(start).x + (at(hub).x - at(start).x) * f);
+      expect(at(id).y).toBeCloseTo(at(start).y + (at(hub).y - at(start).y) * f);
+    });
+    // The hub fans its leaves around the line the chain came in on.
+    const away = angle(at(start), at(hub));
+    const spread = leaves.map((l) => turn(angle(at(hub), at(l)), away)).sort((x, y) => x - y);
+    expect(spread[0]).toBeCloseTo(-STEP_DEGREES / 2);
+    expect(spread[1]).toBeCloseTo(STEP_DEGREES / 2);
+  });
+
+  it("a breakout with twenty children fits them in the half circle, at the sibling pitch, and its parent's segment keeps the uniform length", () => {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    b.join(start, hub);
+    const kids = Array.from({ length: 20 }, () => b.connector());
+    for (const k of kids) b.join(hub, k);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    expect(dist(at(start), at(hub))).toBeCloseTo(UNIFORM_LENGTH);
+    const away = angle(at(start), at(hub));
+    const spread = kids.map((k) => turn(angle(at(hub), at(k)), away)).sort((x, y) => x - y);
+    // The fan fills the half circle and no more: its outer children sit square to the away direction.
+    expect(spread[0]).toBeCloseTo(-90);
+    expect(spread[19]).toBeCloseTo(90);
+    // One length for all twenty, longer than uniform, with neighbours one sibling pitch apart.
+    const length = dist(at(hub), at(kids[0]));
+    expect(length).toBeGreaterThan(UNIFORM_LENGTH);
+    for (const k of kids) expect(dist(at(hub), at(k))).toBeCloseTo(length);
+    const byAngle = [...kids].sort((x, y) => turn(angle(at(hub), at(x)), away) - turn(angle(at(hub), at(y)), away));
+    for (let i = 1; i < byAngle.length; i++) expect(dist(at(byAngle[i - 1]), at(byAngle[i]))).toBeCloseTo(SIBLING_PITCH);
+  });
+
+  it("a segment meets a connector box at the point on its edge nearest the other end", () => {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    const seg = b.join(start, hub);
+    const kids = [b.connector(), b.connector(), b.connector()];
+    const kidSegs = kids.map((k) => b.join(hub, k));
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    const { w, h } = ENDPOINT_SIZE.connector;
+
+    const onEdge = (end: Position, centre: Position) => {
+      const dx = Math.abs(end.x - centre.x);
+      const dy = Math.abs(end.y - centre.y);
+      expect(dx).toBeLessThanOrEqual(w / 2 + 1e-9);
+      expect(dy).toBeLessThanOrEqual(h / 2 + 1e-9);
+      expect(Math.abs(dx - w / 2) < 1e-9 || Math.abs(dy - h / 2) < 1e-9).toBe(true);
+    };
+    // The start connector's end: on its edge, and no point of its box is nearer the hub.
+    const [startEnd, hubEnd] = out.segments.get(seg)!;
+    onEdge(startEnd, at(start));
+    const nearest = { x: Math.min(Math.max(at(hub).x, at(start).x - w / 2), at(start).x + w / 2), y: Math.min(Math.max(at(hub).y, at(start).y - h / 2), at(start).y + h / 2) };
+    expect(startEnd.x).toBeCloseTo(nearest.x);
+    expect(startEnd.y).toBeCloseTo(nearest.y);
+    // A breakout end stays at its centre.
+    expect(hubEnd).toEqual(at(hub));
+    kidSegs.forEach((s, i) => onEdge(out.segments.get(s)![1], at(kids[i])));
+  });
+
+  it("carries one fan arc per breakout or splice with children, passing through each child's box", () => {
+    // start - hub; the hub fans to a splice and two connectors; the splice fans to two more.
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    const splice = b.splice();
+    b.join(start, hub);
+    const hubKids = [splice, b.connector(), b.connector()];
+    for (const k of hubKids) b.join(hub, k);
+    const spliceKids = [b.connector(), b.connector()];
+    for (const k of spliceKids) b.join(splice, k);
+    const out = b.layout({ ...EMPTY, roots: [start] });
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+
+    expect(out.arcs.map((a) => a.node).sort()).toEqual([hub, splice].sort());
+    for (const [node, kids] of [[hub, hubKids], [splice, spliceKids]] as const) {
+      const arc = out.arcs.find((a) => a.node === node)!;
+      expect(arc.centre).toEqual(at(node));
+      for (const k of kids) {
+        expect(dist(arc.centre, at(k))).toBeCloseTo(arc.radius);
+        // Each child's angle lies within the arc's sweep, which runs clockwise on screen from `from` to `to`.
+        const a = angle(arc.centre, at(k));
+        expect(turn(a, arc.from)).toBeGreaterThanOrEqual(-1e-6);
+        expect(turn(arc.to, a)).toBeGreaterThanOrEqual(-1e-6);
+      }
+    }
+  });
+
+  it("packs piece rectangles without overlap, purchased cables after harnesses, each endpoint inside its own", () => {
+    const b = bench();
+    const members = new Map<string, string[]>();
+    const purchasedIds: string[] = [];
+    // Purchased cables made first, so their segment ids sort before every harness's.
+    for (let i = 0; i < 2; i++) {
+      const [x, y] = [b.connector(), b.connector()];
+      purchasedIds.push(b.purchased(x, y));
+      members.set(purchasedIds[i], [x, y]);
+    }
+    for (let size = 1; size <= 5; size++) {
+      const hub = b.point();
+      const ends = [hub];
+      let first = "";
+      for (let i = 0; i < size + 2; i++) {
+        const c = b.connector();
+        ends.push(c);
+        const s = b.join(hub, c);
+        first ||= s;
+      }
+      members.set(first, ends);
+    }
+    const out = b.layout();
+    expect(out.pieces).toHaveLength(7);
+    expect(out.pieces.slice(0, 5).every((p) => p.built)).toBe(true);
+    expect(out.pieces.slice(5).map((p) => p.id)).toEqual(purchasedIds);
+
+    const rects = out.pieces.map((p) => p.rect);
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const [r, s] = [rects[i], rects[j]];
+        const overlap = r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h;
+        expect(overlap, `${out.pieces[i].id} and ${out.pieces[j].id}`).toBe(false);
+        // Shelf order: a later piece is further along its row, or on a later row.
+        expect(s.y > r.y || (s.y === r.y && s.x > r.x)).toBe(true);
+      }
+    }
+    for (const p of out.pieces) {
+      for (const id of members.get(p.id)!) {
+        const at = out.endpoints.get(id)!.drawn;
+        expect(at.x).toBeGreaterThanOrEqual(p.rect.x);
+        expect(at.x).toBeLessThanOrEqual(p.rect.x + p.rect.w);
+        expect(at.y).toBeGreaterThanOrEqual(p.rect.y);
+        expect(at.y).toBeLessThanOrEqual(p.rect.y + p.rect.h);
+      }
+    }
+  });
+
+  it("lays out the RAMMP example with no two connector boxes overlapping", () => {
+    const project = loadExample();
+    const [topology] = [...project.topologies.values()];
+    const out = layoutTopology(project, topology, project.topologyCanvases.get(topology.id)!);
+    const { w, h } = ENDPOINT_SIZE.connector;
+    const boxes = topology.endpoints.filter((e) => e.kind === "connector").map((e) => ({ id: e.id, at: out.endpoints.get(e.id)!.drawn }));
+    const overlaps: string[] = [];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const [a, b] = [boxes[i].at, boxes[j].at];
+        if (Math.abs(a.x - b.x) < w && Math.abs(a.y - b.y) < h) overlaps.push(`${boxes[i].id} and ${boxes[j].id}`);
+      }
+    }
+    expect(overlaps).toEqual([]);
+  });
+
+  it("lays out the RAMMP example with every endpoint at a finite position and no two pieces overlapping", () => {
+    const project = loadExample();
+    const [topology] = [...project.topologies.values()];
+    const out = layoutTopology(project, topology, project.topologyCanvases.get(topology.id)!);
+    expect(out.endpoints.size).toBe(topology.endpoints.length);
+    for (const [id, e] of out.endpoints) {
+      expect(Number.isFinite(e.drawn.x) && Number.isFinite(e.drawn.y), id).toBe(true);
+    }
+    expect(out.pieces.length).toBeGreaterThan(1);
+    const rects = out.pieces.map((p) => p.rect);
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const [r, s] = [rects[i], rects[j]];
+        expect(r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h, `${out.pieces[i].id} and ${out.pieces[j].id}`).toBe(false);
+      }
+    }
+  });
+});
+
+describe("endpoint offsets", () => {
+  /** A connector, a breakout with two connector children, and the hub's id. */
+  function fan() {
+    const b = bench();
+    const start = b.connector();
+    const hub = b.point();
+    b.join(start, hub);
+    const kids = [b.connector(), b.connector(), b.connector()];
+    for (const k of kids) b.join(hub, k);
+    return { b, start, hub, kids };
+  }
+
+  it("an offset moves its endpoint only, and its children stay where the home put them", () => {
+    const { b, start, hub, kids } = fan();
+    const plain = b.layout({ ...EMPTY, roots: [start] });
+    const moved = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 10, y: -6 } } });
+
+    const before = plain.endpoints.get(hub)!;
+    const after = moved.endpoints.get(hub)!;
+    expect(after.home).toEqual(before.home);
+    expect(after.drawn).toEqual({ x: before.home.x + 10, y: before.home.y - 6 });
+    for (const id of [start, ...kids]) expect(moved.endpoints.get(id)).toEqual(plain.endpoints.get(id));
+  });
+
+  it("past the call-out distance its segments end at home and a call-out line runs from home to the box; within it, segments end at the box and there is no line", () => {
+    const { b, start, hub } = fan();
+    const seg = b.project.topologies.get(b.top)!.segments.find((s) => s.ends.includes(start))!;
+    const hubEnd = seg.ends.indexOf(hub);
+    expect(CALLOUT_DISTANCE).toBe(24);
+
+    const near = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 12, y: 16 } } });
+    expect(near.segments.get(seg.id)![hubEnd]).toEqual(near.endpoints.get(hub)!.drawn);
+    expect(near.callouts).toEqual([]);
+
+    const far = b.layout({ ...EMPTY, roots: [start], offsets: { [hub]: { x: 60, y: 80 } } });
+    const { home, drawn } = far.endpoints.get(hub)!;
+    expect(far.segments.get(seg.id)![hubEnd]).toEqual(home);
+    expect(far.callouts).toEqual([{ endpoint: hub, from: home, to: drawn }]);
+  });
+});
+
+describe("the waiting grid", () => {
+  /** Three named components with nets on some connectors, one segment drawn, and some connectors left waiting. */
+  function waitingBench() {
+    let p: Project = freshProject();
+    const t = ops.createTopology(p, "Bench");
+    p = t.project;
+    const top = t.id;
+    const zeta = ops.placeComponent(p, "components/mib", { x: 0, y: 0 }, "Zeta");
+    p = zeta.project;
+    const alpha = ops.placeComponent(p, "components/mib", { x: 0, y: 0 }, "Alpha");
+    p = alpha.project;
+    const battery = ops.placeComponent(p, "components/battery", { x: 0, y: 0 }, "Mid");
+    p = battery.project;
+    const at = (c: { id: string }, d: string) => `${c.id}/${d}`;
+    // Routed: Zeta P1 to Mid OUT, with a segment.
+    p = ops.createNet(p, "48v", [at(zeta, "P1"), at(battery, "OUT")]).project;
+    // Unrouted: Alpha J2, Alpha J1 and Zeta J1 share a net. Alpha J1 has an endpoint record but no segment.
+    p = ops.createNet(p, "can", [at(alpha, "J2"), at(alpha, "J1"), at(zeta, "J1")]).project;
+    const a = ops.placeConnector(p, top, at(zeta, "P1"));
+    const z = ops.placeConnector(a.project, top, at(battery, "OUT"));
+    p = ops.addSegment(z.project, top, a.id, z.id, 100).project;
+    const lone = ops.placeConnector(p, top, at(alpha, "J1"));
+    p = lone.project;
+    return { project: p, top, zeta, alpha, battery, at, loneEndpoint: lone.id };
+  }
+
+  it("holds netted connectors with no segment, grouped and ordered by component name then designator, and leaves out connectors with no nets", () => {
+    const b = waitingBench();
+    const out = layoutTopology(b.project, b.project.topologies.get(b.top)!, EMPTY);
+    expect(out.waiting.map((g) => g.name)).toEqual(["Alpha", "Zeta"]);
+    expect(out.waiting.map((g) => g.connectors.map((c) => c.address))).toEqual([
+      [b.at(b.alpha, "J1"), b.at(b.alpha, "J2")],
+      [b.at(b.zeta, "J1")],
+    ]);
+    // A connector with an endpoint record keeps its id, and the endpoint draws where the grid puts it.
+    const j1 = out.waiting[0].connectors[0];
+    expect(j1.endpoint).toBe(b.loneEndpoint);
+    expect(out.endpoints.get(b.loneEndpoint)!.drawn).toEqual(j1.position);
+    expect(out.waiting[0].connectors[1].endpoint).toBeUndefined();
+  });
+
+  it("drawing a segment from a waiting connector places it and joins it in one edit, and the project before the edit still has it waiting", () => {
+    const b = waitingBench();
+    const j2 = b.at(b.alpha, "J2");
+    const before = b.project;
+    const r = ops.addSegment(before, b.top, j2, b.loneEndpoint);
+    const top = r.project.topologies.get(b.top)!;
+    const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === j2);
+    expect(placed).toBeDefined();
+    expect(top.segments.find((s) => s.id === r.id)!.ends).toEqual([placed!.id, b.loneEndpoint]);
+    const waitingAddresses = (p: Project) => layoutTopology(p, p.topologies.get(b.top)!, EMPTY).waiting.flatMap((g) => g.connectors.map((c) => c.address));
+    expect(waitingAddresses(r.project)).toEqual([b.at(b.zeta, "J1")]);
+    // Undo puts back the project from before the edit, where both still wait.
+    expect(waitingAddresses(before)).toContain(j2);
+  });
+
+  it("growing a segment from a waiting connector into empty canvas places it and adds a point", () => {
+    const b = waitingBench();
+    const j2 = b.at(b.alpha, "J2");
+    const r = ops.growSegment(b.project, b.top, j2);
+    const top = r.project.topologies.get(b.top)!;
+    const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === j2)!;
+    expect(top.segments.find((s) => s.id === r.segment)!.ends).toEqual([placed.id, r.endpoint]);
+  });
+
+  it("deleting a connector's last segment removes its endpoint record in the same edit, and it waits again", () => {
+    const b = waitingBench();
+    const before = b.project.topologies.get(b.top)!;
+    const seg = before.segments[0];
+    const p = ops.removeSegment(b.project, b.top, seg.id);
+    const top = p.topologies.get(b.top)!;
+    for (const end of seg.ends) expect(top.endpoints.some((e) => e.id === end)).toBe(false);
+    const waiting = layoutTopology(p, top, EMPTY).waiting.flatMap((g) => g.connectors.map((c) => c.address));
+    expect(waiting).toContain(b.at(b.zeta, "P1"));
+    expect(waiting).toContain(b.at(b.battery, "OUT"));
+  });
+
+  it("deleting one of several segments at a connector keeps its endpoint record", () => {
+    const b = waitingBench();
+    const seg = b.project.topologies.get(b.top)!.segments[0];
+    const hub = seg.ends[0];
+    const r = ops.growSegment(b.project, b.top, hub);
+    const p = ops.removeSegment(r.project, b.top, seg.id);
+    expect(p.topologies.get(b.top)!.endpoints.some((e) => e.id === hub)).toBe(true);
+  });
+
+  it("sits under the packed pieces with no two waiting connectors overlapping", () => {
+    const b = waitingBench();
+    const out = layoutTopology(b.project, b.project.topologies.get(b.top)!, EMPTY);
+    const bottom = Math.max(...out.pieces.map((p) => p.rect.y + p.rect.h));
+    const all = out.waiting.flatMap((g) => g.connectors);
+    const { w, h } = ENDPOINT_SIZE.connector;
+    for (const c of all) expect(c.position.y - h / 2).toBeGreaterThan(bottom);
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const [a, z] = [all[i].position, all[j].position];
+        expect(Math.abs(a.x - z.x) >= w || Math.abs(a.y - z.y) >= h).toBe(true);
+      }
+    }
+  });
+});
+
+describe("roots", () => {
+  /** c1 - h1 - h2 - h3 - c2, with one leaf connector on each breakout. */
+  function spine() {
+    const b = bench();
+    const c1 = b.connector();
+    const [h1, h2, h3] = [b.point(), b.point(), b.point()];
+    const c2 = b.connector();
+    b.join(c1, h1);
+    b.join(h1, h2);
+    b.join(h2, h3);
+    b.join(h3, c2);
+    const leaves = [h1, h2, h3].map((h) => {
+      const l = b.connector();
+      b.join(h, l);
+      return l;
+    });
+    return { b, c1, c2, hubs: [h1, h2, h3], leaves };
+  }
+  const canvasOf = (p: Project, top: string) => p.topologyCanvases.get(top)!;
+
+  it("one marked root lays its piece out as a radial tree from that root", () => {
+    const { b, c1, hubs, leaves } = spine();
+    const p = ops.markRoot(b.project, b.top, c1);
+    expect(canvasOf(p, b.top).roots).toEqual([c1]);
+    const out = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    // The root has one child; every breakout after it fans its two children 7.5 degrees either side of the way in.
+    expect(dist(at(c1), at(hubs[0]))).toBeCloseTo(UNIFORM_LENGTH);
+    const away = angle(at(c1), at(hubs[0]));
+    const fan = [hubs[1], leaves[0]].map((k) => turn(angle(at(hubs[0]), at(k)), away)).sort((x, y) => x - y);
+    expect(fan[0]).toBeCloseTo(-STEP_DEGREES / 2);
+    expect(fan[1]).toBeCloseTo(STEP_DEGREES / 2);
+  });
+  it("two marked roots put the path between them on one straight line, and other branches hang off it on alternating sides", () => {
+    const { b, c1, c2, hubs, leaves } = spine();
+    const p = ops.markRoot(ops.markRoot(b.project, b.top, c1), b.top, c2);
+    const out = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    const at = (id: string) => out.endpoints.get(id)!.drawn;
+    const line = angle(at(c1), at(c2));
+    // Every trunk node lies on the line from c1 to c2, in order, one uniform length apart.
+    const trunk = [c1, ...hubs, c2];
+    trunk.slice(1).forEach((id, i) => {
+      expect(dist(at(trunk[i]), at(id))).toBeCloseTo(UNIFORM_LENGTH);
+      expect(turn(angle(at(trunk[i]), at(id)), line)).toBeCloseTo(0);
+    });
+    // Each leaf hangs square off its breakout, and the sides alternate along the trunk.
+    const sides = leaves.map((l, i) => turn(angle(at(hubs[i]), at(l)), line));
+    for (const s of sides) expect(Math.abs(s)).toBeCloseTo(90);
+    expect(Math.sign(sides[0])).toBe(-Math.sign(sides[1]));
+    expect(Math.sign(sides[1])).toBe(-Math.sign(sides[2]));
+  });
+
+  it("unmarking the last root gives back the default layout", () => {
+    const { b, c1, c2 } = spine();
+    const before = b.layout();
+    let p = ops.markRoot(ops.markRoot(b.project, b.top, c1), b.top, c2);
+    p = ops.unmarkRoot(ops.unmarkRoot(p, b.top, c2), b.top, c1);
+    expect(canvasOf(p, b.top).roots).toEqual([]);
+    const after = layoutTopology(p, p.topologies.get(b.top)!, canvasOf(p, b.top));
+    expect(after.endpoints).toEqual(before.endpoints);
+  });
+});

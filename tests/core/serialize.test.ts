@@ -19,15 +19,15 @@ describe("serializer", () => {
   });
 
   it("rounds integer fields so sub-pixel drift never dirties a file", () => {
-    const text = serialize(TopologyCanvasSchema, { endpoints: { "end-aaaaaa": { x: 10.4, y: 19.6 } } });
-    expect(JSON.parse(text)).toEqual({ endpoints: { "end-aaaaaa": { x: 10, y: 20 } } });
+    const text = serialize(TopologyCanvasSchema, { offsets: { "end-aaaaaa": { x: 10.4, y: 19.6 } }, pieces: {}, roots: [] });
+    expect(JSON.parse(text)).toEqual({ offsets: { "end-aaaaaa": { x: 10, y: 20 } }, pieces: {}, roots: [] });
     const top = serialize(TopologySchema, { id: "top-aaaaaa", name: "t", endpoints: [], segments: [{ id: "seg-aaaaaa", ends: ["end-aaaaaa", "end-aaaaab"], length_mm: 12.7 }], sheaths: [], ties: [] });
     expect(JSON.parse(top).segments[0].length_mm).toBe(13);
   });
 
   it("sorts record keys", () => {
-    const text = serialize(TopologyCanvasSchema, { endpoints: { "end-b": { x: 0, y: 0 }, "end-a": { x: 0, y: 0 } } });
-    expect(Object.keys(JSON.parse(text).endpoints)).toEqual(["end-a", "end-b"]);
+    const text = serialize(TopologyCanvasSchema, { offsets: { "end-b": { x: 0, y: 0 }, "end-a": { x: 0, y: 0 } }, pieces: {}, roots: [] });
+    expect(Object.keys(JSON.parse(text).offsets)).toEqual(["end-a", "end-b"]);
   });
 });
 

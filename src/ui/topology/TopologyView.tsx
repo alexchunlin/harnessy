@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
-import { ALL_LAYER_ID, activeDomains, addSegment, findNet, growSegment, moveEndpoint, parseConductor, placeConnector, removeEndpoint, removeSegment, removeSheath, removeTiePoint, setSegmentLength, updateTiePoint, type Position } from "../../core";
+import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider, SelectionMode, ViewportPortal, useReactFlow, type Connection, type FinalConnectionState, type Node, type EdgeChange, type NodeChange } from "@xyflow/react";
+import { ALL_LAYER_ID, ENDPOINT_SIZE, activeDomains, addSegment, dropOffset, findNet, growSegment, parseConductor, removeEndpoint, removeSegment, removeSheath, removeTiePoint, resetBoxOffset, setBoxOffset, setEndpointOffset, setSegmentLength, turnPiecesHolding, updateTiePoint, type Position, type Project } from "../../core";
 import { useDoc, useProject } from "../store";
+import { isTyping, turnSelection } from "../keys";
 import { useTheme } from "../theme";
 import { reconcile } from "../connectivity/model";
 import { usePrefs } from "../prefs";
-import { deriveTopology, endpointCentre, type TopoEdge, type TopoNode } from "./model";
-import { EndpointNode, HarnessLabelNode, TieNode } from "./nodes";
-import { RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
-import { LeftPane, TRAY_DRAG_TYPE } from "./Panels";
+import { arcPath, deriveTopology, drawnFrom, homeKey, topologyLayout, type TopoEdge, type TopoNode } from "./model";
+import { useGlide } from "./glide";
+import { EndpointNode, HarnessBoxNode, TieNode, WaitingGroupNode } from "./nodes";
+import { CalloutEdge, RatsnestEdge, SegmentEdge, setSegmentEdgeCallbacks, useConductorHover, useLengthEditor } from "./edges";
+import { LeftPane } from "./Panels";
 import { Inspector } from "./Inspector";
 import "./topology.css";
-// PROTOTYPE for issue #31: `?variant=A|B|C` swaps the canvas for one whose layout the app owns.
-import { PrototypeCanvas, readVariant } from "./prototype-derived-layout/PrototypeCanvas";
 
-const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessLabelNode };
-const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge };
+const nodeTypes = { endpoint: EndpointNode, tie: TieNode, harness: HarnessBoxNode, waitingGroup: WaitingGroupNode };
+const edgeTypes = { segment: SegmentEdge, ratsnest: RatsnestEdge, callout: CalloutEdge };
 
 export function TopologyView() {
   const activeTopology = useDoc((s) => s.activeTopology);
@@ -23,8 +23,6 @@ export function TopologyView() {
   if (!activeTopology || !project.topologies.has(activeTopology)) {
     return <div className="placeholder">No topology yet. Create one with "New topology" in the toolbar.</div>;
   }
-  const variant = readVariant();
-  if (variant) return <PrototypeCanvas topologyId={activeTopology} variant={variant} />;
   return (
     <ReactFlowProvider>
       <Canvas topologyId={activeTopology} />
@@ -61,8 +59,28 @@ function Canvas({ topologyId }: { topologyId: string }) {
     }
     return { nets, components };
   }, [selection, project]);
-  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components, hoverConductor: hoverConductor ?? undefined }), [ratsnest, layerDomains, highlight, hoverConductor]);
-  const model = useMemo(() => deriveTopology(project, topology, selected, drafts, options), [project, topology, selected, drafts, options]);
+  // Homes come from the layout; after an edit the endpoints glide to them and the viewport stays where it is.
+  const layout = useMemo(() => topologyLayout(project, topology), [project, topology]);
+  const homes = useMemo(() => drawnFrom(layout), [layout]);
+  const options = useMemo(() => ({ ratsnest, layerDomains, highlightNets: highlight.nets, highlightComponents: highlight.components, hoverConductor: hoverConductor ?? undefined, waiting: layout.waiting }), [ratsnest, layerDomains, highlight, hoverConductor, layout]);
+  // A waiting connector with no endpoint record is a node under its address. Drawing a segment from it places it.
+  const waitingAddresses = useMemo(() => new Set(layout.waiting.flatMap((g) => g.connectors.filter((c) => !c.endpoint).map((c) => c.address))), [layout]);
+  const glideFrom = useRef(new Map<string, Position>());
+  const glided = useGlide(homes, glideFrom);
+  // A harness box mid-drag carries every endpoint of its piece by the same amount; the box redraws around them.
+  const [boxDrag, setBoxDrag] = useState<{ piece: string; members: Set<string>; delta: Position } | null>(null);
+  const boxDragStart = useRef<Position | null>(null);
+  const drawn = useMemo(() => {
+    if (!boxDrag) return glided;
+    const { members, delta } = boxDrag;
+    // A moved endpoint's home rides along too, so its call-out and segments keep their shape.
+    const carried = new Set([...members].flatMap((m) => [m, homeKey(m)]));
+    return new Map([...glided].map(([id, p]) => [id, carried.has(id) ? { x: p.x + delta.x, y: p.y + delta.y } : p]));
+  }, [glided, boxDrag]);
+  // The drop's edit gives the piece new homes; the drag lets go only once they are in, so the box never jumps back for a frame.
+  useEffect(() => setBoxDrag(null), [homes]);
+  const [menu, setMenu] = useState<{ x: number; y: number; piece: string } | null>(null);
+  const model = useMemo(() => deriveTopology(project, topology, selected, drawn, drafts, options), [project, topology, selected, drawn, drafts, options]);
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -128,10 +146,10 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const selects = changes.filter((c) => c.type === "select");
       if (selects.length === 0) return;
       const current = useDoc.getState().selection;
-      const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id);
+      const native = (id: string) => topology.endpoints.some((e) => e.id === id) || topology.segments.some((s) => s.id === id) || topology.ties.some((t) => t.id === id) || waitingAddresses.has(id);
       const ids = new Set(current.view === "topology" ? current.ids.filter(native) : []);
       for (const c of selects) {
-        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:")) continue;
+        if (c.id.startsWith("harness:") || c.id.startsWith("ratsnest:") || c.id.startsWith("waiting:")) continue;
         if (c.selected) ids.add(c.id);
         else ids.delete(c.id);
       }
@@ -139,7 +157,7 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const same = current.view === "topology" && current.ids.length === next.length && current.ids.every((id) => ids.has(id));
       if (!same) selectIds(next);
     },
-    [topology, selectIds],
+    [topology, selectIds, waitingAddresses],
   );
 
   const onNodesChange = useCallback(
@@ -160,10 +178,17 @@ function Canvas({ topologyId }: { topologyId: string }) {
           return changed ? { ...f, nodes } : f;
         });
       }
+      for (const c of changes) {
+        if (c.type !== "position" || !c.position || !c.dragging || !c.id.startsWith("harness:") || !boxDragStart.current) continue;
+        const piece = c.id.slice("harness:".length);
+        const members = modelRef.current.harnesses.find((h) => h.piece.id === piece)?.piece.endpoints ?? new Set<string>();
+        const delta = { x: Math.round(c.position.x - boxDragStart.current.x), y: Math.round(c.position.y - boxDragStart.current.y) };
+        setBoxDrag({ piece, members, delta });
+      }
       setDrafts((prev) => {
         let next: Map<string, Position> | undefined;
         for (const c of changes) {
-          if (c.type === "position" && c.position && c.dragging) {
+          if (c.type === "position" && c.position && c.dragging && !c.id.startsWith("harness:")) {
             next ??= new Map(prev);
             next.set(c.id, c.position);
           }
@@ -177,22 +202,55 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   const onEdgesChange = useCallback((changes: EdgeChange<TopoEdge>[]) => applySelectChanges(changes as { type: string; id: string; selected?: boolean }[]), [applySelectChanges]);
 
+  const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    boxDragStart.current = node.type === "harness" ? { ...node.position } : null;
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node, dragged: Node[]) => {
+      if (node.type === "harness") {
+        boxDragStart.current = null;
+        if (!boxDrag || (boxDrag.delta.x === 0 && boxDrag.delta.y === 0)) {
+          setBoxDrag(null);
+          return;
+        }
+        const { piece, members, delta } = boxDrag;
+        // Each endpoint starts its glide where the drag left it, which is its new home.
+        for (const id of members) {
+          for (const key of [id, homeKey(id)]) {
+            const p = drawn.get(key);
+            if (p) glideFrom.current.set(key, p);
+          }
+        }
+        edit((p) => {
+          const was = p.topologyCanvases.get(topologyId)?.pieces[piece]?.offset ?? { x: 0, y: 0 };
+          return setBoxOffset(p, topologyId, piece, { x: was.x + delta.x, y: was.y + delta.y });
+        });
+        return;
+      }
       const moved = dragged.length ? dragged : [node];
       edit((p) => {
         let next = p;
         for (const n of moved) {
-          if (n.type === "endpoint") next = moveEndpoint(next, topologyId, n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) });
+          const endpoint = n.type === "endpoint" ? topology.endpoints.find((e) => e.id === n.id) : undefined;
+          if (endpoint) {
+            // Only the offset from home is kept. The box starts its glide where it was dropped.
+            const size = ENDPOINT_SIZE[endpoint.kind];
+            const centre = { x: n.position.x + size.w / 2, y: n.position.y + size.h / 2 };
+            const offset = dropOffset(layout, n.id, centre);
+            const was = drawn.get(n.id);
+            if (!offset || (was && Math.round(was.x - centre.x) === 0 && Math.round(was.y - centre.y) === 0)) continue;
+            glideFrom.current.set(n.id, centre);
+            next = setEndpointOffset(next, topologyId, n.id, offset);
+            continue;
+          }
           if (n.type === "tie") {
             const t = topology.ties.find((t) => t.id === n.id);
             const seg = topology.segments.find((s) => s.id === t?.segment);
             if (!t || !seg) continue;
             const other = seg.ends[0] === t.from ? seg.ends[1] : seg.ends[0];
-            const fromE = topology.endpoints.find((e) => e.id === t.from);
-            const toE = topology.endpoints.find((e) => e.id === other);
-            const a = endpointCentre(fromE!.kind, model.positions.get(t.from)!);
-            const b = endpointCentre(toE!.kind, model.positions.get(other)!);
+            const a = model.positions.get(t.from)!;
+            const b = model.positions.get(other)!;
             const px = n.position.x + 6;
             const py = n.position.y + 6;
             const dx = b.x - a.x;
@@ -207,23 +265,40 @@ function Canvas({ topologyId }: { topologyId: string }) {
       });
       setDrafts(new Map());
     },
-    [edit, topologyId, topology, model],
+    [edit, topologyId, topology, model, layout, boxDrag, drawn],
+  );
+
+  /** A waiting connector placed by this edit starts its glide from where it waited in the grid. */
+  const startFromGrid = useCallback(
+    (after: Project, ids: string[]) => {
+      const top = after.topologies.get(topologyId)!;
+      for (const address of ids) {
+        if (!waitingAddresses.has(address)) continue;
+        const placed = top.endpoints.find((e) => e.kind === "connector" && e.connector === address);
+        const at = drawn.get(address);
+        if (placed && at) glideFrom.current.set(placed.id, at);
+      }
+    },
+    [topologyId, waitingAddresses, drawn],
   );
 
   const onConnect = useCallback(
     (c: Connection) => {
       if (!c.source || !c.target || c.source === c.target) return;
-      if (!topology.endpoints.some((e) => e.id === c.source) || !topology.endpoints.some((e) => e.id === c.target)) return;
+      const known = (id: string) => topology.endpoints.some((e) => e.id === id) || waitingAddresses.has(id);
+      if (!known(c.source) || !known(c.target)) return;
       if (topology.segments.some((s) => (s.ends[0] === c.source && s.ends[1] === c.target) || (s.ends[0] === c.target && s.ends[1] === c.source))) return;
       let id = "";
       edit((p) => {
+        // A waiting connector is placed and joined in this one edit.
         const r = addSegment(p, topologyId, c.source, c.target);
         id = r.id;
+        startFromGrid(r.project, [c.source, c.target]);
         return r.project;
       });
       selectIds([id]);
     },
-    [edit, topologyId, topology, selectIds],
+    [edit, topologyId, topology, selectIds, waitingAddresses, startFromGrid],
   );
 
   const onConnectEnd = useCallback(
@@ -235,36 +310,33 @@ function Canvas({ topologyId }: { topologyId: string }) {
       const from = state.fromNode.id;
       let seg = "";
       edit((p) => {
-        const r = growSegment(p, topologyId, from, { x: pos.x - 6, y: pos.y - 6 });
+        const r = growSegment(p, topologyId, from);
         seg = r.segment;
+        // The drop point is only where the new point starts its glide home.
+        glideFrom.current.set(r.endpoint, pos);
+        startFromGrid(r.project, [from]);
         return r.project;
       });
       selectIds([seg]);
     },
-    [flow, edit, topologyId, selectIds],
+    [flow, edit, topologyId, selectIds, startFromGrid],
   );
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      const address = e.dataTransfer.getData(TRAY_DRAG_TYPE);
-      if (!address) return;
+  // R turns each harness holding the selection a quarter, in one edit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const ids = turnSelection(e, useDoc.getState().selection, "topology");
+      if (ids.length === 0) return;
       e.preventDefault();
-      const pos = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      let id = "";
-      edit((p) => {
-        const r = placeConnector(p, topologyId, address, { x: pos.x - 75, y: pos.y - 13 });
-        id = r.id;
-        return r.project;
-      });
-      selectIds([id]);
-    },
-    [flow, edit, topologyId, selectIds],
-  );
+      edit((p) => turnPiecesHolding(p, topologyId, ids));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [edit, topologyId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (isTyping(e.target)) return;
       const current = useDoc.getState().selection;
       if (current.view !== "topology") return;
       if (e.key === "Escape" && current.ids.length) selectIds([]);
@@ -292,8 +364,8 @@ function Canvas({ topologyId }: { topologyId: string }) {
 
   return (
     <div className="view">
-      <LeftPane project={project} topologyId={topologyId} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
-      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} onDrop={onDrop} onDragOver={(e) => e.dataTransfer.types.includes(TRAY_DRAG_TYPE) && e.preventDefault()} data-testid="topology-canvas">
+      <LeftPane project={project} routes={model.routes} selectedNet={selectedNet} onSelectNet={(id) => select("topology", [id])} />
+      <div className={`canvas${layerDomains ? " in-layer" : ""}`} ref={wrapper} data-testid="topology-canvas">
         <ReactFlow
           nodes={flow_.nodes}
           edges={flow_.edges}
@@ -301,7 +373,16 @@ function Canvas({ topologyId }: { topologyId: string }) {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={(e, node) => {
+            if (node.type !== "harness") return;
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, piece: node.id.slice("harness:".length) });
+          }}
+          onNodeClick={(_, node) => node.type === "harness" && selectIds([node.id])}
+          onPaneClick={() => setMenu(null)}
+          onMoveStart={() => setMenu(null)}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
           onEdgeDoubleClick={(_, e) => e.type === "segment" && e.data?.segment.assembly === undefined && openLength(e.id)}
@@ -318,11 +399,42 @@ function Canvas({ topologyId }: { topologyId: string }) {
           colorMode={theme}
           elevateEdgesOnSelect
         >
+          <ViewportPortal>
+            {/* Each fan's faint arc, under the segments and boxes. */}
+            <svg className="fan-arcs" aria-hidden>
+              {layout.arcs.map((a, i) => (
+                <path key={`${a.node}:${i}`} d={arcPath(a)} data-fan={a.node} />
+              ))}
+            </svg>
+          </ViewportPortal>
           <Background gap={20} color="var(--grid)" />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {menu && <BoxMenu at={menu} onClose={() => setMenu(null)} onReset={() => edit((p) => resetBoxOffset(p, topologyId, menu.piece))} />}
       </div>
       <Inspector project={project} topology={topology} routes={model.routes} selected={selection.view === "topology" ? selection.ids : []} edit={edit} onSelect={(ids) => select("topology", ids)} />
+    </div>
+  );
+}
+
+/** A harness box's context menu. Closes on any pointer press outside it, or Escape. */
+function BoxMenu({ at, onClose, onReset }: { at: { x: number; y: number }; onClose: () => void; onReset: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: PointerEvent) => !ref.current?.contains(e.target as globalThis.Node) && onClose();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key);
+    };
+  }, [onClose]);
+  return (
+    <div className="topo-menu" role="menu" ref={ref} style={{ left: at.x, top: at.y }} onContextMenu={(e) => e.preventDefault()}>
+      <button role="menuitem" onClick={() => (onReset(), onClose())}>
+        Reset position
+      </button>
     </div>
   );
 }

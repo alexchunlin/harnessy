@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadProject, saveProject } from "../../src/core/project";
 import { loadLibrary } from "../../src/core/library";
+import * as ops from "../../src/core/ops";
 import { runChecks } from "../../src/core/drc";
 import { testLibrary, twoNetProject } from "./fixture";
 
@@ -30,6 +31,43 @@ describe("loading", () => {
     expect(problems).toEqual([]);
     const f = runChecks(loaded, loaded.topologies.get(ids.top));
     expect(f.filter((x) => x.check === "dangling-reference").map((x) => x.target)).toContain(ids.sensor);
+  });
+
+  it("a topology canvas with the old endpoints map loads cleanly, and the saved file holds only offsets, pieces and roots", () => {
+    const { project, ids } = twoNetProject();
+    const files = saveProject(project);
+    files.set(`canvas/${ids.top}.json`, JSON.stringify({ endpoints: { [ids.batEnd]: { x: 40, y: 40 }, [ids.mibEnd]: { x: 240, y: 40 } } }));
+    const { project: loaded, problems } = loadProject(files, testLibrary());
+    expect(problems).toEqual([]);
+    expect(JSON.parse(saveProject(loaded).get(`canvas/${ids.top}.json`)!)).toEqual({ offsets: {}, pieces: {}, roots: [] });
+  });
+
+  it("a saved canvas file drops offsets for endpoints that no longer exist", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.setEndpointOffset(project, ids.top, ids.batEnd, { x: 30, y: -40 });
+    p = ops.setEndpointOffset(p, ids.top, ids.mibEnd, { x: 5, y: 5 });
+    // A second segment keeps the battery end in the topology once the MIB end goes.
+    p = ops.growSegment(p, ids.top, ids.batEnd).project;
+    p = ops.removeEndpoint(p, ids.top, ids.mibEnd);
+    expect(JSON.parse(saveProject(p).get(`canvas/${ids.top}.json`)!).offsets).toEqual({ [ids.batEnd]: { x: 30, y: -40 } });
+  });
+
+  it("Reset position drops an endpoint's offset and leaves the others", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.setEndpointOffset(project, ids.top, ids.batEnd, { x: 30.4, y: -40.6 });
+    p = ops.setEndpointOffset(p, ids.top, ids.mibEnd, { x: 5, y: 5 });
+    expect(p.topologyCanvases.get(ids.top)!.offsets[ids.batEnd]).toEqual({ x: 30, y: -41 });
+    p = ops.resetEndpointOffset(p, ids.top, ids.batEnd);
+    expect(p.topologyCanvases.get(ids.top)!.offsets).toEqual({ [ids.mibEnd]: { x: 5, y: 5 } });
+  });
+
+  it("a saved topology canvas drops roots for endpoints that no longer exist", () => {
+    const { project, ids } = twoNetProject();
+    let p = ops.markRoot(ops.markRoot(project, ids.top, ids.batEnd), ids.top, ids.mibEnd);
+    // A second segment keeps the battery end in the topology once the MIB end goes.
+    p = ops.growSegment(p, ids.top, ids.batEnd).project;
+    p = ops.removeEndpoint(p, ids.top, ids.mibEnd);
+    expect(JSON.parse(saveProject(p).get(`canvas/${ids.top}.json`)!).roots).toEqual([ids.batEnd]);
   });
 
   it("a project library file shadows the repo entry whole", () => {

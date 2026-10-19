@@ -7,9 +7,9 @@ import { twoNetProject } from "./fixture";
 /** Route the sensor net too so the topology has no errors. */
 function complete() {
   let { project: p, ids } = twoNetProject();
-  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`, { x: 0, y: 100 });
+  const s = ops.placeConnector(p, ids.top, `${ids.sensor}/J1`);
   p = s.project;
-  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`, { x: 100, y: 100 });
+  const m = ops.placeConnector(p, ids.top, `${ids.mib}/J1`);
   p = m.project;
   const seg = ops.addSegment(p, ids.top, s.id, m.id, 150);
   p = ops.setHarnessAnchor(seg.project, ids.top, seg.id, { name: "Sensor harness" });
@@ -52,9 +52,9 @@ describe("BOM", () => {
     p = sw.project;
     const eth = ops.createNet(p, "ethernet", [`${ids.mib}/ETH`, `${sw.id}/P1`], "uplink");
     p = eth.project;
-    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`, { x: 0, y: 0 });
+    const e1 = ops.placeConnector(p, ids.top, `${ids.mib}/ETH`);
     p = e1.project;
-    const e2 = ops.placeConnector(p, ids.top, `${sw.id}/P1`, { x: 0, y: 0 });
+    const e2 = ops.placeConnector(p, ids.top, `${sw.id}/P1`);
     p = e2.project;
     const s = ops.addSegment(p, ids.top, e1.id, e2.id);
     p = ops.setSegmentAssembly(s.project, ids.top, s.id, "assemblies/rj45-patch-500");
@@ -133,17 +133,18 @@ describe("BOM", () => {
     let { p, ids } = complete();
     const s2 = ops.placeComponent(p, "components/sensor", { x: 600, y: 0 }, "Sensor 2");
     p = ops.addConnectorToNet(s2.project, ids.sig, `${s2.id}/J1`);
-    const b = ops.placeConnector(p, ids.top, `${s2.id}/J1`, { x: 200, y: 150 });
+    const b = ops.placeConnector(p, ids.top, `${s2.id}/J1`);
     p = b.project;
     const sensorEnd = p.topologies.get(ids.top)!.endpoints.find((e) => e.kind === "connector" && e.connector === `${ids.sensor}/J1`)!.id;
-    const mibEnd = p.topologies.get(ids.top)!.endpoints.find((e) => e.kind === "connector" && e.connector === `${ids.mib}/J1`)!.id;
+    // The segment's removal sends both its connectors back to waiting, so they come back by address.
+    const mibEnd = `${ids.mib}/J1`;
     const seg = p.topologies.get(ids.top)!.segments.find((s) => s.ends.includes(sensorEnd))!;
     p = ops.removeSegment(p, ids.top, seg.id);
-    const mid = ops.addEndpoint(p, ids.top, "splice", { x: 0, y: 0 });
+    const mid = ops.addEndpoint(p, ids.top, "splice");
     p = mid.project;
     const a1 = ops.addSegment(p, ids.top, mibEnd, mid.id, 100);
     p = ops.setHarnessAnchor(a1.project, ids.top, a1.id, { name: "Sensor harness" });
-    p = ops.addSegment(p, ids.top, mid.id, sensorEnd, 200).project;
+    p = ops.addSegment(p, ids.top, mid.id, `${ids.sensor}/J1`, 200).project;
     p = ops.addSegment(p, ids.top, mid.id, b.id, 250).project;
     p = ops.setSpliceNets(p, ids.top, mid.id, [ids.sig], "splices/solder-sleeve");
     const bom = buildBom(p, p.topologies.get(ids.top)!);
